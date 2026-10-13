@@ -1,0 +1,6 @@
+version: 2.0
+shards:
+  bcrypt:
+    git: https://github.com/jgaskins/bcrypt.git
+    version: 0.1.0+git.commit.4004f17053cba6f2c752ea83162f405143ab541c
+

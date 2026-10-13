@@ -1,0 +1,459 @@
+---
+accounts:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: custom_styles
+    type: text
+    nullable: "YES"
+    default:
+  - name: join_code
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: settings
+    type: jsonb
+    nullable: "YES"
+    default:
+  - name: singleton_guard
+    type: int4
+    nullable: "NO"
+    default: "0"
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+action_text_rich_texts:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: body
+    type: text
+    nullable: "YES"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: record_id
+    type: int8
+    nullable: "NO"
+    default:
+  - name: record_type
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+active_storage_attachments:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: blob_id
+    type: int8
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: record_id
+    type: int8
+    nullable: "NO"
+    default:
+  - name: record_type
+    type: varchar
+    nullable: "NO"
+    default:
+active_storage_blobs:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: byte_size
+    type: int8
+    nullable: "NO"
+    default:
+  - name: checksum
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: content_type
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: filename
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: key
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: metadata
+    type: text
+    nullable: "YES"
+    default:
+  - name: service_name
+    type: varchar
+    nullable: "NO"
+    default:
+active_storage_variant_records:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: blob_id
+    type: int8
+    nullable: "NO"
+    default:
+  - name: variation_digest
+    type: varchar
+    nullable: "NO"
+    default:
+ar_internal_metadata:
+  columns:
+  - name: key
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: value
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+bans:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: ip_address
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
+boosts:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: booster_id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: content
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: message_id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+memberships:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: connected_at
+    type: timestamp
+    nullable: "YES"
+    default:
+  - name: connections
+    type: int4
+    nullable: "NO"
+    default: "0"
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: involvement
+    type: varchar
+    nullable: "YES"
+    default: '''mentions'''
+  - name: room_id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: unread_at
+    type: timestamp
+    nullable: "YES"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
+messages:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: client_message_id
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: creator_id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: room_id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+push_subscriptions:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: auth_key
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: endpoint
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: p256dh_key
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: user_agent
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
+rooms:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: creator_id
+    type: int8
+    nullable: "NO"
+    default:
+  - name: name
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: type
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+schema_migrations:
+  columns:
+  - name: version
+    type: varchar
+    nullable: "NO"
+    default:
+searches:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: query
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
+sessions:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: ip_address
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: last_active_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: token
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: user_agent
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
+users:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: bio
+    type: text
+    nullable: "YES"
+    default:
+  - name: bot_token
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: email_address
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: password_digest
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: role
+    type: int4
+    nullable: "NO"
+    default: "0"
+  - name: status
+    type: int4
+    nullable: "NO"
+    default: "0"
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+webhooks:
+  columns:
+  - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: url
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
