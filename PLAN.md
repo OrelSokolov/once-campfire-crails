@@ -210,3 +210,38 @@ Dockerfile; сами проверки contracts.rb уже воспроизвед
 
 Следующий шаг: git-init репозитория `once-campfire-crails` + первый коммит,
 затем патч harness (compare.rb: allowed/топология) для формального preflight.
+
+**Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
+- Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
+  Фазы 4):
+  - `turbo.cr`: `Turbo.signed_stream_verifier_key_from_secret!` — деривация
+    ключа подписи стримов (PBKDF2-SHA256, 1000 итераций, соль
+    `turbo/signed_stream_verifier_key`; вектор в `spec/railtie_key_spec.cr`);
+  - `railties.cr`: `Application#cable_handler` — монтаж cable-хендлера ПЕРЕД
+    middleware-стеком (аналог ActionCable::Engine; спека
+    `spec/cable_mount_spec.cr`); railties НЕ зависит от action_cable_cr
+    (приложение подставляет готовый ws_handler);
+  - `action_pack.cr`+`action_cable.cr`: фикс Cookie-парсера — элементы без
+    `=` (пустой cookie-заголовок loadgen) больше не роняют запрос
+    IndexError'ом (семантика Rack: значение "");
+  - `action_cable.cr`: CableHandler эхает `Sec-WebSocket-Protocol:
+    actioncable-v1-json` в 101 (без этого tungstenite/loadgen отклоняют
+    хендшейк; спека в ws_spec.cr).
+- Приложение: `config/cable.cr` (единый `ActionCable::Server` →
+  `ActionCable.server`/`Turbo.cable_server`/`cable_handler`; `Turbo.app =
+  "campfire"`), connection-авторизация по signed-cookie `session_token`
+  (identifier `current_user` = id строкой), каналы RoomMessages (gid-стрим +
+  проверка membership), Presence (present/absent/refresh → memberships),
+  UnreadRooms, Heartbeat; turbo-cable-stream-source на room-странице и в
+  сайдбаре (rooms + user:rooms); POST message бродкастит тот же turbo-stream
+  кадр в стрим комнаты.
+- Верификация: python raw-WS smoke (welcome → 5 подписок → confirm →
+  broadcast с маркером) — PASS; реальный loadgen `login → scrape → cable`
+  (4 клиента, 2 постера): ready 4/4, failed 0, 2787 постов / 0 ошибок,
+  3714 frames/sec, latency-доставка полная. `/` → redirect на последнюю
+  комнату (cookie last_room / первая видимая).
+
+Осталось в Фазе 2: browser gate `bin/browser` (Playwright) — требует полный
+UI (first_run, lexxy-editor, редактирование, профиль/аккаунт, QR, боты,
+custom styles, session transfers, автокомплит direct-ping); jobs-очередь
+«persisted before response» для уведомлений/push/webhooks.

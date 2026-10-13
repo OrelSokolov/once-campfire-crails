@@ -59,13 +59,20 @@ class MessagesController < ApplicationController
     # Контракт ответа: text/vnd.turbo-stream.html, action="append",
     # target = единственный messages_room_<id>; DOM сообщения с
     # data-message-id, чтобы loadgen извлёк подтверждённый id.
-    render(html: String.build do |io|
+    # Тот же кадр уходит в cable-стрим комнаты (RoomMessagesChannel).
+    turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}">)
       io << %(<template><article id="message_#{message_id}" data-message-id="#{message_id}" data-client-message-id=")
       io << HTML.escape(client_message_id)
       io << %("\n  ><div class="message-body">) << body_html << "</div></article></template>"
       io << "</turbo-stream>\n"
-    end, content_type: "text/vnd.turbo-stream.html")
+    end
+
+    Turbo.cable.broadcast(
+      Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
+      turbo_frame)
+
+    render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
   end
 
   private def message_body_param : String

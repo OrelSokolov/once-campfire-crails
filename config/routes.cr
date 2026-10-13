@@ -1,4 +1,5 @@
 CRails.application.routes.draw do
+  get "/", to: "welcome#show"
   get "/up", to: "up#show"
   get "/session/new", to: "sessions#new"
   post "/session", to: "sessions#create"

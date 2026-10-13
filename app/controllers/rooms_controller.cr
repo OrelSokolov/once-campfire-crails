@@ -13,11 +13,18 @@ class RoomsController < ApplicationController
     messages = Message.where("room_id = ?", room.id.not_nil!)
       .order("created_at DESC").limit(40).to_a.reverse
 
+    # turbo_stream_from @room, :messages, channel: "RoomMessagesChannel"
+    # (формат turbo-rails: channel первым, signed-stream-name следом —
+    # loadgen scrape парсит именно эту пару атрибутов).
+    signed_name = HTML.escape(Turbo::Streams::StreamName.signed_stream_name([room, "messages"]))
+    stream_source = %(<turbo-cable-stream-source channel="RoomMessagesChannel" signed-stream-name="#{signed_name}" data-turbo-stream-source="RoomMessagesChannel"></turbo-cable-stream-source>\n)
+
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
       io << "<!doctype html>\n<html>\n<head><title>"
       io << HTML.escape(room.name.to_s)
       io << %(</title>\n<link rel="stylesheet" href="/assets/application.css">\n</head>\n<body>\n)
+      io << stream_source
       io << %(<main id="messages_room_#{room.id}">\n)
       messages.each do |m|
         cmid = m.client_message_id.to_s
