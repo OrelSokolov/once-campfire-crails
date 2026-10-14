@@ -46,6 +46,15 @@ machine with the identical stand and methodology.
 | search     |   238 |  35 999 | 29 802 | 51 970 | 61 153 |   3 275 |  **76 942** |
 | /up        | 2 826 |  47 972 | 59 862 | 81 267 | 122 111 |   5 887 | **148 238** |
 | KLOC       |   2.9 |     6.5 |   39.3 |   58.7 |  108.8 |    14.0 |      **2.4** |
+| Revision   | `90b3300` | `bb70a7d` | `c4ab53d` | `6dae2fd` | `873a51f` | `58964cf` | `c096b40` |
+
+Revisions pin the exact code each column was measured against: Express, Go,
+Rust, C and Elixir are upstream checkouts from 2026-10-09 (the same pins as
+the harness baselines). The Rails column is the vanilla reference `90b3300`
+(no response cache; the later upstream-optimized Rails with a
+whole-response cache reaches ~4.1k RPS on the official stand and is a
+different revision). CRails `c096b40` is the commit that produced the
+numbers above.
 
 **#1 on every measured GET route — including C and Elixir** — with the
 smallest code base. KLOC counts non-blank, non-comment lines of the
