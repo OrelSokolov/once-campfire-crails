@@ -19,3 +19,8 @@ db/*.sqlite3-wal
 # ~/rails.cr/tmp/campfire-express → assets/generated/public/assets
 # копировать сюда целиком (app/views/*.html фрагменты — те же исходники).
 /public/assets/
+
+# Rake-бенчмарк: рабочее окружение (клоны конкурентов, harness, сид)
+/bench-workspace/
+
+benchmark/

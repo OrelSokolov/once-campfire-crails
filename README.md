@@ -145,6 +145,41 @@ for auth before its cache is even consulted.
 
 ## Build and run
 
+The full comparison pipeline — download the pinned competitor repos,
+build every production image, verify with the official
+[once-campfire-verification](https://github.com/basecamp/once-campfire-verification)
+harness, then run the formal benchmark — is a single rake task:
+
+```sh
+rake deps            # host dependencies (apt/brew, rustup, sqlite3 with FTS5)
+rake download        # clone competitor repos at their pinned revisions
+rake build           # production docker images (crails builds last)
+rake harness         # verifier checkout + crails patch + loadgen + seed DB
+rake verify          # preflight: route contracts against every image
+rake benchmark       # formal run: 3 rounds, 16 clients → benchmarks/
+rake run             # all of the above, sequentially
+```
+
+Granular per-app tasks: `rake download[c]`, `rake build[rust]`,
+`rake benchmark[c,go]`. Knobs: `BENCH_SERVER_CPUS`/`BENCH_CLIENT_CPUS`
+(default: auto-detected 2 SMT cores for the server, 4 separate cores for
+the load generator), `BENCH_ROUNDS`, `BENCH_DURATION`, `REBUILD=1`,
+`DRY_RUN=1` — see the Rakefile header. Raw results are copied to
+`benchmarks/<UTC-timestamp>-<apps>/`; the working tree of cloned repos,
+the verifier and the seed live in gitignored `bench-workspace/`.
+
+Two environment notes are collected in [REPORT.md](REPORT.md): the exact
+build stack is pinned in [environment.md](environment.md), and the digest
+assets must be generated before the image build (the rake tasks do this
+automatically):
+
+```sh
+node ../once-campfire-express/bin/build-assets.js  # → assets/generated/public/assets
+cp -r ../once-campfire-express/assets/generated/public/assets/. public/assets/
+```
+
+Standalone app image:
+
 ```sh
 bin/docker-build.sh          # docker build -t once-campfire-crails:app .
 docker run --rm -p 3000:3000 \
