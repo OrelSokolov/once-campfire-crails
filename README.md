@@ -1,4 +1,8 @@
-# ONCE Campfire on CRails
+<p align="center">
+  <img src="crystal-icon.svg" width="72" alt="Crystal">
+</p>
+
+<h1 align="center">ONCE Campfire on CRails</h1>
 
 A from-scratch implementation of [ONCE Campfire](https://once.com/campfire)
 in [Crystal](https://crystal-lang.org) on **CRails** — a Rails-inspired
