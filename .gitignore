@@ -22,5 +22,3 @@ db/*.sqlite3-wal
 
 # Rake-бенчмарк: рабочее окружение (клоны конкурентов, harness, сид)
 /bench-workspace/
-
-benchmark/
