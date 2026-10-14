@@ -13,6 +13,7 @@ class AccountsController < ApplicationController
   end
 
   def update
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     user = current_user.not_nil!
     return render(plain: "forbidden", status: 403) unless user.role == 1
     account = Account.take.not_nil!

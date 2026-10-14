@@ -52,6 +52,7 @@ class DirectsController < ApplicationController
   # POST /rooms/directs — существующая комната с тем же набором участников
   # или новая Rooms::Direct (name NULL, involvement "everything").
   def create
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     user = current_user.not_nil!
     ids = selected_user_ids.unshift(user.id.not_nil!).uniq!
     ids.reject! { |id| User.where("id = ? AND status = 0", id).take.nil? }

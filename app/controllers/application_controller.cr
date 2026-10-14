@@ -62,4 +62,25 @@ abstract class ApplicationController < ActionController::Base
     host = request.headers["Host"]? || "localhost"
     "http://#{host}"
   end
+
+  # Отдача кэшированной страницы: If-None-Match → 304; Accept-Encoding
+  # gzip → сжатое представление (лениво, живёт в Page). Тело — сырые
+  # байты (gzip-строка может быть невалидным UTF-8 — Crystal пишет
+  # байты как есть).
+  def send_page(page : Campfire::PageCache::Page) : Nil
+    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    response.headers["ETag"] = page.etag
+    response.headers["Cache-Control"] = "no-cache"
+    if request.headers["If-None-Match"]? == page.etag
+      # render(plain:) сбрасывает статус — передаём аргументом
+      return render(plain: "", status: :not_modified)
+    end
+    if request.headers["Accept-Encoding"]?.to_s.includes?("gzip")
+      response.headers["Content-Encoding"] = "gzip"
+      response.headers["Vary"] = "Accept-Encoding"
+      render(html: page.gzip)
+    else
+      render(html: page.bytes)
+    end
+  end
 end

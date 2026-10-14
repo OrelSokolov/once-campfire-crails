@@ -208,8 +208,40 @@ Dockerfile; сами проверки contracts.rb уже воспроизвед
   набором args. (Выяснено на собственном уроненном аргументе: из-за
   протухшего биндинга это маскировалось под «баг Relation#first?».)
 
-Следующий шаг: git-init репозитория `once-campfire-crails` + первый коммит,
-затем патч harness (compare.rb: allowed/топология) для формального preflight.
+### Известные особенности (Фаза 3, производительность)
+
+- **PRAGMA data_version в WAL двигается только на ЧУЖИЕ коммиты** (другие
+  соединения/процессы; no-op UPDATE не считается). Собственные записи
+  приложения через пул не инкрементируют его — каждый write-экшен зовёт
+  `Campfire::PageCache.invalidate!` явно (MessageCreator, messages#update,
+  rooms/bots/profiles/accounts/custom_styles/directs/joins/first_runs).
+  Presence-обновления (connected_at) кэш не инвалидируют осознанно.
+- **Конкурентные POST**: одиночный POST сообщения ~40 мс, но 16 одновременных
+  писателей сериализуются на WAL-записи (26 RPS, mean 600 мс). Для бенча
+  (mixed-write-rate ≤ 100/с) не блокер; следить при Фазе 3-тюнинге.
+- `render(plain:)` в action_pack сбрасывает статус — 304 передавать
+  `status: :not_modified` аргументом (та же ловушка, что в Фазе 1).
+
+**Фаза 3 — веха 2026-10-14: whole-page response cache + gzip + ETag/304.**
+- `app/helpers/page_cache.cr` — порт response_cache.js: byte-bounded LRU
+  (CAMPFIRE_RESPONSE_CACHE_MB, default 64 MB, max entry = budget/8), epoch
+  = PRAGMA data_version (+ invalidate! на своих записях), ключ = handler +
+  URL + Accept/Turbo-Frame/User-Agent/Cookie + user_id; страница хранится
+  с ETag (SHA1-префикс), gzip-представление лениво; отдача через
+  `ApplicationController#send_page` (If-None-Match → 304, Accept-Encoding →
+  gzip, Vary).
+- Замер (loadgen http, conc=16, 15 c, сид-база, комната All Talk): baseline
+  231 RPS / p99 147 мс / 126 KB → **3749 RPS / p99 9 мс / 10 KB (gzip)** —
+  ×16. Инвалидация проверена: POST сообщения → следующий GET 200 MISS
+  (новое тело), без записи — 304. Browser smoke — PASS.
+- Осталось из Фазы 3: fragment cache (message_dom по template digest +
+  id + updated_at) для MISS-рендера, прекомпрессия крупных страниц,
+  sidebar/searches при необходимости, тюнинг WEB_CONCURRENCY (serverX
+  multi-worker) против 1 процесса на фибрах — после подключения serverX.
+
+Следующий шаг: патч harness (compare.rb: allowed/топология/Dockerfile) для
+формального preflight Фазы 1-criteria + Docker-образ (Фаза 4), затем
+остаток Фазы 3 на официальном стенде.
 
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до

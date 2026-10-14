@@ -27,6 +27,7 @@ class FirstRunsController < ApplicationController
   end
 
   def create
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     if Account.take
       return redirect_to "/"
     end

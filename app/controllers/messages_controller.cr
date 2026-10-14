@@ -145,6 +145,8 @@ class MessagesController < ApplicationController
       return render(plain: "Cannot edit this message")
     end
 
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+
     body_html = message_body_param
     plain = plain_text(body_html)
     now = Time.utc

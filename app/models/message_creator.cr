@@ -29,6 +29,7 @@ module MessageCreator
 
     broadcast(room, message, creator)
     notify(room, message, creator, body_html, webhooks)
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     message
   end
 

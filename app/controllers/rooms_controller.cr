@@ -2,6 +2,8 @@
 # data-message-id ровно 40 последних сообщений ASC; DOM-идентичности
 # id="message_<cmid>" / data-client-message-id="<cmid>"; браузерный гейт:
 # message-area + composer + turbo-cable-stream-source + importmap).
+# Whole-page response cache (Фаза 3): готовый HTML кэшируется per-worker,
+# инвалидация по DB-epoch (PRAGMA data_version); отдача с gzip + ETag/304.
 class RoomsController < ApplicationController
   def show
     room = Room.find?(params["id"].to_s.to_i64)
@@ -11,6 +13,12 @@ class RoomsController < ApplicationController
     end
     room = room.not_nil!
     user = current_user.not_nil!
+
+    epoch = PageCache.epoch
+    key = PageCache.key("rooms#show", request, user.id)
+    if (cached = PageCache.get(key, epoch))
+      return send_page(cached)
+    end
 
     # Контракт: 40 последних по created_at DESC, вывод в ASC.
     messages = Message.where("room_id = ?", room.id.not_nil!)
@@ -23,13 +31,20 @@ class RoomsController < ApplicationController
     end
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
+    html = String.build do |io|
       io << ChatLayout.head(room.name.to_s, user, room.id, chat: true)
       io << ChatLayout.body_open(room, user)
       io << ChatLayout.message_area(room, messages_html, user)
       io << ChatLayout.composer(room)
       io << ChatLayout.body_close(chat: true)
-    end)
+    end
+    page = Campfire::PageCache::Page.new(html)
+    # Кэшируем только если БД не менялась за время рендера и ответ чист
+    # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
+    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
+      PageCache.set(key, epoch, page)
+    end
+    send_page(page)
   end
 
   # GET /rooms/:id/refresh — опрос refresh-room-контроллера (видимость
@@ -67,6 +82,7 @@ class RoomsController < ApplicationController
   # membership всем активным юзерам; broadcast prepend ссылки в
   # shared_rooms стрима "rooms"; redirect на /rooms/<id>.
   def create
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     user = current_user.not_nil!
     kind = params["kind"].to_s
     return head(:not_found) unless kind == "opens"
@@ -92,6 +108,7 @@ class RoomsController < ApplicationController
   # PATCH /rooms/:room_id/edit — переименование (rename): broadcast
   # prepend с тем же id — Turbo дедуплицирует и перемещает ссылку.
   def update
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     room = Room.find(params["room_id"].to_s.to_i64)
     return head(:not_found) unless room
     nested = params["room"]?

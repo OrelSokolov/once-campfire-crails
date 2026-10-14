@@ -29,6 +29,7 @@ class CustomStylesController < ApplicationController
   end
 
   def update
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     account = Account.take.not_nil!
     nested = params["account"]?
     if nested.is_a?(ActionController::Parameters) && (styles = nested["custom_styles"]?)
