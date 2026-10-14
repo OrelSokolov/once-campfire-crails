@@ -66,7 +66,10 @@ FTS5 index + unread + notification jobs persisted before the response,
 audited per write) and is not a throughput route; C and Elixir keep it
 under 700 RPS as well. On CRails the avatar path verifies the signed token
 (PBKDF2 key derivation), runs two SQL lookups and reads the file from disk
-on every request — no response cache was applied there.
+on every request — no response cache was applied there. Push notification
+delivery is a no-op without VAPID keys — the same trade-off as the official
+Express implementation (`if (!VAPID_PRIVATE_KEY) return`); the notification
+jobs themselves are still created and persisted before the response.
 
 ## Methodology
 
