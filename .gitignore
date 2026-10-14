@@ -13,3 +13,8 @@ db/*.sqlite3-wal
 /log/
 /storage/
 .env
+
+# Сгенерированные ассеты (~20MB): `node bin/build-assets.js` в
+# ~/rails.cr/tmp/campfire-express → assets/generated/public/assets
+# копировать сюда целиком (app/views/*.html фрагменты — те же исходники).
+/public/assets/

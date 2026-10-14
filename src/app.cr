@@ -1,9 +1,11 @@
 require "railties_cr"
 require "active_record_cr"
 require "bcrypt"
+require "rqrcode_cr"
 
 require "../config/application"
 require "../app/models/**"
+require "../app/helpers/chat_layout"
 require "../config/cable"
 require "../app/channels/application_cable/channel"
 require "../app/channels/application_cable/connection"

@@ -22,6 +22,8 @@ class RoomMessagesChannel < ApplicationCable::Channel
   end
 
   # "<b64url(gid)>:messages" → комната, видимая текущему пользователю.
+  # gid может быть STI-классом (Rooms::Open) или базой (Room) — имя модели
+  # не security-граница, граница — membership.
   private def subscribable_room?(stream_name : String) : Bool
     gid_param, suffix = stream_name.split(":", 2)
     return false unless suffix == STREAM_SUFFIX
@@ -31,7 +33,7 @@ class RoomMessagesChannel < ApplicationCable::Channel
     rescue
       return false
     end
-    return false unless match = gid.match(/\Agid:\/\/campfire\/Room\/(\d+)\z/)
+    return false unless match = gid.match(/\Agid:\/\/campfire\/[\w:]+\/(\d+)\z/)
     room_id = match[1].to_i64
 
     uid = current_user_id

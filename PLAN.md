@@ -245,3 +245,25 @@ Dockerfile; сами проверки contracts.rb уже воспроизвед
 UI (first_run, lexxy-editor, редактирование, профиль/аккаунт, QR, боты,
 custom styles, session transfers, автокомплит direct-ping); jobs-очередь
 «persisted before response» для уведомлений/push/webhooks.
+
+### Известные особенности (browser gate, Фаза 2)
+
+- **`%("\n)`-ловушка**: в DOM-билдерах повторялась опечатка — незакрытый
+  тег `%("\n)` вместо `%(">\n)` (мета current-user-name, message_dom,
+  searches#show). После каждого нового DOM-билдера grep `%\("\\n\)` по
+  приложению — должен быть пуст.
+- **Порядок загрузки `app/controllers/**`** — алфавитный glob: файл,
+  идущий раньше `application_controller.cr` (например `accounts_controller`),
+  требует явного `require "./application_controller"`.
+- **Base64-декодинг**: `Base64.decode` кидает `Base64::Error` (не
+  `ArgumentError`) — ловить оба (qr_codes#show).
+- **Роутер: `+` в path-сегментах** — action_pack routes.cr декодирует
+  сегменты через `URI.decode_www_form` (семантика query), `+` становится
+  пробелом. Ловится на join_code с base64-алфавитом; joins_controller
+  пробует оба варианта. Правильный фикс — в монорепо (декодировать только
+  %XX).
+- `Model.new(kwargs)` без `type`; STI-подклассами; UPSERT не работает на
+  FTS5 (DELETE+INSERT); integration_spec.cr:137 — старый фейл (параметры
+  action/controller утекают в echo), не трогать; loadgen cable перепроверить
+  после смены rejection-семантики (подписки валидные — не должно меняться,
+  но НЕ проверено).

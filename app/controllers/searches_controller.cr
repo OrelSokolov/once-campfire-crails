@@ -22,17 +22,20 @@ class SearchesController < ApplicationController
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
-      io << "<!doctype html>\n<html>\n<head><title>Search</title></head>\n<body>\n"
-      io << %(<section class="search_results" data-query=") << HTML.escape(query) << %("\n)
-      io << %(  <ol class="results">\n)
+      io << ChatLayout.head("Search: #{query}", user, nil, chat: false)
+      io << %(<body class="search">\n<main id="main-content">\n)
+      io << %(<div id="search-results" class="messages searches__results" data-controller="search-results" )
+      io << %(data-search-results-target="messages" data-search-results-me-class="message--me" )
+      io << %(data-search-results-threaded-class="message--threaded" )
+      io << %(data-search-results-mentioned-class="message--mentioned" )
+      io << %(data-search-results-formatted-class="message--formatted" data-query=") << HTML.escape(query) << %(">\n)
       messages.each do |m|
-        io << %(    <li><article id="message_#{m.id}" data-message-id="#{m.id}" data-client-message-id=")
-        io << HTML.escape(m.client_message_id.to_s)
-        io << %("\n      >)
-        io << %(<div class="message-body">) << m.indexed_body.to_s << "</div>\n"
-        io << "    </article></li>\n"
+        room = Room.find?(m.room_id.not_nil!)
+        next unless room
+        io << ChatLayout.message_dom(m, room, User.find?(m.creator_id.not_nil!))
       end
-      io << "  </ol>\n</section>\n</body>\n</html>\n"
+      io << %(</div>\n)
+      io << %(</main>\n</body>\n</html>\n)
     end)
   end
 end
