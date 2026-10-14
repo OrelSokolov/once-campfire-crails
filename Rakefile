@@ -14,6 +14,7 @@
 #   rake verify[c]
 #   rake benchmark             # формальный прогон: все приложения, 3 раунда, чередование
 #   rake benchmark[c]          # ...одно приложение
+#   rake report                # сводная таблица сравнения (роуты × приложения) из benchmarks/
 #   rake run                   # ВСЁ последовательно: deps→download→build→harness→verify→benchmark
 #
 # Результаты: benchmarks/<UTC-таймстамп>-<apps>/ (summary.json + сырые сэмплы).
@@ -27,6 +28,8 @@
 #
 # Замер и верификация требуют Linux (docker --network host, taskset в harness);
 # на macOS доступны только deps/download/build.
+
+require "bundler/setup" # гемы Gemfile (terminal-table для report) — vendor/bundle
 
 require "fileutils"
 require "json"
@@ -77,6 +80,10 @@ IMAGE = {
   "c" => "once-campfire-c:app", "elixir" => "campfire-elixir:app",
   CRAILS_APP => "once-campfire-crails:app",
 }.freeze
+
+# Порядок роутов в отчётах harness (таблицы README) и их отображение.
+ROUTE_ORDER = %w[room_show messages_page sidebar search avatar static_css up post_message].freeze
+ROUTE_LABEL = { "up" => "/up" }.freeze
 
 # ————— Утилиты —————
 
@@ -463,6 +470,74 @@ task :benchmark, [:app] do |_t, args|
   apps.each { |a| abort "Образ #{IMAGE[a]} не собран: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
   run_henchmark(apps, [])
   save_results(apps.join("_"))
+end
+
+# ————— report: сводная таблица сравнения из отчётов —————
+
+def bold(s) = $stdout.tty? ? "\e[1m#{s}\e[0m" : s
+
+def thousands(n) = n.round.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\1 ').reverse
+
+desc "Comparison table (routes × apps, median RPS) from benchmarks/*/summary.json"
+task :report do
+  require "terminal-table"
+
+  reports = Dir[File.join(RESULTS_DIR, "*", "summary.json")].sort
+  abort "No reports in benchmarks/ — run `rake benchmark` first." if reports.empty?
+
+  # app → { medians: route → median_rps, rev:, dir: }; более поздний отчёт
+  # (имя каталога — UTC-таймстамп) затирает более ранний по тому же app.
+  data_by_app = {}
+  skipped = []
+  reports.each do |path|
+    dir = File.basename(File.dirname(path))
+    data = JSON.parse(File.read(path))
+    next skipped << dir unless data.dig("metadata", "complete")
+
+    revs = data.dig("metadata", "source_revisions") || {}
+    data.fetch("results").each do |app, summary|
+      medians = summary.filter_map { |route, v| [route, v["median_rps"]] if v.is_a?(Hash) && v["median_rps"] }.to_h
+      # Отчёты до патча compare.rb держали в summary только 5 роутов —
+      # недостающие добираем медианой из по-раундовых файлов <app>-N.json.
+      measured = (data.dig("metadata", "routes") || "").split(",")
+      missing = measured - medians.keys
+      unless missing.empty?
+        round_rows = Dir[File.join(dir, "#{app}-*.json")].sort.map { |f| JSON.parse(File.read(f)) }
+        missing.each do |route|
+          samples = round_rows.filter_map { |row|
+            row["http"]&.find { |it| it["route"] == route && it["conc"] == 16 }&.fetch("rps")
+          }
+          medians[route] = samples.sort[samples.size / 2] unless samples.empty?
+        end
+      end
+      data_by_app[app] = { medians: medians, rev: revs.dig(app, "head").to_s[0, 7], dir: dir }
+    end
+  end
+  abort "All reports are incomplete (complete: false) — no run reached the summary." if data_by_app.empty?
+
+  apps   = APP_ORDER.select { |a| data_by_app.key?(a) } + (data_by_app.keys - APP_ORDER)
+  routes = ROUTE_ORDER + (data_by_app.values.flat_map { |d| d[:medians].keys } - ROUTE_ORDER)
+
+  puts
+  puts "Median RPS, 3 rounds × 16 clients (bold — best per route):"
+  table = Terminal::Table.new do |t|
+    t.headings = ["Route", *apps]
+    t.align_column(0, :left)
+    apps.each_index { |i| t.align_column(i + 1, :right) }
+    routes.uniq.each do |route|
+      medians = apps.map { |a| data_by_app[a][:medians][route] }
+      best = medians.compact.max
+      t.add_row([ROUTE_LABEL.fetch(route, route), *medians.map { |m|
+        m.nil? ? "—" : (m == best ? bold(thousands(m)) : thousands(m))
+      }])
+    end
+    t.add_row(["Revision", *apps.map { |a| data_by_app[a][:rev] }.map { |r| r.nil? || r.empty? ? "—" : r }])
+  end
+  puts table
+  puts
+  apps.each { |a| puts "  #{a}: #{data_by_app[a][:dir]} @ #{data_by_app[a][:rev]}" }
+  puts "  Skipped incomplete runs: #{skipped.join(", ")}" unless skipped.empty?
+  puts
 end
 
 desc "Полный цикл: deps → download → build (crails последним) → harness → verify → benchmark"

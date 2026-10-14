@@ -157,6 +157,7 @@ rake build           # production docker images (crails builds last)
 rake harness         # verifier checkout + crails patch + loadgen + seed DB
 rake verify          # preflight: route contracts against every image
 rake benchmark       # formal run: 3 rounds, 16 clients → benchmarks/
+rake report          # comparison table (routes × apps, medians) from benchmarks/ summaries
 rake run             # all of the above, sequentially
 ```
 

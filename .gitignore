@@ -22,3 +22,9 @@ db/*.sqlite3-wal
 
 # Rake-бенчмарк: рабочее окружение (клоны конкурентов, harness, сид)
 /bench-workspace/
+
+# Ruby-гемы rake-пайплайна (Gemfile → vendor/bundle)
+/.bundle/
+/vendor/
+
+benchmarks/

@@ -1,5 +1,5 @@
 diff --git a/bench/compare.rb b/bench/compare.rb
-index 9e1f15f..e70cd42 100644
+index 9e1f15f..f476d97 100644
 --- a/bench/compare.rb
 +++ b/bench/compare.rb
 @@ -29,7 +29,7 @@ OptionParser.new do |parser|
@@ -19,3 +19,12 @@ index 9e1f15f..e70cd42 100644
        end
        unless %w[c cpp].include?(kind)
          metadata[:topology][app][:response_cache_mb] = config.fetch("CAMPFIRE_RESPONSE_CACHE_MB", "64")
+@@ -227,7 +228,7 @@ begin
+   raise "original seed changed" unless Digest::SHA256.file(File.join(options[:seed], "db/production.sqlite3")).hexdigest == original_seed_sha
+   summary = apps.to_h do |app|
+     rows = results.select { |row| row[:app] == app }
+-    summary_routes = mixed ? %w[room_show messages_page sidebar search] : %w[room_show messages_page sidebar search post_message]
++    summary_routes = mixed ? %w[room_show messages_page sidebar search] : selected_routes
+     values = summary_routes.to_h do |name|
+       samples = rows.filter_map { |row| row[mixed ? :mixed_http : :http].find { |item| item.fetch("route") == name && item.fetch("conc") == 16 }&.fetch("rps") }
+       [name, samples.empty? ? nil : { median_rps: median(samples), runs: samples }]
