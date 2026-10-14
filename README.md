@@ -118,6 +118,31 @@ Cold paths avoid N+1 queries: sidebar member labels are resolved with a
 single JOIN for all direct rooms, search/message pages preload rooms and
 authors with one `IN (...)` per entity.
 
+## How the other implementations are built
+
+Same dimensions, same machine, revisions pinned in the results table above.
+
+| | Rails | Express | Go | Rust | C | Elixir | **CRails** |
+|---|---|---|---|---|---|---|---|
+| Transport | Puma | `node:http` + Express 5 | stdlib `net/http` + built-in "Thruster" (h2c, TLS/ACME) | axum/hyper/tokio + own front-server (h2c, TLS/ACME) | custom epoll server (picohttpparser, HTTP/1.1) | Bandit + Plug, behind a Thruster proxy | **ServerX: nginx-model, buffer per connection, offset parser** |
+| Processes | Puma workers (3×5 threads) | cluster + `reusePort: true` (`WEB_WORKERS`) | 1 process, goroutine-per-connection | 1 process, tokio threads = CPU | 1 process: 1 loop thread + 4 worker threads, no SO_REUSEPORT | 1 BEAM OS process, no clustering | **3 fork workers + SO_REUSEPORT** |
+| Whole-page response cache | none (every response re-rendered) | LRU 64 MB + `data_version` epoch | LRU 64 MB + pinned `data_version` | ≤1 MB/entry + 15 s TTL | 64 MiB + `data_version` epoch | 64 MB FIFO, final gzip bytes | LRU 64 MB + `data_version` epoch |
+| Fragment cache | — | LRU 32 MB (`messages/{id}-{updated_at}`) | LRU 32 MB (sidebar frame) | LRU 32 MB, per-message | none (views are C code) | ETS, keyed by `updated_at` | none (page cache covers it) |
+| Gzip | Rack::Deflater | spliced gzip (stable segments deflated once) + compression L6 | front gzip L6, precompressed assets | zlib-rs L6 + front zstd L1, `.br`/`.gz` embedded in the binary | gzip representation stored in cache | re-deflated on every response (25% CPU) | lazy gzip in the page cache |
+| ETag/304 | yes | weak fast-etag (crc32) | weak `W/"..."` | SHA-256, Rack-style | `W/"sha256(body)"` | `W/"sha256"` over the whole body | SHA1 prefix in the page cache |
+| Session on hot path | SQL per request | SQL through an LRU query cache → effectively 0 queries on a hit | SQL per request (JOIN sessions+users, before cache lookup) | SQL per request (`find_by_token` + `find_by_id`) | 2 SQLs before cache lookup | full auth path even on a hit (3–4 SQL + AES decrypt) | **1 PRAGMA per request** (IdentityCache) |
+| Prepared statements | — | LRU 512, `IN` via `json_each` | cache 256, `IN` via `json_each` (stable SQL shape) | `prepare_cached` (256) | fixed SQL per connection | LRU 64 per reader (writer re-prepares) | crystal-db cache |
+| N+1 | — | none: `IN (json_each(?))` batches | none: LEFT JOIN in messageSelect + `IN json_each`; deliberate N+1 on boosts | none: presenter memoization + fragment cache | none: `IN json_each(?)` | yes: ~200 SQL per room render | none: one `IN (...)` per entity, JOIN for sidebar |
+| DB architecture | — | 1 connection + background checkpointer | 1 writer + N ro-readers + a pinned ro connection for `data_version` | 1 writer thread + N reader threads + checkpointer thread | ro pool + 1 writer thread (queue 256) | 1 writer GenServer + reader partitions, every query is a GenServer.call (row copies) | pool per fork worker, WAL |
+| Notable extras | — | memoized AES-cookie decrypt | extra `messages(room_id, created_at/updated_at)` indexes at startup | jemalloc, LTO, THP disabled, RLIMIT_NOFILE | static HTML views compiled into the binary | keys cached in `persistent_term` | `-Dwithout_mt` (fork vs MT Crystal runtime) |
+
+The winning combination is the last column's, and no other implementation
+has all three pieces at once: multi-process SO_REUSEPORT transport (only
+Express clusters too), a whole-page cache (Go/Rust/C/Elixir have one as
+well), and a session cache that reduces the hot path to a single
+`PRAGMA data_version` — every other implementation pays 2+ SQL per request
+for auth before its cache is even consulted.
+
 ## Build and run
 
 ```sh
