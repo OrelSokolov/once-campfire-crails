@@ -11,6 +11,24 @@ implementations (route contracts validated on every response under load,
 write audits against the seed database, browser gate via Playwright,
 Action Cable live messaging) — and then be measured on requests per second.
 
+## Measurement environment
+
+All CRails, C and Elixir numbers below were measured on this machine:
+
+- **Xiaomi Redmi Book Pro 16 2024** laptop
+- **Intel Core Ultra 7 155H** — 6 P-cores + 8 E-cores + 2 LP E-cores
+  (16 cores / 22 threads), up to 4.8 GHz; 32 GB RAM
+- Linux kernel 7.2.6, Docker (`--network host`)
+- Server pinned to `--cpuset-cpus 8-11`: 4 hardware threads of two
+  P-cores (SMT pair each, up to 4.5 GHz); load generator pinned to
+  cpuset 12-15 (E-cores), so client and server never share cores
+- Same seed database, same 3-round × 16-client methodology for every app
+
+As a laptop (shared memory bandwidth, thermals), absolute numbers are
+specific to this machine; the Rails/Express/Go/Rust columns are the
+harness's recorded baselines taken with an equivalent CPU split
+(4 P-core threads for the server, E-core threads for the client).
+
 ## Benchmark results
 
 Official harness, median of 3 rounds, 16 concurrent clients, 4 physical cores
