@@ -241,10 +241,42 @@ Dockerfile; сами проверки contracts.rb уже воспроизвед
   3714 frames/sec, latency-доставка полная. `/` → redirect на последнюю
   комнату (cookie last_room / первая видимая).
 
-Осталось в Фазе 2: browser gate `bin/browser` (Playwright) — требует полный
-UI (first_run, lexxy-editor, редактирование, профиль/аккаунт, QR, боты,
-custom styles, session transfers, автокомплит direct-ping); jobs-очередь
-«persisted before response» для уведомлений/push/webhooks.
+**Фаза 2 — ✅ закрыта (2026-10-14): browser gate + jobs-очередь.**
+
+Browser gate (Playwright smoke) зелёной вехой закрыт 2026-10-14: полный PASS
+(setup/first_run, two-tab live messaging + duplicate suppression, stored-markup
+safety, permalinks, редактирование, поиск, профиль/аккаунт, QR, комнаты
+create/rename + broadcast, боты, custom styles, session transfers, join по
+invite, autocomplete direct pings). Фиксы финального блока: парсинг
+`user_ids[]` (action_pack кладёт их в `params["user_ids"]` как
+Scalar/Array/Parameters — `directs_controller#selected_user_ids`), и
+pill-template автокомплита с `<img data-content="avatar">` (selection.js
+требует; сверен с direct_new.eta).
+
+Jobs-очередь «persisted before response» (порт src/jobs.js express):
+- `app/jobs/job_queue.cr` — leased-SQLite очередь в отдельной `db/jobs.sqlite3`
+  (WAL, busy_timeout 10 c): enqueue-батч синхронно из HTTP-запроса, claim по
+  случайному lease-токену на 120 c, retry с экспоненциальным backoff
+  (2^n, кап 300 c), dead после 5 попыток, last_error; inline-воркер —
+  JOB_CONCURRENCY фибр (default 3), поллинг 250 мс, стартует вместе с serve;
+- `app/models/message_creator.cr` — единая точка создания сообщения:
+  insert + ActionText-тело + FTS5 + turbo-stream broadcast + unread_memberships
+  (offline >60 c, involvement<>'invisible') + notify (webhook-джобы ботам
+  комнаты при direct/упоминании, push-джобы involvement everything/mentions
+  offline-участникам) — всё до ответа; sgid-упоминания без проверки подписи
+  (порт mentionIds/unverifiedUserGid);
+- perform: webhook — POST JSON-payload (user/room/message, path с botKey),
+  7-сек таймаут → реплай «Failed to respond...», ответ 200 text/* →
+  сообщение от бота (webhooks: false против петель); push — no-op без
+  VAPID-ключей (как express), полноценная доставка — Фаза 4;
+- `bots_controller` — webhook_url бота теперь сохраняется в webhooks
+  (create/update/edit; раньше поле формы игнорировалось);
+- проверено end-to-end: бот с webhook на локальный сервер → сообщение с
+  sgid-упоминанием → джоба → доставка JSON → реплай «pong from bot» от бота →
+  очередь пуста. Регресс: browser smoke PASS.
+
+Осталось: Фаза 3 (производительность) и Фаза 4 (публикация: serverX на GitHub,
+Dockerfile, патч harness, README).
 
 ### Известные особенности (browser gate, Фаза 2)
 

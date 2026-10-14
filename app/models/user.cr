@@ -26,4 +26,10 @@ class User < ActiveRecord::Base
       ActiveStorageBlob.find(attachment.blob_id.not_nil!)
     end
   end
+
+  # Единственный webhook бота (таблица webhooks; user_id, url).
+  def webhook_url : String?
+    ActiveRecord::Base.connection.query_one?(
+      "SELECT url FROM webhooks WHERE user_id = ?", id.not_nil!) { |rs| rs.read(String?) }
+  end
 end

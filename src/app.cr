@@ -6,6 +6,7 @@ require "rqrcode_cr"
 require "../config/application"
 require "../app/models/**"
 require "../app/helpers/chat_layout"
+require "../app/jobs/**"
 require "../config/cable"
 require "../app/channels/application_cable/channel"
 require "../app/channels/application_cable/connection"
@@ -23,4 +24,9 @@ elsif File.exists?("config/database.yml")
 end
 
 CRails.application.initialize!
+
+# Inline job worker (уведомления/push/webhooks) — как у express-кластера:
+# воркер очереди живёт в тех же процессах, что и HTTP.
+Campfire::JobQueue.start_worker if {"", "serve"}.includes?(ARGV[0]? || "")
+
 CRails.application.boot(ARGV)

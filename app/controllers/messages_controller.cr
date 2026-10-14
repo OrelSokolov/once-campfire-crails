@@ -39,38 +39,16 @@ class MessagesController < ApplicationController
     body_html = message_body_param
     client_message_id = message_client_id_param || UUID.random.to_s
 
-    # Вставка сообщения + ActionText-тела + FTS5-индекс (аудит validate_acks
-    # требует все три с точным телом).
-    now = Time.utc
-    message = Message.new(
-      room_id: room.id.not_nil!,
-      creator_id: user.id.not_nil!,
-      client_message_id: client_message_id)
-    message.save!
-    message_id = message.id.not_nil!
+    # Вставка + ActionText-тело + FTS5-индекс + broadcast + unread +
+    # джобы уведомлений (push/webhook) в очередь — persisted до ответа
+    # (аудит validate_acks требует первые три с точным телом).
+    message = MessageCreator.create!(room, user, body_html, client_message_id)
 
-    conn = ActiveRecord::Base.connection
-    plain = plain_text(body_html)
-    conn.exec(
-      "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
-      "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
-    conn.exec(
-      "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
-      message_id, plain)
-
-    # Ответ + cable-broadcast: turbo-stream append с полным DOM сообщения
-    # (RoomMessagesChannel). Дедупликацию на клиенте делает messages-
-    # контроллер по data-client-message-id; контракту хватает подстроки
-    # id="<cmid>" в data-client-message-id и data-message-id="<id>".
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
       io << ChatLayout.message_dom(message, room, user)
       io << %(</template></turbo-stream>\n)
     end
-
-    Turbo.cable.broadcast(
-      Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-      turbo_frame)
 
     render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
   end
@@ -97,21 +75,7 @@ class MessagesController < ApplicationController
     body_html = "<p>#{HTML.escape(plain)}</p>"
     client_message_id = UUID.random.to_s
 
-    now = Time.utc
-    message = Message.new(
-      room_id: room.id.not_nil!,
-      creator_id: bot.id.not_nil!,
-      client_message_id: client_message_id)
-    message.save!
-    message_id = message.id.not_nil!
-
-    conn = ActiveRecord::Base.connection
-    conn.exec(
-      "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
-      "Message", message_id, "body", body_html, now, now)
-    conn.exec(
-      "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
-      message_id, plain)
+    message = MessageCreator.create!(room, bot, body_html, client_message_id)
 
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)

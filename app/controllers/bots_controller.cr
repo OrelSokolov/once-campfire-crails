@@ -26,6 +26,7 @@ class BotsController < ApplicationController
       bot_token: Random::Secure.hex(6),
       created_at: now, updated_at: now)
     bot.save!
+    sync_webhook(bot.id.not_nil!, nested("webhook_url"))
     # createUser эталона (domain.js): новый пользователь (включая бота)
     # получает membership во все Rooms::Open (involvement "mentions").
     # STI-порт хранит type коротким именем подкласса ("Open").
@@ -82,6 +83,7 @@ class BotsController < ApplicationController
     bot.name = name unless name.empty?
     bot.updated_at = Time.utc
     bot.save!
+    sync_webhook(bot.id.not_nil!, nested("webhook_url"))
     redirect_to "/account/bots"
   end
 
@@ -103,8 +105,9 @@ class BotsController < ApplicationController
     io << %(autofocus required data-1p-ignore="true"></label></div>\n)
     io << %(<div class="flex align-center gap">)
     io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-    io << %(<input type="url" name="user[webhook_url]" id="user_webhook_url" value="" )
-    io << %(class="input" placeholder="Webhook URL"></label></div>\n)
+    io << %(<input type="url" name="user[webhook_url]" id="user_webhook_url" value=")
+    io << HTML.escape(bot.try(&.webhook_url).to_s)
+    io << %(" class="input" placeholder="Webhook URL"></label></div>\n)
     io << %(<button class="btn btn--reversed center txt-large" type="submit">)
     io << %(<span class="for-screen-reader">Save changes</span></button>\n)
     io << %(</form></section>\n</main>\n</body>\n</html>\n)
@@ -114,6 +117,27 @@ class BotsController < ApplicationController
     nested = params["user"]?
     return "" unless nested.is_a?(ActionController::Parameters)
     nested[key]?.to_s
+  end
+
+  # Webhook бота (routes.js эталона): пустой URL — удалить, непустой —
+  # единственная запись webhooks для бота.
+  private def sync_webhook(bot_id : Int64, url : String) : Nil
+    conn = ActiveRecord::Base.connection
+    if url.empty?
+      conn.exec("DELETE FROM webhooks WHERE user_id = ?", bot_id)
+    else
+      now = Time.utc
+      existing = conn.query_one?(
+        "SELECT id FROM webhooks WHERE user_id = ?", bot_id) { |rs| rs.read(Int64) }
+      if existing
+        conn.exec("UPDATE webhooks SET url = ?, updated_at = ? WHERE id = ?",
+          url, now, existing)
+      else
+        conn.exec(
+          "INSERT INTO webhooks (url, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)",
+          url, bot_id, now, now)
+      end
+    end
   end
 
   private def require_admin : Nil
