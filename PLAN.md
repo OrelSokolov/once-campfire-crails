@@ -333,6 +333,31 @@ per-request: `klass.new(context)`), аутентификация и page-cache �
 
 Следующий шаг: полный официальный прогон 3 раундов в harness.
 
+**Фаза 4 — веха 3 (2026-10-14): первый полный официальный прогон — PASS
+(exit 0, 3 раунда, все роуты, write-аудиты зелёные).** По дороге исправлен
+контрактный баг messages_page, который преflight физически не мог поймать
+(контракты снимаются, но не валидируются под нагрузкой):
+- loadgen route-contract-v1 матчит `<div ... data-message-id=...>` и
+  closure `</turbo-frame></div>$` каждого сообщения, а мы рендерили
+  минимальный `<article>` — 0 матчей, 100% invalid; Ruby-prepare матчит
+  `data-message-id="..."` без div, поэтому preflight проходил;
+- фикс: `render_messages_page` → `ChatLayout.message_dom` (тот же DOM,
+  что room_show) + убран закрывающий `</main></body></html>` — последний
+  сегмент должен кончаться ровно на `</turbo-frame></div>` (messages_page
+  — partial истории, полной HTML-страницей быть не обязан).
+Замеры официального стенда (cpuset 8-11, conc=16, median из 3 раундов):
+
+| Роут | RPS | | Роут | RPS |
+|---|---|---|---|---|
+| room_show (PageCache+gzip) | **58 093** | | static_css | 209 000 |
+| messages_page | 2 982 | | up | 147 832* |
+| sidebar | 11 089 | | post_message | 110 |
+| search | 3 915 | | avatar | 3 205 |
+
+*up: 158k/148k/120k (медиана 147.8k; разброс от соседней нагрузки).
+room_show 58k — верхняя граница Go-эталона (53–60k) на тех же ядрах;
+Rails-эталон /up 2.8k.
+
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
   Фазы 4):

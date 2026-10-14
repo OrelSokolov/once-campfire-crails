@@ -201,7 +201,12 @@ class MessagesController < ApplicationController
     html.gsub(/<[^>]*>/, " ").gsub(/\s+/, " ").strip
   end
 
+  # messages.eta (референс): каждая запись — тот же DOM, что в комнате
+  # (message_dom: <div data-message-id=...> + turbo-frame + </turbo-frame>
+  # </div> closure); минимальный <article> не проходит route-contract-v1
+  # loadgen'а (<div ... data-message-id> + </turbo-frame></div>$).
   private def render_messages_page(room, messages)
+    user_cache = {} of Int64 => User?
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
       io << "<!doctype html>\n<html>\n<head><title>"
@@ -209,13 +214,15 @@ class MessagesController < ApplicationController
       io << "</title></head>\n<body>\n"
       io << %(<main id="messages_room_#{room.id}">\n)
       messages.each do |m|
-        io << %(  <article id="message_#{m.id}" data-message-id="#{m.id}" data-client-message-id=")
-        io << HTML.escape(m.client_message_id.to_s)
-        io << %("\n    >)
-        io << %(<div class="message-body">) << m.body.to_s << "</div>\n"
-        io << "  </article>\n"
+        creator_id = m.creator_id.not_nil!
+        user_cache[creator_id] ||= User.find?(creator_id)
+        io << ChatLayout.message_dom(m, room, user_cache[creator_id])
       end
-      io << "</main>\n</body>\n</html>\n"
+      # Без закрывающих </main></body></html>: route-contract-v1 требует,
+      # чтобы сегмент последнего сообщения заканчивался ровно на
+      # "</turbo-frame></div>" (closure); messages_page — partial-ответ
+      # истории (подгружается в turbo-frame), полной HTML-страницей
+      # быть не обязан.
     end)
   end
 end
