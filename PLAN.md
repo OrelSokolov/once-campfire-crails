@@ -239,9 +239,30 @@ Dockerfile; сами проверки contracts.rb уже воспроизвед
   sidebar/searches при необходимости, тюнинг WEB_CONCURRENCY (serverX
   multi-worker) против 1 процесса на фибрах — после подключения serverX.
 
-Следующий шаг: патч harness (compare.rb: allowed/топология/Dockerfile) для
-формального preflight Фазы 1-criteria + Docker-образ (Фаза 4), затем
-остаток Фазы 3 на официальном стенде.
+**Фаза 3 — веха 2 (2026-10-14): главный тормоз был dev-сборкой.** Замеры
+велись на бинаре без `--release`; hello 142k из results/000-hello.md —
+release-сборка. После `crystal build --release` (бинарь `bin/app-release`):
+
+| Роут | dev | release |
+|---|---|---|
+| `GET /up` | 15.6k RPS | **75.7k RPS** (p50 0.2 мс) |
+| `GET /rooms/:id` (PageCache+gzip) | 3.7k RPS | **13.1k RPS** (p99 2.9 мс) |
+
+От исходного baseline 231 RPS (dev, без кэша) — рост **×56**; уровень Rails
+(4.1–4.3k) превышен втрое на одном процессе stdlib HTTP::Server. Browser
+smoke на release-бинаре — PASS. **Правило: все бенч-замеры — только на
+`--release`** (bin/benchmark и Dockerfile Фазы 4 должны собирать release).
+
+Остаток разрыва до Go (53–60k): (а) 3 SQL на каждый запрос
+(session + user + PRAGMA data_version) — кэшировать сессию/юзера per-fiber
+или mem-таблицей с инвалидацией по epoch; (б) транспорт stdlib → serverX
+(reusePort, WEB_CONCURRENCY=3); (в) fragment cache MISS-рендера. Go- и
+Rust-реализации лежат в `~/rails.cr/tmp/once-campfire-{go,rust}` — их
+front-server (h2c, bounded response cache) — ориентир для Фазы 3-тюнинга.
+
+Следующий шаг: патч harness (compare.rb: allowed/топология/Dockerfile,
+release-сборка в образе) для формального preflight, затем тюнинг из
+остатка выше на официальном стенде.
 
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
