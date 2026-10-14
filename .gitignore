@@ -1,6 +1,7 @@
 # Crystal
 /lib/
-/bin/
+/bin/*
+!/bin/docker-build.sh
 /tmp/
 *.dwarf
 

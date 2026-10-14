@@ -1,11 +1,27 @@
 # once-campfire-crails — ONCE Campfire на CRails.
-# Framework shards resolve via lib/ symlinks into the ~/rails.cr monorepo
-# (как rails_hello); bcrypt — для паролей сида (порт stdlib Crypto::Bcrypt).
+# Все зависимости — публичные git-шарды (бенчмарк-образ собирается через
+# `shards install`; path-симлинки монорепо больше не нужны).
 name: once_campfire_crails
 version: 0.1.0
 crystal: ">= 1.21.0"
 dependencies:
+  railties_cr:
+    github: OrelSokolov/railties.cr
+    version: ~> 0.1.1
+  active_record_cr:
+    github: OrelSokolov/active_record.cr
+    version: ~> 0.1.1
+  action_cable_cr:
+    github: OrelSokolov/action_cable.cr
+    version: ~> 0.1.1
+  turbo_cr:
+    github: OrelSokolov/turbo.cr
+    version: ~> 0.1.1
   bcrypt:
     github: jgaskins/bcrypt
+  rqrcode_cr:
+    github: OrelSokolov/rqrcode.cr
+    version: ~> 0.1.0
   serverx:
-    path: /home/oleg/serverX.cr
+    github: OrelSokolov/serverx.cr
+    version: ~> 0.2.1

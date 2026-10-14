@@ -1,0 +1,9 @@
+.git
+lib
+tmp
+log
+nohup.out
+db/*.sqlite3*
+bin/app
+bin/app-release
+bin/app-sx

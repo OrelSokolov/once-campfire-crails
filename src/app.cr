@@ -43,7 +43,8 @@ end
 # upgrade/ActionCable поддержан транспортом). Иначе — stdlib HTTP::Server
 # (TcpNodelayServer) в CRails.application.boot.
 if {"", "serve"}.includes?(ARGV[0]? || "") && ENV["CRAILS_TRANSPORT"]? == "serverx"
-  port = CRails.application.config.port
+  # harness передаёт порт через HTTP_PORT env (не -p)
+  port = ENV["HTTP_PORT"]?.try(&.to_i?) || CRails.application.config.port
   host = CRails.application.config.host
   i = ARGV[0]? ? 1 : 0
   while i < ARGV.size
