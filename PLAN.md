@@ -319,6 +319,20 @@ preflight — всё зелёное.**
 Следующий шаг: мем-кэш сессий (3 SQL/запрос: session + user + PRAGMA
 data_version), затем полный официальный прогон 3 раундов.
 
+**Фаза 4 — веха 2 (2026-10-14): мем-кэш аутентификации (IdentityCache).**
+`app/helpers/identity_cache.cr`: per-worker кэш session+user по токену,
+записи живут один DB-epoch (тот же `PRAGMA data_version`, что у PageCache);
+`PageCache.invalidate!` сбрасывает и его (все 13 write-экшенов покрыты).
+`ApplicationController`: `db_epoch` — мемо PRAGMA на запрос (контроллер
+per-request: `klass.new(context)`), аутентификация и page-cache делят одну
+эпоху; негативные результаты не кэшируются. Горячий путь /rooms HIT:
+3 SQL → 1 PRAGMA. Проверено: login/rooms 200; инвалидация — UPDATE sessions
+из чужого процесса → 302 немедленно. Замер (serverX×3, conc=16, без cpuset,
+как веха 3): /rooms **39.2k → 77.4k RPS** (×2, p50 0.18 мс, p99 0.56 мс,
+0 ошибок) — уровень Go (53–60k) превышен.
+
+Следующий шаг: полный официальный прогон 3 раундов в harness.
+
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
   Фазы 4):

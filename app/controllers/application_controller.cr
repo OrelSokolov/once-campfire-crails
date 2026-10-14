@@ -1,4 +1,8 @@
 abstract class ApplicationController < ActionController::Base
+  @db_epoch : String? = nil
+  @identity_entry : Campfire::IdentityCache::Entry? = nil
+  @identity_checked : Bool = false
+
   before_action :require_authentication
 
   def current_session : Session?
@@ -9,15 +13,21 @@ abstract class ApplicationController < ActionController::Base
             else nil
             end
     return nil unless token
-    Session.where("token = ?", token).take
+    @identity_checked = true
+    @identity_entry = Campfire::IdentityCache.lookup(token, db_epoch)
+    @identity_entry.try(&.session)
   end
 
   def current_user : User?
-    session = current_session
-    return nil unless session
-    user_id = session.user_id
-    return nil unless user_id
-    User.find?(user_id)
+    current_session unless @identity_checked
+    @identity_entry.try(&.user)
+  end
+
+  # DB-epoch запроса (PRAGMA data_version, см. PageCache): мемо на время
+  # запроса — аутентификация и page-cache видят одну эпоху, PRAGMA
+  # выполняется один раз.
+  def db_epoch : String
+    @db_epoch ||= PageCache.epoch
   end
 
   def require_authentication : Nil

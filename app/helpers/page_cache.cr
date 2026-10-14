@@ -46,8 +46,11 @@ module Campfire
     # Инвалидация: PRAGMA data_version двигается только на ЧУЖИЕ коммиты
     # (другие соединения/процессы); собственные записи приложения через пул
     # не видны — поэтому каждый write-экшен зовёт invalidate! явно.
+    # Сбрасывает и IdentityCache (session+user могли измениться тем же
+    # write-экшеном: профиль, аккаунт, membership).
     def self.invalidate! : Nil
       @@epoch = ""
+      Campfire::IdentityCache.reset!
     end
 
     def self.epoch : String

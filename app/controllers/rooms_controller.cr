@@ -14,7 +14,7 @@ class RoomsController < ApplicationController
     room = room.not_nil!
     user = current_user.not_nil!
 
-    epoch = PageCache.epoch
+    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
     key = PageCache.key("rooms#show", request, user.id)
     if (cached = PageCache.get(key, epoch))
       return send_page(cached)
