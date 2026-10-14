@@ -51,14 +51,37 @@ module Campfire
       end
     end
 
+    # Write-транзакция очереди: BEGIN IMMEDIATE — write-lock захватывается
+    # до первого чтения, и при конкуренции PRAGMA busy_timeout честно ждёт.
+    # db.transaction (BEGIN DEFERRED) под WAL при read→write upgrade
+    # устаревшего снапшота падает мгновенно SQLITE_BUSY_SNAPSHOT, минуя
+    # busy_timeout, — POST возвращал 500, claim — «queue failed».
+    # Возвращает значение блока (как db.transaction).
+    def self.immediate_transaction(& : DB::Connection -> _)
+      db.using_connection do |conn|
+        conn.exec("BEGIN IMMEDIATE")
+        begin
+          result = yield conn
+          conn.exec("COMMIT")
+          result
+        rescue e
+          begin
+            conn.exec("ROLLBACK")
+          rescue
+          end
+          raise e
+        end
+      end
+    end
+
     # jobs: массив пар {kind, data} где data — JSON-строка.
     def self.enqueue_batch(jobs : Array(Tuple(String, String)),
                            at : Float64 = Time.utc.to_unix_f) : Nil
       return if jobs.empty?
-      db.transaction do |tx|
+      immediate_transaction do |conn|
         jobs.each do |(kind, data)|
           payload = %({"kind":#{kind.to_json},"data":#{data}})
-          tx.connection.exec(
+          conn.exec(
             "INSERT INTO jobs (payload, available_at) VALUES (?, ?)",
             payload, at)
         end
@@ -66,8 +89,8 @@ module Campfire
     end
 
     def self.claim(now : Float64 = Time.utc.to_unix_f) : Job?
-      db.transaction do |tx|
-        row = tx.connection.query_one?(
+      immediate_transaction do |conn|
+        row = conn.query_one?(
           "SELECT id, payload, attempts FROM jobs " \
           "WHERE status='ready' AND available_at <= ? " \
           "AND (lease_until IS NULL OR lease_until <= ?) ORDER BY id LIMIT 1",
@@ -76,7 +99,7 @@ module Campfire
         end
         next nil unless row
         token = Random::Secure.hex(16)
-        tx.connection.exec(
+        conn.exec(
           "UPDATE jobs SET attempts = attempts + 1, lease_until = ?, lease_token = ? WHERE id = ?",
           now + 120, token, row[:id])
         Job.new(row[:id], row[:payload], row[:attempts] + 1, token)
