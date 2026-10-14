@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="crystal-icon.svg" width="72" alt="Crystal">
+  <img src="crails-icon.svg" width="72" alt="CRails">
 </p>
 
 <h1 align="center">ONCE Campfire on CRails</h1>

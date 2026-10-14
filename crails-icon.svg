@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="crails-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="0.5" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#1e3a8a"/>
+    </linearGradient>
+    <linearGradient id="crails-crown" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a5f3fc"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="crails-pav" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- алмаз: контур -->
+  <polygon points="40,20 88,20 112,64 64,118 16,64" fill="url(#crails-body)" stroke="#0c4a6e" stroke-width="2" stroke-linejoin="round"/>
+  <!-- корона -->
+  <polygon points="40,20 88,20 84,44 44,44" fill="url(#crails-crown)"/>
+  <polygon points="40,20 44,44 16,64" fill="#7dd3fc" opacity="0.85"/>
+  <polygon points="88,20 112,64 84,44" fill="#0ea5e9" opacity="0.9"/>
+  <!-- павильон -->
+  <polygon points="44,44 16,64 64,118" fill="url(#crails-pav)"/>
+  <polygon points="44,44 84,44 64,118" fill="#1e40af" opacity="0.9"/>
+  <polygon points="84,44 112,64 64,118" fill="#2563eb" opacity="0.95"/>
+  <!-- блик -->
+  <polygon points="48,26 66,26 56,40 46,40" fill="#e0f2fe" opacity="0.75"/>
+</svg>
