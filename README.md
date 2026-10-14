@@ -46,7 +46,7 @@ machine with the identical stand and methodology.
 | search     |   238 |  35 999 | 29 802 | 51 970 | 61 153 |   3 275 |  **76 942** |
 | /up        | 2 826 |  47 972 | 59 862 | 81 267 | 122 111 |   5 887 | **148 238** |
 | KLOC       |   2.9 |     6.5 |   39.3 |   58.7 |  108.8 |    14.0 |      **2.4** |
-| Revision   | `90b3300` | `bb70a7d` | `c4ab53d` | `6dae2fd` | `873a51f` | `58964cf` | `c096b40` |
+| Revision   | [`90b3300`](https://github.com/basecamp/once-campfire/commit/90b3300) | [`bb70a7d`](https://github.com/basecamp/once-campfire-express/commit/bb70a7d) | [`c4ab53d`](https://github.com/basecamp/once-campfire-go/commit/c4ab53d) | [`6dae2fd`](https://github.com/basecamp/once-campfire-rust/commit/6dae2fd) | [`873a51f`](https://github.com/basecamp/once-campfire-c/commit/873a51f) | [`58964cf`](https://github.com/basecamp/once-campfire-elixir/commit/58964cf) | [`c096b40`](https://github.com/OrelSokolov/once-campfire-crails/commit/c096b40) |
 
 Revisions pin the exact code each column was measured against: Express, Go,
 Rust, C and Elixir are upstream checkouts from 2026-10-09 (the same pins as
