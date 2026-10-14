@@ -82,7 +82,7 @@ class MessagesController < ApplicationController
       io << ChatLayout.message_dom(message, room, bot)
       io << %(</template></turbo-stream>\n)
     end
-    Turbo.cable.broadcast(
+    Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
       turbo_frame)
     render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
@@ -168,7 +168,7 @@ class MessagesController < ApplicationController
       io << ChatLayout.message_dom(message, room, user)
       io << %(</template></turbo-stream>\n)
     end
-    Turbo.cable.broadcast(
+    Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
       turbo_frame)
     render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")

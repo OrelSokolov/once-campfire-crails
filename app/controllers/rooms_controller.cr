@@ -155,7 +155,7 @@ class RoomsController < ApplicationController
     stream_html = %(<turbo-stream action="prepend" target="shared_rooms"><template>)
     stream_html += link
     stream_html += %(</template></turbo-stream>)
-    Turbo.cable.broadcast(
+    Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from(["rooms"]),
       stream_html)
   end

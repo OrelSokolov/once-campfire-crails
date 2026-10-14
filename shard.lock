@@ -4,3 +4,7 @@ shards:
     git: https://github.com/jgaskins/bcrypt.git
     version: 0.1.0+git.commit.4004f17053cba6f2c752ea83162f405143ab541c
 
+  serverx:
+    path: /home/oleg/serverX.cr
+    version: 0.2.1
+

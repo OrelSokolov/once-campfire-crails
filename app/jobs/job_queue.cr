@@ -106,6 +106,13 @@ module Campfire
       concurrency.times { spawn { worker_loop } }
     end
 
+    # После fork (serverX Cluster): унаследованные sqlite-дескрипторы
+    # нельзя использовать — закрыть и открыть заново лениво.
+    def self.reset! : Nil
+      @@db.try(&.close)
+      @@db = nil
+    end
+
     def self.worker_loop : Nil
       loop do
         job = begin

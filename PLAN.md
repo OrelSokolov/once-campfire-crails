@@ -260,9 +260,34 @@ smoke на release-бинаре — PASS. **Правило: все бенч-за
 Rust-реализации лежат в `~/rails.cr/tmp/once-campfire-{go,rust}` — их
 front-server (h2c, bounded response cache) — ориентир для Фазы 3-тюнинга.
 
+**Фаза 3 — веха 3 (2026-10-14): транспорт ServerX + WEB_CONCURRENCY=3.**
+- Подключён `serverx` (path-зависимость → ~/serverX.cr; на Фазе 4 — GitHub):
+  `CRAILS_TRANSPORT=serverx` в src/app.cr — AppServer (handler = всё
+  приложение, cable внутри chain), воркеры — `ServerX::Cluster.run`
+  (fork + SO_REUSEPORT, `WEB_CONCURRENCY`), в fork-ребёнке AR-пул и
+  jobs-БД переоткрываются (`JobQueue.reset!`).
+- **CableBus** (app/helpers/cable_bus.cr): межворкерная шина кабеля —
+  TCP-хаб на 127.0.0.1:<app_port+1000>, избираемый bind-конкуренцией;
+  `Campfire.broadcast` = локальная доставка + ретрансляция пирам
+  (эквивалент cluster-IPC cable-batch у express). Все 5 точек broadcast
+  переведены на неё.
+- **busy_timeout=10000 в AR sqlite-адаптере** (монорепо, локально):
+  без него 3 воркера ловили `database is locked` (500 на GET).
+- Сборка: `--release -Dwithout_mt` (fork-воркеры). Итоги (conc=16, 10 c):
+
+| Роут | stdlib×1 | serverX×1 | serverX×3 |
+|---|---|---|---|
+| `/up` | 75.7k | 79.5k | **183k RPS** |
+| `/rooms/:id` (кэш+gzip) | 13.1k | 14.2k | **39.2k RPS** (p99 0.65 мс) |
+
+Browser smoke на serverX×3 — полный PASS (live-сообщения между вкладками
+через шину, боты, QR, session transfers, direct pings). От исходного
+231 RPS — рост **×170**; до Go-диапазона (53–60k на офиц. стенде 4 ядра)
+остаётся ~1.4× — следующий рычаг: мем-кэш сессий (3 SQL/запрос).
+
 Следующий шаг: патч harness (compare.rb: allowed/топология/Dockerfile,
-release-сборка в образе) для формального preflight, затем тюнинг из
-остатка выше на официальном стенде.
+release+serverX+WEB_CONCURRENCY=3 в образе) для формального preflight,
+затем мем-кэш сессий.
 
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до

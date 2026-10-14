@@ -7,3 +7,5 @@ crystal: ">= 1.21.0"
 dependencies:
   bcrypt:
     github: jgaskins/bcrypt
+  serverx:
+    path: /home/oleg/serverX.cr

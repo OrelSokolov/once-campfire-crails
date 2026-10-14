@@ -39,7 +39,7 @@ module MessageCreator
       io << ChatLayout.message_dom(message, room, author)
       io << %(</template></turbo-stream>\n)
     end
-    Turbo.cable.broadcast(
+    Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
       turbo_frame)
   end

@@ -125,7 +125,7 @@ class DirectsController < ApplicationController
     stream_html += link
     stream_html += %(</template></turbo-stream>)
     members.each do |member|
-      Turbo.cable.broadcast(
+      Campfire.broadcast(
         Turbo::Streams::StreamName.stream_name_from([member, "rooms"]),
         stream_html)
     end
