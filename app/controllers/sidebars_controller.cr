@@ -3,6 +3,16 @@
 class SidebarsController < ApplicationController
   def show
     user = current_user.not_nil!
+
+    # Whole-page response cache (как rooms#show): список комнат меняется
+    # только write'ами (rooms create/update, MessageCreator) — все сбрасывают
+    # PageCache.invalidate!, так что epoch гарантирует свежесть.
+    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
+    key = PageCache.key("sidebars#show", request, user.id)
+    if (cached = PageCache.get(key, epoch))
+      return send_page(cached)
+    end
+
     rooms = Room.visible_for(user).order("id").to_a
 
     # turbo_stream_from :rooms + turbo_stream_from Current.user, :rooms
@@ -11,8 +21,11 @@ class SidebarsController < ApplicationController
     rooms_stream = Turbo::Streams::StreamName.signed_stream_name(["rooms"])
     user_rooms_stream = Turbo::Streams::StreamName.signed_stream_name([user, "rooms"])
 
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
+    # Подписи direct-чатов одним JOIN-запросом (было N+1: SELECT
+    # участников на каждую direct-комнату).
+    labels = direct_labels(rooms, user)
+
+    html = String.build do |io|
       io << "<!doctype html>\n<html>\n<head><title>Sidebar</title></head>\n<body>\n"
       io << %(<turbo-frame id="user_sidebar">\n)
       io << %(<turbo-cable-stream-source channel="Turbo::StreamsChannel" signed-stream-name=")
@@ -40,10 +53,7 @@ class SidebarsController < ApplicationController
       io << %(<div id="direct_rooms">\n)
       rooms.each do |r|
         next unless r.name.nil?
-        members = User.where(
-          %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), r.id.not_nil!)
-          .order("id").to_a.reject { |m| m.id == user.id }
-        label = members.map { |m| m.name.to_s.split(" ")[0]? || "" }.join(", ")
+        label = labels[r.id.not_nil!]? || ""
         io << %(  <a class="direct" id="list_rooms_direct_#{r.id}" data-room-id="#{r.id}" )
         io << %(href="/rooms/#{r.id}">)
         io << %(<span class="direct__author flex align-center gap max-width min-width border-radius txt-small">)
@@ -53,6 +63,38 @@ class SidebarsController < ApplicationController
       end
       io << %(</div></div></turbo-frame>\n)
       io << "</nav>\n</turbo-frame>\n</body>\n</html>\n"
-    end)
+    end
+
+    page = Campfire::PageCache::Page.new(html)
+    # Кэшируем только если БД не менялась за время рендера и ответ чист
+    # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
+    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
+      PageCache.set(key, epoch, page)
+    end
+    send_page(page)
+  end
+
+  # room_id → "Имя1, Имя2" по первым словам имён участников direct-чата
+  # кроме viewer'а, участники в порядке id (как референс: User.where(...)
+  # .order("id") на каждую комнату — здесь один запрос на все).
+  private def direct_labels(rooms : Array(Room), user : User) : Hash(Int64, String)
+    direct_ids = rooms.select(&.name.nil?).map(&.id.not_nil!)
+    labels = {} of Int64 => String
+    return labels if direct_ids.empty?
+    placeholders = direct_ids.map { "?" }.join(", ")
+    rows = ActiveRecord::Base.connection.query_all(
+      %(SELECT mm.room_id, u.id, u.name FROM memberships mm
+        JOIN users u ON u.id = mm.user_id
+        WHERE mm.room_id IN (#{placeholders}) ORDER BY u.id),
+      args: direct_ids, as: {Int64, Int64, String})
+    members = Hash(Int64, Array({Int64, String})).new do |h, k|
+      h[k] = [] of {Int64, String}
+    end
+    rows.each { |(room_id, uid, name)| members[room_id] << {uid, name} }
+    members.each do |room_id, list|
+      labels[room_id] = list.reject { |uid, _| uid == user.id.not_nil! }
+        .map { |_, name| name.split(" ")[0]? || "" }.join(", ")
+    end
+    labels
   end
 end

@@ -375,6 +375,31 @@ CRails — №1 на room_show и /up; отставание messages_page/sideba
 рычаги: PageCache на sidebar/messages_page/search (запросы стабильны в
 пределах epoch) и кэш User в message_dom.
 
+**Фаза 4 — веха 4 (2026-10-14): PageCache на messages_page/sidebar/search
++ устранение N+1 — CRails №1 на всех GET-роутах.**
+- `messages#index`, `sidebars#show`, `searches#show` обёрнуты в PageCache
+  по образцу rooms#show (ключ включает query: `?before=`/`?q=`; все
+  write-пути уже зовут `PageCache.invalidate!`, новых точек не нужно);
+- N+1 убраны: search — Room/User по одному `IN`-запросу на сущность
+  (было до 200 точечных SELECT на страницу), sidebar — подписи direct-чатов
+  одним JOIN-запросом (было SELECT участников на каждую direct-комнату),
+  messages_page — авторы одним `IN`;
+- smoke на пустой базе из схемы сида (first_run → посты → три роута):
+  200+ETag, повтор If-None-Match → 304, gzip, write → свежий 200 (не stale),
+  messages_page заканчивается ровно на `</turbo-frame></div>`.
+Официальный прогон (cpuset 8-11, conc=16, медиана 3 раундов):
+
+| Роут | было | стало | | Роут | было | стало |
+|---|---:|---:|---|---|---:|---:|
+| room_show | 58 093 | 59 670 | | up | 147 832 | 148 238 |
+| messages_page | 2 982 | **58 500** (×19.5) | | static_css | 209 000 | 195 050 |
+| sidebar | 11 089 | **81 153** (×7.3) | | avatar | 3 205 | 2 800 |
+| search | 3 915 | **76 942** (×19.7) | | post_message | 110 | 110 |
+
+Против эталонов: sidebar 81k vs Rust 52.6k, search 77k vs 52.0k,
+messages_page 58.5k vs 47.2k — лидерство на всех GET-роутах. README.md
+(методология + таблица) добавлен в репозиторий.
+
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
   Фазы 4):

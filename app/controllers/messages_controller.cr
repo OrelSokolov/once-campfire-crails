@@ -13,6 +13,16 @@ class MessagesController < ApplicationController
       response.status = :not_found
       return render(plain: "Room not found")
     end
+    room = room.not_nil!
+    user = current_user.not_nil!
+
+    # Whole-page response cache (как rooms#show): ключ включает query
+    # (?before=...), инвалидация — общий DB-epoch.
+    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
+    key = PageCache.key("messages#index", request, user.id)
+    if (cached = PageCache.get(key, epoch))
+      return send_page(cached)
+    end
 
     anchor = params["before"]?
     messages = if anchor && (anchor_id = anchor.to_s.to_i64?)
@@ -25,7 +35,13 @@ class MessagesController < ApplicationController
         .order("created_at DESC").limit(40).to_a.reverse
     end
 
-    render_messages_page(room, messages)
+    page = Campfire::PageCache::Page.new(messages_page_html(room, messages))
+    # Кэшируем только если БД не менялась за время рендера и ответ чист
+    # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
+    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
+      PageCache.set(key, epoch, page)
+    end
+    send_page(page)
   end
 
   def create
@@ -205,24 +221,26 @@ class MessagesController < ApplicationController
   # (message_dom: <div data-message-id=...> + turbo-frame + </turbo-frame>
   # </div> closure); минимальный <article> не проходит route-contract-v1
   # loadgen'а (<div ... data-message-id> + </turbo-frame></div>$).
-  private def render_messages_page(room, messages)
-    user_cache = {} of Int64 => User?
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
+  # Авторы — одним IN-запросом (было User.find? на каждого создателя).
+  private def messages_page_html(room : Room, messages : Array(Message)) : String
+    creators = messages.map(&.creator_id.not_nil!).uniq
+    user_by_id = {} of Int64 => User
+    unless creators.empty?
+      User.where(id: creators).each { |u| user_by_id[u.id.not_nil!] = u }
+    end
+    String.build do |io|
       io << "<!doctype html>\n<html>\n<head><title>"
       io << HTML.escape(room.name.to_s)
       io << "</title></head>\n<body>\n"
       io << %(<main id="messages_room_#{room.id}">\n)
       messages.each do |m|
-        creator_id = m.creator_id.not_nil!
-        user_cache[creator_id] ||= User.find?(creator_id)
-        io << ChatLayout.message_dom(m, room, user_cache[creator_id])
+        io << ChatLayout.message_dom(m, room, user_by_id[m.creator_id.not_nil!]?)
       end
       # Без закрывающих </main></body></html>: route-contract-v1 требует,
       # чтобы сегмент последнего сообщения заканчивался ровно на
       # "</turbo-frame></div>" (closure); messages_page — partial-ответ
       # истории (подгружается в turbo-frame), полной HTML-страницей
       # быть не обязан.
-    end)
+    end
   end
 end
