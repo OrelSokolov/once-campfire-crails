@@ -27,9 +27,15 @@ machine with the identical stand and methodology.
 | sidebar    |   360 |  46 383 | 32 843 | 52 574 | 60 164 |   3 323 |  **81 153** |
 | search     |   238 |  35 999 | 29 802 | 51 970 | 61 153 |   3 275 |  **76 942** |
 | /up        | 2 826 |  47 972 | 59 862 | 81 267 | 122 111 |   5 887 | **148 238** |
+| KLOC       |   2.9 |     6.5 |   39.3 |   58.7 |  108.8 |    14.0 |      **2.4** |
 
-**#1 on every measured GET route — including C and Elixir.** Remaining
-routes from the same runs:
+**#1 on every measured GET route — including C and Elixir** — with the
+smallest code base. KLOC counts non-blank, non-comment lines of the
+application's own source in its primary language (Rails: `app/**/*.rb`;
+Express: `src/*.js`; Elixir: `lib/**/*.ex`; Go, Rust, C: repository
+sources; CRails: `app/`, `src/`, `config/` in Crystal — the CRails
+framework itself is published as separate reusable shards, so this is
+Campfire-the-product). Remaining routes from the same runs:
 
 | Route        |      C | Elixir | **CRails** |
 |--------------|-------:|-------:|-----------:|
@@ -43,16 +49,6 @@ audited per write) and is not a throughput route; C and Elixir keep it
 under 700 RPS as well. On CRails the avatar path verifies the signed token
 (PBKDF2 key derivation), runs two SQL lookups and reads the file from disk
 on every request — no response cache was applied there.
-
-Application size (non-blank, non-comment source lines, no vendored code):
-
-| | [Express](https://github.com/basecamp/once-campfire-express) | [Elixir](https://github.com/basecamp/once-campfire-elixir) | [Go](https://github.com/basecamp/once-campfire-go) | [Rust](https://github.com/basecamp/once-campfire-rust) | [C](https://github.com/basecamp/once-campfire-c) | [CRails](https://github.com/OrelSokolov/once-campfire-crails) |
-|---|---:|---:|---:|---:|---:|---:|
-| KLOC | 6.5 | 14.0 | 39.3 | 58.7 | 108.8 | **2.4** |
-
-CRails counts the application only; the CRails framework itself is
-published as separate reusable shards (railties/action_pack/active_record/
-action_cable/turbo ports) — the 2.4 KLOC is Campfire-the-product.
 
 ## Methodology
 
