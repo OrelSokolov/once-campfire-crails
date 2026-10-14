@@ -289,6 +289,36 @@ Browser smoke на serverX×3 — полный PASS (live-сообщения м�
 release+serverX+WEB_CONCURRENCY=3 в образе) для формального preflight,
 затем мем-кэш сессий.
 
+**Фаза 4 — веха 1 (2026-10-14): git-зависимости, Docker-образ, формальный
+preflight — всё зелёное.**
+- Все шарды опубликованы на GitHub и тегированы: `railties.cr`/`action_pack.cr`/
+  `action_cable.cr`/`turbo.cr`/`active_record.cr` v0.1.1 (патч-бамп для
+  `~> 0.1.0`), `rqrcode.cr` v0.1.0, `serverx` v0.2.1, 12 реп монорепо v0.1.0.
+  Грабли: теги должны существовать именно на GitHub (ls-remote), branch и tag
+  в constraints — разные шарды.
+- `shard.yml` приложения полностью на git-зависимостях (симлинков в `lib/`
+  нет); `shards install` собирает рабочий бинарь. serverX-ветка читает порт из
+  `ENV["HTTP_PORT"]` (harness передаёт его контейнеру).
+- Dockerfile: build-стадия `shards install` из публичных реп + `crystal build
+  --release -Dwithout_mt` (в build-образе нужны `sqlite-dev yaml-dev zlib-dev
+  openssl-dev` — без них линкер падает на `-lsqlite3`); runtime-стадии alpine
+  нужны `gc libevent pcre2 sqlite-libs libgcc libstdc++ yaml` — без `yaml`
+  бинарь падает `libyaml-0.so.2 not found` сразу после старта (exit 127).
+  `bin/docker-build.sh` сведён к `docker build` с контекстом-приложением
+  (`.dockerignore`: lib, .git, tmp, `db/*.sqlite3*`, локальные бинари).
+- Harness-форк: `allowed += crails`, топология `when "crails"`, образ
+  `once-campfire-crails:app` подставляется дефолтом.
+- Формальный preflight `bin/benchmark --apps crails --preflight --port 25140`
+  — **PASS** (exit 0): 3 раунда, контракты всех 8 роутов сняты
+  (room_show gzip 127k→10k байт, avatar/static_css байт-точны),
+  `post_write_audit verified`, seed не изменён, `complete: true`.
+  Важно: дефолтный порт 25130 занят `campfire-rails-baseline`
+  (`0.0.0.0:25130→80/tcp`) — его ready-ответ маскирует падение тестируемого
+  контейнера; прогонять с явным `--port`.
+
+Следующий шаг: мем-кэш сессий (3 SQL/запрос: session + user + PRAGMA
+data_version), затем полный официальный прогон 3 раундов.
+
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
   Фазы 4):
@@ -353,8 +383,8 @@ Jobs-очередь «persisted before response» (порт src/jobs.js express)
   sgid-упоминанием → джоба → доставка JSON → реплай «pong from bot» от бота →
   очередь пуста. Регресс: browser smoke PASS.
 
-Осталось: Фаза 3 (производительность) и Фаза 4 (публикация: serverX на GitHub,
-Dockerfile, патч harness, README).
+Осталось: Фаза 4 — мем-кэш сессий, полный официальный прогон 3 раундов,
+сравнение по роутам, README.
 
 ### Известные особенности (browser gate, Фаза 2)
 

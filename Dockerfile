@@ -2,6 +2,7 @@
 # Все зависимости — публичные git-шарды (shard.yml), контекст = каталог приложения
 # (.dockerignore отсекает lib/, базы, артефакты).
 FROM crystallang/crystal:1.21-alpine AS build
+RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev
 WORKDIR /app
 COPY shard.yml shard.lock ./
 RUN shards install
@@ -11,7 +12,7 @@ COPY . .
 RUN crystal build src/app.cr -o bin/app-release --release -Dwithout_mt
 
 FROM alpine:3.20
-RUN apk add --no-cache gc libevent pcre2 sqlite-libs libgcc libstdc++
+RUN apk add --no-cache gc libevent pcre2 sqlite-libs libgcc libstdc++ yaml
 WORKDIR /app
 COPY --from=build /app/bin/app-release ./bin/app-release
 COPY --from=build /app/public ./public
