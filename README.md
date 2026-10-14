@@ -160,8 +160,11 @@ rake benchmark       # formal run: 3 rounds, 16 clients → benchmarks/
 rake run             # all of the above, sequentially
 ```
 
-Granular per-app tasks: `rake download[c]`, `rake build[rust]`,
-`rake benchmark[c,go]`. Knobs: `BENCH_SERVER_CPUS`/`BENCH_CLIENT_CPUS`
+Granular per-app tasks: `rake download:c`, `rake build:rust`,
+`rake benchmark:c,go` — the colon form is preferred, because bash expands
+the bracket form (`rake benchmark[crails]`) against the `benchmarks/`
+results directory and silently runs nothing; quoted
+`rake 'benchmark[crails]'` also works. Knobs: `BENCH_SERVER_CPUS`/`BENCH_CLIENT_CPUS`
 (default: auto-detected 2 SMT cores for the server, 4 separate cores for
 the load generator), `BENCH_ROUNDS`, `BENCH_DURATION`, `REBUILD=1`,
 `DRY_RUN=1` — see the Rakefile header. Raw results are copied to

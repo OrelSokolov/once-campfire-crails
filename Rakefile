@@ -35,6 +35,16 @@ require "rbconfig"
 require "socket"
 require "tmpdir"
 
+# Bash-глоб ловушка: `rake benchmark[crails]` разворачивается шеллом в
+# существующий каталог benchmarks/ (класс символов [crails] содержит 's';
+# то же с rails/express), и rake молча трактует это как готовую file-task.
+# Восстанавливаем намерение и подсказываем правильный синтаксис.
+if (idx = ARGV.index("benchmarks"))
+  ARGV[idx] = "benchmark"
+  puts "ПРИМЕЧАНИЕ: аргумент развернулся в каталог benchmarks/ — запущен benchmark без фильтра."
+  puts "Для одного приложения используй `rake benchmark:crails` или `rake 'benchmark[crails]'`."
+end
+
 # ————— Конфигурация: приложение → репозиторий на пине —————
 # Пины — ревизии из таблицы README (upstream от 2026-10-09); rails — main
 # на момент замера (ванильный 90b3300 не проходит текущий harness,
@@ -461,3 +471,19 @@ task :run do
 end
 
 task default: :run
+
+# ————— Глоб-безопасные алиасы —————
+# Bash разворачивает `rake benchmark[crails]` в существующий каталог
+# benchmarks/ (класс [crails] содержит 's') — rake молча считает это
+# file-task'ей и выходит без работы. То же ждёт rails/express. Аргументы
+# в кавычках (`rake 'benchmark[crails]'`) работают, но удобнее алиасы
+# через двоеточие, которые глоб не трогает:
+
+%w[download build verify benchmark].each do |base|
+  namespace base do
+    APP_ORDER.each do |app|
+      desc "#{base}: только #{app} (алиас без квадратных скобок)"
+      task(app) { Rake::Task[base].invoke(app) }
+    end
+  end
+end
