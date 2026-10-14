@@ -15,28 +15,44 @@ Action Cable live messaging) — and then be measured on requests per second.
 
 Official harness, median of 3 rounds, 16 concurrent clients, 4 physical cores
 (`--cpuset-cpus 8-11`, WEB_CONCURRENCY=3 fork workers), seed database.
-Competitor numbers are the recorded baselines of this harness
-(`bench/results/600-campfire-baselines.md`, cpuset 0,2,4,6 — also 4 P-cores).
+Rails/Express/Go/Rust numbers are the recorded baselines of this harness
+(`bench/results/600-campfire-baselines.md`, cpuset 0,2,4,6 — also 4 P-cores);
+C and Elixir were built from their upstream repositories and measured on this
+machine with the identical stand and methodology.
 
-| Route      | Rails | Express |    Go |   Rust | **CRails** |
-|-----------:|------:|--------:|------:|-------:|-----------:|
-| room_show  |   157 |  19 492 | 26 598 | 52 536 |  **59 670** |
-| messages_page | 273 | 35 114 | 28 369 | 47 213 |  **58 500** |
-| sidebar    |   360 |  46 383 | 32 843 | 52 574 |  **81 153** |
-| search     |   238 |  35 999 | 29 802 | 51 970 |  **76 942** |
-| /up        | 2 826 |  47 972 | 59 862 | 81 267 | **148 238** |
+| Route      | [Rails](https://github.com/basecamp/once-campfire) | [Express](https://github.com/basecamp/once-campfire-express) | [Go](https://github.com/basecamp/once-campfire-go) | [Rust](https://github.com/basecamp/once-campfire-rust) | [C](https://github.com/basecamp/once-campfire-c) | [Elixir](https://github.com/basecamp/once-campfire-elixir) | [CRails](https://github.com/OrelSokolov/once-campfire-crails) |
+|-----------:|------:|--------:|------:|-------:|-------:|-------:|-----------:|
+| room_show  |   157 |  19 492 | 26 598 | 52 536 | 57 202 |   3 025 |  **59 670** |
+| messages_page | 273 | 35 114 | 28 369 | 47 213 | 56 482 |   3 210 |  **58 500** |
+| sidebar    |   360 |  46 383 | 32 843 | 52 574 | 60 164 |   3 323 |  **81 153** |
+| search     |   238 |  35 999 | 29 802 | 51 970 | 61 153 |   3 275 |  **76 942** |
+| /up        | 2 826 |  47 972 | 59 862 | 81 267 | 122 111 |   5 887 | **148 238** |
 
-**#1 on every measured GET route.** Remaining routes from the same run:
+**#1 on every measured GET route — including C and Elixir.** Remaining
+routes from the same runs:
 
-| Route        | RPS    |
-|--------------|-------:|
-| static_css   | 195 050 |
-| avatar       |   2 800 |
-| post_message |     110 |
+| Route        |      C | Elixir | **CRails** |
+|--------------|-------:|-------:|-----------:|
+| static_css   | 84 703 | 66 870 |  **195 050** |
+| avatar       | 35 597 | 55 044 |       2 800 |
+| post_message |    690 |    690 |         110 |
 
 `post_message` is a durability-heavy write path (message + rich-text body +
 FTS5 index + unread + notification jobs persisted before the response,
-audited per write) and is not a throughput route.
+audited per write) and is not a throughput route; C and Elixir keep it
+under 700 RPS as well. On CRails the avatar path verifies the signed token
+(PBKDF2 key derivation), runs two SQL lookups and reads the file from disk
+on every request — no response cache was applied there.
+
+Application size (non-blank, non-comment source lines, no vendored code):
+
+| | [Express](https://github.com/basecamp/once-campfire-express) | [Elixir](https://github.com/basecamp/once-campfire-elixir) | [Go](https://github.com/basecamp/once-campfire-go) | [Rust](https://github.com/basecamp/once-campfire-rust) | [C](https://github.com/basecamp/once-campfire-c) | [CRails](https://github.com/OrelSokolov/once-campfire-crails) |
+|---|---:|---:|---:|---:|---:|---:|
+| KLOC | 6.5 | 14.0 | 39.3 | 58.7 | 108.8 | **2.4** |
+
+CRails counts the application only; the CRails framework itself is
+published as separate reusable shards (railties/action_pack/active_record/
+action_cable/turbo ports) — the 2.4 KLOC is Campfire-the-product.
 
 ## Methodology
 
