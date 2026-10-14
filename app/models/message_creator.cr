@@ -1,4 +1,5 @@
 require "json"
+require "sqlite3"
 
 # Создание сообщения со всеми побочными эффектами комнаты — порт
 # MessagesController#create + Room#receive + notifyMessage
@@ -11,26 +12,41 @@ module MessageCreator
   def self.create!(room : Room, creator : User, body_html : String,
                    client_message_id : String, webhooks : Bool = true) : Message
     now = Time.utc
-    message = Message.new(
-      room_id: room.id.not_nil!,
-      creator_id: creator.id.not_nil!,
-      client_message_id: client_message_id)
-    message.save!
-    message_id = message.id.not_nil!
-
     plain = plain_text(body_html)
-    conn = ActiveRecord::Base.connection
-    conn.exec(
-      "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
-      "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
-    conn.exec(
-      "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
-      message_id, plain)
 
-    broadcast(room, message, creator)
-    notify(room, message, creator, body_html, webhooks)
+    # Одна атомарная транзакция на production-БД: message + rich text +
+    # FTS5 + unread. Атомарность обязательна для retry: повтор после
+    # "database is locked" не должен оставлять сообщений без тела/индекса
+    # (аудит write_ack'ов сверяет каждую запись).
+    message = retry_on_lock do
+      ActiveRecord::Base.transaction do
+        record = Message.new(
+          room_id: room.id.not_nil!,
+          creator_id: creator.id.not_nil!,
+          client_message_id: client_message_id)
+        record.save!
+        message_id = record.id.not_nil!
+
+        conn = ActiveRecord::Base.__session # pinned-коннект транзакции
+        conn.exec(
+          "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
+          "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
+        conn.exec(
+          "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
+          message_id, plain)
+
+        pending_jobs = notify(room, record, creator, body_html, webhooks)
+        {record: record, jobs: pending_jobs}
+      end.not_nil!
+    end
+    # Постановка джобов (отдельная БД очереди) и broadcast — строго ПОСЛЕ
+    # commit production-транзакции: ожидание write-lock очереди внутри
+    # чужой транзакции держит production write-lock и заводит конвейер
+    # из двух пулов (наблюдали полный дедлок приложения при conc=16).
+    Campfire::JobQueue.enqueue_batch(message[:jobs])
+    broadcast(room, message[:record], creator)
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    message
+    message[:record]
   end
 
   def self.broadcast(room : Room, message : Message, author : User) : Nil
@@ -45,10 +61,12 @@ module MessageCreator
   end
 
   # Room#receive: unread для участников, отключённых дольше 60 секунд,
-  # затем сборка джобов уведомлений (notifyMessage у express).
+  # затем сборка джобов уведомлений (notifyMessage у express). Возвращает
+  # собранные джобы — постановка в очередь выполняет вызывающий ПОСЛЕ
+  # commit production-транзакции.
   def self.notify(room : Room, message : Message, creator : User,
-                  body_html : String, webhooks : Bool) : Nil
-    conn = ActiveRecord::Base.connection
+                  body_html : String, webhooks : Bool) : Array(Tuple(String, String))
+    conn = ActiveRecord::Base.__session # pinned-коннект транзакции create!
     now = Time.utc
     conn.exec(
       "UPDATE memberships SET unread_at = ?, updated_at = ? " \
@@ -98,14 +116,33 @@ module MessageCreator
         jobs << {"push", data}
       end
     end
-
-    Campfire::JobQueue.enqueue_batch(jobs)
+    jobs
   end
 
   # Грубое html→text для FTS5-индекса: контракту достаточно вхождения
   # слов тела; теги вырезаем.
   def self.plain_text(html : String) : String
     html.gsub(/<[^>]*>/, " ").gsub(/\s+/, " ").strip
+  end
+
+  # В WAL отложенная транзакция с чтением→записью при конкуренции
+  # fork-воркеров за write-lock ловит SQLITE_BUSY мгновенно, минуя
+  # PRAGMA busy_timeout; повтор транзакции целиком берёт свежий снапшот.
+  private def self.retry_on_lock(attempts : Int32 = 5, &)
+    tries = 0
+    loop do
+      tries += 1
+      begin
+        return yield
+      rescue e : SQLite3::Exception
+        if e.message.to_s.includes?("database is locked") && tries < attempts
+          sleep Random.new.rand(0.005..0.05)
+          next
+        end
+        raise e
+      end
+    end
+    raise Exception.new("unreachable") # исключает Nil из типа возврата
   end
 
   # ————— Упоминания (порт mentionIds + unverifiedUserGid, richtext.js) —————

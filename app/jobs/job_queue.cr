@@ -2,6 +2,7 @@ require "db"
 require "json"
 require "http/client"
 require "random/secure"
+require "sqlite3"
 require "uuid"
 
 # Leased-SQLite очередь джобов — порт src/jobs.js (once-campfire-express).
@@ -51,58 +52,60 @@ module Campfire
       end
     end
 
-    # Write-транзакция очереди: BEGIN IMMEDIATE — write-lock захватывается
-    # до первого чтения, и при конкуренции PRAGMA busy_timeout честно ждёт.
-    # db.transaction (BEGIN DEFERRED) под WAL при read→write upgrade
-    # устаревшего снапшота падает мгновенно SQLITE_BUSY_SNAPSHOT, минуя
-    # busy_timeout, — POST возвращал 500, claim — «queue failed».
-    # Возвращает значение блока (как db.transaction).
-    def self.immediate_transaction(& : DB::Connection -> _)
-      db.using_connection do |conn|
-        conn.exec("BEGIN IMMEDIATE")
-        begin
-          result = yield conn
-          conn.exec("COMMIT")
-          result
-        rescue e
-          begin
-            conn.exec("ROLLBACK")
-          rescue
-          end
-          raise e
-        end
-      end
-    end
-
     # jobs: массив пар {kind, data} где data — JSON-строка.
+    # BEGIN IMMEDIATE: при конкуренции fork-воркеров и job-фибр за
+    # write-lock отложенная транзакция ловит SQLITE_BUSY мгновенно
+    # (минуя busy_timeout); IMMEDIATE захватывает lock с ожиданием,
+    # retry покрывает истечение таймаута.
     def self.enqueue_batch(jobs : Array(Tuple(String, String)),
                            at : Float64 = Time.utc.to_unix_f) : Nil
       return if jobs.empty?
-      immediate_transaction do |conn|
-        jobs.each do |(kind, data)|
-          payload = %({"kind":#{kind.to_json},"data":#{data}})
-          conn.exec(
-            "INSERT INTO jobs (payload, available_at) VALUES (?, ?)",
-            payload, at)
+      retry_on_lock do
+        db.using_connection do |conn|
+          conn.exec("BEGIN IMMEDIATE")
+          begin
+            jobs.each do |(kind, data)|
+              payload = %({"kind":#{kind.to_json},"data":#{data}})
+              conn.exec(
+                "INSERT INTO jobs (payload, available_at) VALUES (?, ?)",
+                payload, at)
+            end
+            conn.exec("COMMIT")
+          rescue e
+            conn.exec("ROLLBACK") rescue nil
+            raise e
+          end
         end
       end
     end
 
     def self.claim(now : Float64 = Time.utc.to_unix_f) : Job?
-      immediate_transaction do |conn|
-        row = conn.query_one?(
-          "SELECT id, payload, attempts FROM jobs " \
-          "WHERE status='ready' AND available_at <= ? " \
-          "AND (lease_until IS NULL OR lease_until <= ?) ORDER BY id LIMIT 1",
-          now, now) do |rs|
-          {id: rs.read(Int64), payload: rs.read(String), attempts: rs.read(Int32)}
+      retry_on_lock do
+        db.using_connection do |conn|
+          conn.exec("BEGIN IMMEDIATE")
+          begin
+            row = conn.query_one?(
+              "SELECT id, payload, attempts FROM jobs " \
+              "WHERE status='ready' AND available_at <= ? " \
+              "AND (lease_until IS NULL OR lease_until <= ?) ORDER BY id LIMIT 1",
+              now, now) do |rs|
+              {id: rs.read(Int64), payload: rs.read(String), attempts: rs.read(Int32)}
+            end
+            job = nil
+            if row
+              token = Random::Secure.hex(16)
+              conn.exec(
+                "UPDATE jobs SET attempts = attempts + 1, lease_until = ?, lease_token = ? WHERE id = ?",
+                now + 120, token, row[:id])
+              job = Job.new(row[:id], row[:payload], row[:attempts] + 1, token)
+            end
+            conn.exec("COMMIT")
+            job
+          rescue e
+            conn.exec("ROLLBACK") rescue nil
+            raise e
+          end
         end
-        next nil unless row
-        token = Random::Secure.hex(16)
-        conn.exec(
-          "UPDATE jobs SET attempts = attempts + 1, lease_until = ?, lease_token = ? WHERE id = ?",
-          now + 120, token, row[:id])
-        Job.new(row[:id], row[:payload], row[:attempts] + 1, token)
       end
     end
 
@@ -134,6 +137,25 @@ module Campfire
     def self.reset! : Nil
       @@db.try(&.close)
       @@db = nil
+    end
+
+    # См. комментарий у enqueue_batch: мгновенный SQLITE_BUSY у
+    # отложенных транзакций лечится повтором со свежим снапшотом.
+    private def self.retry_on_lock(attempts : Int32 = 5, &)
+      tries = 0
+      loop do
+        tries += 1
+        begin
+          return yield
+        rescue e : SQLite3::Exception
+          if e.message.to_s.includes?("database is locked") && tries < attempts
+            sleep Random.new.rand(0.005..0.05)
+            next
+          end
+          raise e
+        end
+      end
+      raise Exception.new("unreachable") # исключает Nil из типа возврата
     end
 
     def self.worker_loop : Nil
