@@ -358,6 +358,23 @@ per-request: `klass.new(context)`), аутентификация и page-cache �
 room_show 58k — верхняя граница Go-эталона (53–60k) на тех же ядрах;
 Rails-эталон /up 2.8k.
 
+Сравнение с эталонами этого стенда (bench/results/600-campfire-baselines.md;
+базовые линии снимались на cpuset 0,2,4,6, наш прогон — 8-11, оба 4 P-ядра):
+
+| Роут | Rails | Express | Go | Rust | CRails |
+|---|---:|---:|---:|---:|---:|
+| room_show | 157 | 19 492 | 26 598 | 52 536 | **58 093** |
+| messages_page | 273 | 35 114 | 28 369 | 47 213 | 2 982 |
+| sidebar | 360 | 46 383 | 32 843 | 52 574 | 11 089 |
+| search | 238 | 35 999 | 29 802 | 51 970 | 3 915 |
+| /up | 2 826 | 47 972 | 59 862 | 81 267 | **147 832** |
+| static_css | — | — | — | — | 209 000 |
+
+CRails — №1 на room_show и /up; отставание messages_page/sidebar/search —
+динамический рендер без whole-page кэша (Rust кэширует всё); следующие
+рычаги: PageCache на sidebar/messages_page/search (запросы стабильны в
+пределах epoch) и кэш User в message_dom.
+
 **Фаза 2 (cable) — веха 2026-10-14: Action Cable работает end-to-end.**
 - Фреймворк-клей (вложенные репо `~/rails.cr`, локально, не публикуется до
   Фазы 4):
