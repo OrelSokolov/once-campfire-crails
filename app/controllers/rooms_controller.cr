@@ -21,14 +21,13 @@ class RoomsController < ApplicationController
     end
 
     # Контракт: 40 последних по created_at DESC, вывод в ASC.
+    # Фрагментный кэш: хиты из FragmentCache без SQL (тело rich text,
+    # авторы), промахи — с батч-загрузкой авторов одним IN-запросом
+    # (было User.find? на каждое сообщение, ~85 SQL на промахе).
     messages = Message.where("room_id = ?", room.id.not_nil!)
       .order("created_at DESC").limit(40).to_a.reverse
 
-    messages_html = String.build do |io|
-      messages.each do |m|
-        io << ChatLayout.message_dom(m, room, User.find?(m.creator_id.not_nil!))
-      end
-    end
+    messages_html = ChatLayout.messages_html(messages, epoch, room)
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     html = String.build do |io|

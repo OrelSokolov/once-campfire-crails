@@ -35,7 +35,7 @@ class MessagesController < ApplicationController
         .order("created_at DESC").limit(40).to_a.reverse
     end
 
-    page = Campfire::PageCache::Page.new(messages_page_html(room, messages))
+    page = Campfire::PageCache::Page.new(messages_page_html(room, messages, epoch))
     # Кэшируем только если БД не менялась за время рендера и ответ чист
     # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
     if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
@@ -226,21 +226,16 @@ class MessagesController < ApplicationController
   # (message_dom: <div data-message-id=...> + turbo-frame + </turbo-frame>
   # </div> closure); минимальный <article> не проходит route-contract-v1
   # loadgen'а (<div ... data-message-id> + </turbo-frame></div>$).
-  # Авторы — одним IN-запросом (было User.find? на каждого создателя).
-  private def messages_page_html(room : Room, messages : Array(Message)) : String
-    creators = messages.map(&.creator_id.not_nil!).uniq
-    user_by_id = {} of Int64 => User
-    unless creators.empty?
-      User.where(id: creators).each { |u| user_by_id[u.id.not_nil!] = u }
-    end
+  # Список — через fragment-кэш (было User.find?/rich_text на каждое
+  # сообщение): хиты без SQL, авторы промахов — одним IN-запросом.
+  private def messages_page_html(room : Room, messages : Array(Message),
+                                 epoch : String) : String
     String.build do |io|
       io << "<!doctype html>\n<html>\n<head><title>"
       io << HTML.escape(room.name.to_s)
       io << "</title></head>\n<body>\n"
       io << %(<main id="messages_room_#{room.id}">\n)
-      messages.each do |m|
-        io << ChatLayout.message_dom(m, room, user_by_id[m.creator_id.not_nil!]?)
-      end
+      ChatLayout.messages_to(io, messages, epoch, room)
       # Без закрывающих </main></body></html>: route-contract-v1 требует,
       # чтобы сегмент последнего сообщения заканчивался ровно на
       # "</turbo-frame></div>" (closure); messages_page — partial-ответ

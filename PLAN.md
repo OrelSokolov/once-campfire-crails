@@ -488,3 +488,68 @@ Jobs-очередь «persisted before response» (порт src/jobs.js express)
   action/controller утекают в echo), не трогать; loadgen cable перепроверить
   после смены rejection-семантики (подписки валидные — не должно меняться,
   но НЕ проверено).
+
+### Фаза 4 — производительность: fragment cache + roadmap (2026-10-15)
+
+Прогон 20261015-190005-crails (6528f85 + fragment cache): room_show 38 044,
+messages_page 38 543, sidebar 52 431, search 51 187, avatar 50 415,
+static_css 78 292, /up 89 339, post_message 2 010. Учтено при чтении таблицы:
+контрольные маршруты (avatar/static_css//up — fragment cache на них не
+выполняется) поднялись на 6–9% чистым дрейфом прогона.
+
+**Fragment cache (сделано)** — `app/helpers/fragment_cache.cr`: per-worker LRU
+(32 МБ, `CAMPFIRE_FRAGMENT_CACHE_MB`) готовых DOM-фрагментов сообщений, ключ
+`messages/<id>-<updated_at_ms>` (Rails `cache_key_with_version`), свежесть —
+общий DB-epoch, сброс в `PageCache.invalidate!`. Look-ahead в
+`ChatLayout.messages_to`: хиты — до любых SQL, промахи — комнаты/авторы одним
+IN-запросом, рендер и запись в кэш. Подключено в rooms#show (ушло 40×
+`User.find?` + 40× rich_text SQL на промахе), messages#index, searches#show.
+В бенчмарке read-and-post-v1 почти не виден: фазы GET после warmup —
+стабильные PageCache-хиты, рендер не выполняется; окупается в mixed-профиле
+(`--mixed-write-rate`). Smoke: холодный/тёплый рендер байт-в-байт, POST/PATCH
+инвалидация корректна.
+
+**Roadmap (framework, бенчмарк) — НЕ сделано, осознанно отложено:**
+
+1. *post_message, −46% к Rust (2 010 vs 2 935).* Причины по коду:
+   - джобы: `enqueue_batch` — синхронная вторая SQLite-транзакция в отдельной
+     `jobs.sqlite3` до ответа, под глобальным WriteQueue-мьютексом; в seed HQ
+     каждый POST создаёт 2 push-джобы → ~5 лишних транзакций очереди на запрос
+     (enqueue + claim×2 + finish×2), все в критической секции production-писателя.
+     У Rust — in-process mpsc-очереди без блокировки writer'а, lossy при краше
+     (осознанное решение их плана). Фикс: асинхронный/батч-флаш enqueue или
+     in-process очередь — меняет durability-семантику (контракт validate_acks
+     первых трёх записей не нарушает);
+   - notify-скан (`memberships JOIN users`) внутри production-транзакции — у
+     Rust `unread_memberships` одним UPDATE после commit;
+   - `message_dom` рендерится дважды на POST (broadcast в MessageCreator +
+     HTTP-ответ в контроллере), каждый с rich_text SELECT — Rust переиспользует
+     один фрагмент;
+   - мелочь: fiber-хопы WriteQueue против writer-потока; Boehm GC против
+     jemalloc.
+2. *avatar — PublicCache middleware (СДЕЛАНО 2026-10-15).* Короткое
+   замыкание публичных ответов — аналог front-кэша Thruster
+   (`front/cache.rs` Rust-порта): `app/middleware/public_cache.cr`,
+   вставлен `insert_before(RequestId)` в config/application.cr — до
+   RequestId/RequestLogger/маршрутизации/PRAGMA/подписи токена. GET на
+   `/users/<signed_token>/avatar` (токен, не числовой id) отдаётся из
+   TTL-LRU (30 минут, `CAMPFIRE_PUBLIC_CACHE_MB`, default 16) — цена
+   запроса падает до уровня статики. Заполняет AvatarsController (только
+   токен-путь; числовой id зависит от сессии и не кэшируется). Свежесть —
+   TTL из Cache-Control без PRAGMA/epoch, семантика как у Rust-фронта и
+   HTTP-кэша (смена аватара видна до max-age). Общий вариант
+   (кэшировать любой public+max-age ответ с перехватом тела) требует
+   tee-выхода Response — уровень фреймворка, осталось в roadmap.
+   Smoke: hit/miss байт-в-байт, числовой путь без X-Cache, 404 без
+   сессии, комнаты/поиск без регресса. Замер 20261015-193908-crails:
+   avatar 50 415 → 76 669 (+52%), лучший среди всех приложений
+   (Rust 74 442); при этом static_css 75 962 — цена хита аватара
+   сравнялась со статикой, как и планировалось. Контрольные маршруты
+   в этом прогоне ушли в −3..−8% дрейфом — вклад PublicCache в них
+   нулевой.
+3. *Дешёвые общие фиксы горячего пути (все маршруты):* одиночный route matching
+   (сейчас `Observability.builtin?` + `dispatch` матчат дважды), ленивый
+   RequestId, логгер без sprintf на каждый запрос.
+
+Быстрые основные твики сделаны; продолжать бороться за ~500 RPS на
+post_message силами на сегодня нет — зафиксировано roadmap'ом выше.

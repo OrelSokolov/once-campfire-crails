@@ -159,6 +159,58 @@ module ChatLayout
     end
   end
 
+  # DOM-список сообщений с fragment-кэшем — порт Rails `render partial:,
+  # collection:, cached:` (rooms/show.html.erb + FragmentCache
+  # референса): хиты берутся из кэша одним проходом до любых SQL;
+  # промахи рендерятся свежо — их комнаты (кроме переданной) и авторы
+  # догружаются одним IN-запросом на сущность — и пишутся в кэш.
+  # Ключ = cache_key_with_version (id + updated_at), свежесть — общий
+  # DB-epoch (см. FragmentCache).
+  def self.messages_to(io : IO, messages : Array(Message), epoch : String,
+                       room : Room? = nil) : Nil
+    hits = {} of Int64 => String
+    misses = [] of Message
+    messages.each do |m|
+      if (html = FragmentCache.get(FragmentCache.key(m), epoch))
+        hits[m.id.not_nil!] = html
+      else
+        misses << m
+      end
+    end
+
+    rooms = {} of Int64 => Room
+    if r = room
+      rooms[r.id.not_nil!] = r
+    else
+      room_ids = misses.map(&.room_id.not_nil!).uniq
+      unless room_ids.empty?
+        Room.where(id: room_ids).each { |r| rooms[r.id.not_nil!] = r }
+      end
+    end
+    creators = {} of Int64 => User
+    creator_ids = misses.map(&.creator_id.not_nil!).uniq
+    unless creator_ids.empty?
+      User.where(id: creator_ids).each { |u| creators[u.id.not_nil!] = u }
+    end
+
+    messages.each do |m|
+      if (html = hits[m.id.not_nil!]?)
+        io << html
+      elsif (r = rooms[m.room_id.not_nil!]?)
+        html = message_dom(m, r, creators[m.creator_id.not_nil!]?)
+        FragmentCache.set(FragmentCache.key(m), epoch, html)
+        io << html
+      end
+    end
+  end
+
+  # String-обёртка над messages_to (rooms#show: результат уходит в
+  # message_area).
+  def self.messages_html(messages : Array(Message), epoch : String,
+                         room : Room? = nil) : String
+    String.build { |io| messages_to(io, messages, epoch, room) }
+  end
+
   # composer.eta — форма отправки сообщения (lexxy-editor). Портировано
   # целиком: targets/атрибуты нужны composer/typing-notifications
   # контроллерам (нехватка валит click->composer#submit).

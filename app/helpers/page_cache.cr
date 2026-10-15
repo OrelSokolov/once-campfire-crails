@@ -47,10 +47,12 @@ module Campfire
     # (другие соединения/процессы); собственные записи приложения через пул
     # не видны — поэтому каждый write-экшен зовёт invalidate! явно.
     # Сбрасывает и IdentityCache (session+user могли измениться тем же
-    # write-экшеном: профиль, аккаунт, membership).
+    # write-экшеном: профиль, аккаунт, membership), и FragmentCache
+    # (профиль автора и комнаты влияют на DOM фрагментов).
     def self.invalidate! : Nil
       @@epoch = ""
       Campfire::IdentityCache.reset!
+      Campfire::FragmentCache.reset!
     end
 
     def self.epoch : String

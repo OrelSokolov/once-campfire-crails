@@ -30,19 +30,9 @@ class SearchesController < ApplicationController
         .order("id ASC").to_a
     end
 
-    # Комнаты и авторы — по одному IN-запросу на сущность (было N+1:
-    # Room.find? + User.find? на каждое сообщение, до 100 результатов).
-    room_by_id = {} of Int64 => Room
-    room_ids = messages.map(&.room_id.not_nil!).uniq
-    unless room_ids.empty?
-      Room.where(id: room_ids).each { |r| room_by_id[r.id.not_nil!] = r }
-    end
-    user_by_id = {} of Int64 => User
-    creator_ids = messages.map(&.creator_id.not_nil!).uniq
-    unless creator_ids.empty?
-      User.where(id: creator_ids).each { |u| user_by_id[u.id.not_nil!] = u }
-    end
-
+    # Список — через fragment-кэш (было Room.find?/User.find?/rich_text
+    # на каждое сообщение, до 100 результатов): хиты без SQL, комнаты и
+    # авторы промахов — по одному IN-запросу на сущность.
     html = String.build do |io|
       io << ChatLayout.head("Search: #{query}", user, nil, chat: false)
       io << %(<body class="search">\n<main id="main-content">\n)
@@ -51,11 +41,7 @@ class SearchesController < ApplicationController
       io << %(data-search-results-threaded-class="message--threaded" )
       io << %(data-search-results-mentioned-class="message--mentioned" )
       io << %(data-search-results-formatted-class="message--formatted" data-query=") << HTML.escape(query) << %(">\n)
-      messages.each do |m|
-        room = room_by_id[m.room_id.not_nil!]?
-        next unless room
-        io << ChatLayout.message_dom(m, room, user_by_id[m.creator_id.not_nil!]?)
-      end
+      ChatLayout.messages_to(io, messages, epoch)
       io << %(</div>\n)
       io << %(</main>\n</body>\n</html>\n)
     end

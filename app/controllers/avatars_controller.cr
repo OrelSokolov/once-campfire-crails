@@ -32,7 +32,8 @@ class AvatarsController < ApplicationController
     unless blob
       # Референс: без аватара рендерятся SVG-инициалы (render_initials),
       # не 404 — страницы сообщений всегда линкуют /users/<id>/avatar.
-      return render_initials(user, raw_token, cache_epoch)
+      return render_initials(user, raw_token, cache_epoch,
+        public_path: !!PublicCache.avatar_token_path?(request.path))
     end
 
     key = blob.not_nil!.key.not_nil!
@@ -42,8 +43,15 @@ class AvatarsController < ApplicationController
     content_type = blob.not_nil!.content_type.to_s
     bytes = File.read(path)
     AvatarCache.set(raw_token, cache_epoch, bytes, content_type)
+    PublicCache.set(PublicCache.key(request), bytes, content_type) if public_token_path?
     response.headers["Cache-Control"] = "public, max-age=1800"
     render(html: bytes, content_type: content_type)
+  end
+
+  # Токен-путь публичен (не зависит от зрителя): числовой id — только
+  # для авторизованных, в PublicCache не попадает никогда.
+  private def public_token_path? : Bool
+    !!PublicCache.avatar_token_path?(request.path)
   end
 
   # Storage root: harness монтирует сид в /rails/storage/files; локально —
@@ -53,9 +61,11 @@ class AvatarsController < ApplicationController
   end
 
   # users/avatars/show.svg.erb референса: квадрат с инициалами имени.
-  # cache_epoch передаётся из show — SVG тоже кэшируется по токену.
+  # cache_epoch передаётся из show — SVG тоже кэшируется по токену;
+  # public_path — дополнительно в PublicCache (короткое замыкание).
   private def render_initials(user : User?, cache_key : String? = nil,
-                              cache_epoch : String? = nil) : Nil
+                              cache_epoch : String? = nil,
+                              public_path : Bool = false) : Nil
     name = user.try(&.name).to_s
     initials = name.split(/\s+/).reject(&.empty?)
       .map(&.[0]?.try(&.upcase).to_s).join[0, 2]? || ""
@@ -70,6 +80,7 @@ class AvatarsController < ApplicationController
     if cache_key && cache_epoch
       AvatarCache.set(cache_key, cache_epoch, svg, "image/svg+xml")
     end
+    PublicCache.set(PublicCache.key(request), svg, "image/svg+xml") if public_path
     # content_type: явный аргумент — render(html:) по умолчанию ставит
     # text/html и затирает выставленный заранее заголовок.
     response.headers["Cache-Control"] = "public, max-age=1800"
