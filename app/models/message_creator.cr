@@ -18,32 +18,41 @@ module MessageCreator
     # FTS5 + unread. Атомарность обязательна для retry: повтор после
     # "database is locked" не должен оставлять сообщений без тела/индекса
     # (аудит write_ack'ов сверяет каждую запись).
-    message = retry_on_lock do
-      ActiveRecord::Base.transaction do
-        record = Message.new(
-          room_id: room.id.not_nil!,
-          creator_id: creator.id.not_nil!,
-          client_message_id: client_message_id)
-        record.save!
-        message_id = record.id.not_nil!
+    #
+    # Производственная транзакция и постановка джобов идут через
+    # Campfire::WriteQueue: в процессе пишет одна writer-фибера (см.
+    # write_queue.cr — почему конкурентный BEGIN IMMEDIATE из фибер
+    # лайвлокит воркер). Broadcast и инвалидация кэша — после, вне
+    # очереди.
+    message = Campfire::WriteQueue.perform do
+      created = retry_on_lock do
+        ActiveRecord::Base.transaction do
+          record = Message.new(
+            room_id: room.id.not_nil!,
+            creator_id: creator.id.not_nil!,
+            client_message_id: client_message_id)
+          record.save!
+          message_id = record.id.not_nil!
 
-        conn = ActiveRecord::Base.__session # pinned-коннект транзакции
-        conn.exec(
-          "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
-          "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
-        conn.exec(
-          "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
-          message_id, plain)
+          conn = ActiveRecord::Base.__session # pinned-коннект транзакции
+          conn.exec(
+            "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
+            "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
+          conn.exec(
+            "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
+            message_id, plain)
 
-        pending_jobs = notify(room, record, creator, body_html, webhooks)
-        {record: record, jobs: pending_jobs}
+          pending_jobs = notify(room, record, creator, body_html, webhooks)
+          {record: record, jobs: pending_jobs}
+        end
       end.not_nil!
+      # Постановка джобов (отдельная БД очереди) — строго ПОСЛЕ commit
+      # production-транзакции: ожидание write-lock очереди внутри чужой
+      # транзакции держит production write-lock и заводит конвейер из
+      # двух пулов (наблюдали полный дедлок приложения при conc=16).
+      Campfire::JobQueue.enqueue_batch(created[:jobs])
+      created
     end
-    # Постановка джобов (отдельная БД очереди) и broadcast — строго ПОСЛЕ
-    # commit production-транзакции: ожидание write-lock очереди внутри
-    # чужой транзакции держит production write-lock и заводит конвейер
-    # из двух пулов (наблюдали полный дедлок приложения при conc=16).
-    Campfire::JobQueue.enqueue_batch(message[:jobs])
     broadcast(room, message[:record], creator)
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     message[:record]

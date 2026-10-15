@@ -10,6 +10,7 @@ require "../app/helpers/chat_layout"
 require "../app/helpers/page_cache"
 require "../app/helpers/identity_cache"
 require "../app/helpers/cable_bus"
+require "../app/helpers/write_queue"
 require "../app/jobs/**"
 require "../config/cable"
 require "../app/channels/application_cable/channel"
@@ -66,6 +67,7 @@ if {"", "serve"}.includes?(ARGV[0]? || "") && ENV["CRAILS_TRANSPORT"]? == "serve
       ActiveRecord::Base.establish_connection(db_url)
     end
     Campfire::JobQueue.reset!
+    Campfire::WriteQueue.reset!
     Campfire::JobQueue.start_worker
     # Шина кабеля между воркерами (cable-batch): порт приложения + 1000
     Campfire::CableBus.start(port + 1000)

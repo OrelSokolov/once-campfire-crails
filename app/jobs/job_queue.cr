@@ -43,7 +43,11 @@ module Campfire
         Dir.mkdir_p(File.dirname(path))
         database = DB.open("sqlite3://#{path}")
         database.setup_connection do |conn|
-          conn.exec("PRAGMA busy_timeout=10000")
+          # busy_timeout=0: SQLITE_BUSY возвращается мгновенно, а ожидание
+          # идёт фиберами retry_on_lock (sleep в шедулере Crystal, event-loop
+          # жив). C-сон busy-хендлера из фиберы джоб-воркера заморозил бы
+          # воркер при занятом локе (см. Campfire::WriteQueue).
+          conn.exec("PRAGMA busy_timeout=0")
           conn.exec("PRAGMA journal_mode=WAL")
           conn.exec("PRAGMA synchronous=NORMAL")
         end
@@ -53,10 +57,9 @@ module Campfire
     end
 
     # jobs: массив пар {kind, data} где data — JSON-строка.
-    # BEGIN IMMEDIATE: при конкуренции fork-воркеров и job-фибр за
-    # write-lock отложенная транзакция ловит SQLITE_BUSY мгновенно
-    # (минуя busy_timeout); IMMEDIATE захватывает lock с ожиданием,
-    # retry покрывает истечение таймаута.
+    # BEGIN IMMEDIATE при busy_timeout=0: при конкуренции fork-воркеров
+    # и job-фибр за write-lock SQLITE_BUSY возвращается мгновенно, ожидание
+    # — фиберами retry_on_lock (event-loop воркера не блокируется).
     def self.enqueue_batch(jobs : Array(Tuple(String, String)),
                            at : Float64 = Time.utc.to_unix_f) : Nil
       return if jobs.empty?

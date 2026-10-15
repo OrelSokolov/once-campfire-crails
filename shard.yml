@@ -10,7 +10,7 @@ dependencies:
     version: ~> 0.1.4
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.2
+    version: ~> 0.1.3
   action_cable_cr:
     github: OrelSokolov/action_cable.cr
     version: ~> 0.1.1

@@ -166,16 +166,21 @@ class MessagesController < ApplicationController
     body_html = message_body_param
     plain = plain_text(body_html)
     now = Time.utc
-    conn = ActiveRecord::Base.connection
-    conn.exec(
-      "UPDATE action_text_rich_texts SET body = ?, updated_at = ? WHERE record_type = 'Message' AND record_id = ?",
-      body_html.empty? ? plain : body_html, now, message.id.not_nil!)
-    conn.exec(
-      "DELETE FROM message_search_index WHERE rowid = ?", message.id.not_nil!)
-    conn.exec(
-      "INSERT INTO message_search_index (rowid, body) VALUES (?, ?)",
-      message.id.not_nil!, plain)
-    conn.exec("UPDATE messages SET updated_at = ? WHERE id = ?", now, message.id.not_nil!)
+    # Отдельная локальная переменная: message не должен захватываться
+    # замыканием очереди (иначе компилятор теряет Nil-narrowing выше).
+    target = message
+    Campfire::WriteQueue.perform do
+      conn = ActiveRecord::Base.connection
+      conn.exec(
+        "UPDATE action_text_rich_texts SET body = ?, updated_at = ? WHERE record_type = 'Message' AND record_id = ?",
+        body_html.empty? ? plain : body_html, now, target.not_nil!.id.not_nil!)
+      conn.exec(
+        "DELETE FROM message_search_index WHERE rowid = ?", target.not_nil!.id.not_nil!)
+      conn.exec(
+        "INSERT INTO message_search_index (rowid, body) VALUES (?, ?)",
+        target.not_nil!.id.not_nil!, plain)
+      conn.exec("UPDATE messages SET updated_at = ? WHERE id = ?", now, target.not_nil!.id.not_nil!)
+    end
 
     message = Message.find?(message.id.not_nil!).not_nil!
     cid = message.client_message_id.to_s.presence || message.id.to_s
