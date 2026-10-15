@@ -1,35 +1,35 @@
 # frozen_string_literal: true
 
-# Полный цикл сравнительного бенчмарка ONCE Campfire на этой машине:
-# официальным harness'ом basecamp/once-campfire-verification.
+# Full cycle of the comparative ONCE Campfire benchmark on this machine:
+# the official basecamp/once-campfire-verification harness.
 #
-#   rake deps                  # зависимости хоста (Linux apt / macOS brew)
-#   rake download              # скачать все репозитории конкурентов на пинах (сабмодули рекурсивно)
-#   rake download[c,go]        # ...выборочно
-#   rake build                 # собрать docker-образы всех приложений
-#   rake build[rust]           # ...выборочно
-#   rake harness               # клонировать harness, применить патч crails,
-#                             # bin/check, собрать loadgen, построить сид-базу (bin/seed)
-#   rake verify                # preflight-верификация каждого образа (контракты без нагрузки)
+#   rake deps                  # host dependencies (Linux apt / macOS brew)
+#   rake download              # clone all competitor repositories at pinned revisions (submodules recursively)
+#   rake download[c,go]        # ...selectively
+#   rake build                 # build docker images of all applications
+#   rake build[rust]           # ...selectively
+#   rake harness               # clone the harness, apply the crails patch,
+#                              # bin/check, build loadgen, build the seed database (bin/seed)
+#   rake verify                # preflight verification of each image (contracts, no load)
 #   rake verify[c]
-#   rake benchmark             # формальный прогон: все приложения, 3 раунда, чередование
-#   rake benchmark[c]          # ...одно приложение
-#   rake report                # сводная таблица сравнения (роуты × приложения) из benchmarks/
-#   rake run                   # ВСЁ последовательно: deps→download→build→harness→verify→benchmark
+#   rake benchmark             # formal run: all applications, 3 rounds, interleaved
+#   rake benchmark[c]          # ...a single application
+#   rake report                # summary comparison table (routes × apps) from benchmarks/
+#   rake run                   # EVERYTHING sequentially: deps→download→build→harness→verify→benchmark
 #
-# Результаты: benchmarks/<UTC-таймстамп>-<apps>/ (summary.json + сырые сэмплы).
+# Results: benchmarks/<UTC-timestamp>-<apps>/ (summary.json + raw samples).
 #
-# Переменные окружения:
-#   BENCH_SERVER_CPUS  cpuset сервера    (по умолчанию: автодетект 2 SMT-ядра, иначе 0,1,8,9)
-#   BENCH_CLIENT_CPUS  cpuset генератора (по умолчанию: 4 отдельных ядра, иначе 4-7)
-#   BENCH_ROUNDS       раунды (default 3), BENCH_DURATION сек (default 8)
-#   REBUILD=1          пересобрать уже существующие образы
-#   DRY_RUN=1          печатать команды без выполнения
+# Environment variables:
+#   BENCH_SERVER_CPUS  server cpuset     (default: autodetect 2 SMT cores, else 0,1,8,9)
+#   BENCH_CLIENT_CPUS  generator cpuset  (default: 4 separate cores, else 4-7)
+#   BENCH_ROUNDS       rounds (default 3), BENCH_DURATION seconds (default 8)
+#   REBUILD=1          rebuild existing images
+#   DRY_RUN=1          print commands without executing them
 #
-# Замер и верификация требуют Linux (docker --network host, taskset в harness);
-# на macOS доступны только deps/download/build.
+# Benchmarking and verification require Linux (docker --network host, taskset in the harness);
+# on macOS only deps/download/build are available.
 
-require "bundler/setup" # гемы Gemfile (terminal-table для report) — vendor/bundle
+require "bundler/setup" # Gemfile gems (terminal-table for report) — vendor/bundle
 
 require "fileutils"
 require "json"
@@ -38,21 +38,21 @@ require "rbconfig"
 require "socket"
 require "tmpdir"
 
-# Bash-глоб ловушка: `rake benchmark[crails]` разворачивается шеллом в
-# существующий каталог benchmarks/ (класс символов [crails] содержит 's';
-# то же с rails/express), и rake молча трактует это как готовую file-task.
-# Восстанавливаем намерение и подсказываем правильный синтаксис.
+# Bash glob trap: `rake benchmark[crails]` gets expanded by the shell into
+# the existing benchmarks/ directory (the character class [crails] contains 's';
+# same for rails/express), and rake silently treats it as an existing file task.
+# Restore the intent and hint at the correct syntax.
 if (idx = ARGV.index("benchmarks"))
   ARGV[idx] = "benchmark"
-  puts "ПРИМЕЧАНИЕ: аргумент развернулся в каталог benchmarks/ — запущен benchmark без фильтра."
-  puts "Для одного приложения используй `rake benchmark:crails` или `rake 'benchmark[crails]'`."
+  puts "NOTE: the argument expanded to the benchmarks/ directory — running benchmark without a filter."
+  puts "For a single application use `rake benchmark:crails` or `rake 'benchmark[crails]'`."
 end
 
-# ————— Конфигурация: приложение → репозиторий на пине —————
-# Пины — ревизии из таблицы README (upstream от 2026-10-09); rails — main
-# на момент замера (ванильный 90b3300 не проходит текущий harness,
-# см. REPORT.md). CRails — этот репозиторий, добавляется ПОСЛЕДНИМ:
-# способ запуска меняется, держим его в хвосте очереди.
+# ————— Configuration: application → repository at a pin —————
+# Pins are revisions from the README table (upstream as of 2026-10-09); rails is main
+# at measurement time (vanilla 90b3300 does not pass the current harness,
+# see REPORT.md). CRails is this repository and is added LAST:
+# its launch method changes, so we keep it at the tail of the queue.
 HARNESS_REPO  = "https://github.com/basecamp/once-campfire-verification.git"
 HARNESS_REV   = "ec02debb3e44f40b8778a6a42db3c4515b2f9eaf"
 
@@ -65,7 +65,7 @@ APPS = {
   "elixir"  => { repo: "https://github.com/basecamp/once-campfire-elixir.git",  rev: "58964cf8a8788b2a20c7bde16dae65b025812593" },
 }.freeze
 CRAILS_APP = "crails"
-APP_ORDER  = APPS.keys + [CRAILS_APP] # crails строго последним
+APP_ORDER  = APPS.keys + [CRAILS_APP] # crails strictly last
 
 REPO_ROOT     = File.expand_path(__dir__)
 WORKSPACE     = File.join(REPO_ROOT, "bench-workspace")
@@ -73,7 +73,7 @@ HARNESS       = File.join(WORKSPACE, "once-campfire-verification")
 HARNESS_PATCH = File.join(REPO_ROOT, "benchmark", "harness-crails.patch")
 RESULTS_DIR   = File.join(REPO_ROOT, "benchmarks")
 
-# Имена образов — дефолты bench/compare.rb (RAILS_IMAGE и т.п. не нужны).
+# Image names — defaults of bench/compare.rb (RAILS_IMAGE etc. are not needed).
 IMAGE = {
   "rails" => "once-campfire:app", "express" => "once-campfire-express:app",
   "go" => "once-campfire-go:app", "rust" => "campfire-rust:app",
@@ -81,15 +81,21 @@ IMAGE = {
   CRAILS_APP => "once-campfire-crails:app",
 }.freeze
 
-# Порядок роутов в отчётах harness (таблицы README) и их отображение.
+# Route order in harness reports (README tables) and their display labels.
 ROUTE_ORDER = %w[room_show messages_page sidebar search avatar static_css up post_message].freeze
 ROUTE_LABEL = { "up" => "/up" }.freeze
 
-# ————— Утилиты —————
+# ————— Utilities —————
 
 def darwin?  = RbConfig::CONFIG["host_os"].include?("darwin")
 def linux?   = RbConfig::CONFIG["host_os"].include?("linux")
 def dry_run? = ENV["DRY_RUN"] == "1"
+
+# Step banners: bold blue in a TTY, "==>" prefix always, so progress lines
+# stand out in build/download logs.
+def step(msg)
+  puts $stdout.tty? ? "\e[1;34m==> #{msg}\e[0m" : "==> #{msg}"
+end
 
 def sh!(*cmd, env: {}, chdir: nil)
   puts "+ #{env.reject { |_k, v| v.nil? }.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}".strip
@@ -98,7 +104,7 @@ def sh!(*cmd, env: {}, chdir: nil)
   abort "FAILED: #{cmd.join(" ")}" unless ok
 end
 
-# Как sh!, но false вместо abort — для повторных попыток.
+# Like sh!, but false instead of abort — for retries.
 def sh?(*cmd, env: {}, chdir: nil)
   puts "+ #{cmd.join(" ")}"
   return true if dry_run?
@@ -129,7 +135,7 @@ rescue Errno::ECONNREFUSED
   false
 end
 
-# sqlite3 c FTS5 (Android platform-tools sqlite3 её не имеет — см. REPORT.md).
+# sqlite3 with FTS5 (the Android platform-tools sqlite3 lacks it — see REPORT.md).
 def fts5_sqlite3_dir
   dirs = ENV["PATH"].split(":") + %w[/usr/bin /usr/local/bin /opt/homebrew/bin]
   dirs.uniq.each do |dir|
@@ -141,30 +147,31 @@ def fts5_sqlite3_dir
   nil
 end
 
-# PATH для запуска harness: ruby текущего интерпретатора (иначе `#!/usr/bin/env ruby`
-# в скриптах harness возьмёт системный ruby с GEM-путями от rvm — смесь падает
-# на "can't find gem bundler"), cargo (rustup) и sqlite3-with-FTS5 впереди.
+# PATH for running the harness: the current interpreter's ruby (otherwise
+# `#!/usr/bin/env ruby` in harness scripts picks the system ruby with rvm GEM
+# paths — the mix fails with "can't find gem bundler"), cargo (rustup), and
+# sqlite3-with-FTS5 first.
 def harness_env
   path = [RbConfig::CONFIG["bindir"], File.expand_path("~/.cargo/bin"), fts5_sqlite3_dir, ENV["PATH"]].compact.join(":")
   env = { "PATH" => path }
-  # Изолируем скрипты harness от bundler-окружения родителя: rubygems грузит
-  # bundler/setup уже при старте по BUNDLER_SETUP/BUNDLE_GEMFILE, а harness —
-  # не bundler-проект (minitest/stdlib) и своей Gemfile-привязки не имеет.
+  # Isolate harness scripts from the parent's bundler environment: rubygems
+  # loads bundler/setup at startup via BUNDLER_SETUP/BUNDLE_GEMFILE, while the
+  # harness is not a bundler project (minitest/stdlib) and has no Gemfile tie.
   %w[BUNDLER_SETUP BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLE_EXEC_OPTS RUBYOPT].each { |k| env[k] = nil }
-  # Хостовый redis на 6379 не даёт контейнерным забиндиться (harness --
-  # network host); Rails-образ уже без локального redis, Elixir переключаем
-  # на внешний через REDIS_URL. См. REPORT.md.
+  # A host redis on 6379 prevents the container from binding (harness uses
+  # --network host); the Rails image already has no local redis, Elixir is
+  # switched to the external one via REDIS_URL. See REPORT.md.
   env["ELIXIR_BENCH_ENV"] = { REDIS_URL: "redis://127.0.0.1:6379/0" }.to_json if port_busy?(6379)
   env
 end
 
-# CPU-раскладка: сервер — 2 физических ядра с SMT (4 треда), клиент — 4 других ядра.
+# CPU layout: server — 2 physical cores with SMT (4 threads), client — 4 other cores.
 def cpu_sets
   return [ENV["BENCH_SERVER_CPUS"], ENV["BENCH_CLIENT_CPUS"]] if ENV["BENCH_SERVER_CPUS"] && ENV["BENCH_CLIENT_CPUS"]
   pairs = {}
   if linux? && Dir.exist?("/sys/devices/system/cpu")
     Dir["/sys/devices/system/cpu/cpu[0-9]*"].sort_by { |d| File.basename(d)[/\d+/].to_i }.each do |d|
-      # Формат siblings: "0-1", "0,8" или смесь — парсим и то, и другое.
+      # siblings format: "0-1", "0,8" or a mix — parse both.
       sib = File.read(File.join(d, "topology", "thread_siblings_list")).strip.split(",")
                 .flat_map { |part| a, b = part.split("-"); b ? (a.to_i..b.to_i).to_a : [a.to_i] }
       cpu = File.basename(d)[/\d+/].to_i
@@ -177,7 +184,7 @@ def cpu_sets
 end
 
 def app_dir(app)
-  # harness ищет сиблинги: rails → «once-campfire», остальные (включая
+  # the harness looks for siblings: rails → «once-campfire», the rest (including
   # crails) → «once-campfire-<kind>»
   File.join(WORKSPACE, app == "rails" ? "once-campfire" : "once-campfire-#{app}")
 end
@@ -186,7 +193,7 @@ def each_app(spec)
   list = spec.to_s.split(",").map(&:strip).reject(&:empty?)
   list = APP_ORDER if list.empty?
   unknown = list - APP_ORDER
-  abort "Неизвестные приложения: #{unknown.join(", ")}. Доступны: #{APP_ORDER.join(", ")}" unless unknown.empty?
+  abort "Unknown apps: #{unknown.join(", ")}. Available: #{APP_ORDER.join(", ")}" unless unknown.empty?
   list
 end
 
@@ -194,93 +201,93 @@ def save_results(label)
   return if dry_run?
   results = File.join(HARNESS, "tmp", "bench", "results")
   latest = Dir[File.join(results, "*")].select { |d| File.directory?(d) }.max_by { |d| File.mtime(d) }
-  return puts "(нет результатов для копирования)" unless latest
+  return puts "(no results to copy)" unless latest
   dest = File.join(RESULTS_DIR, "#{Time.now.utc.strftime('%Y%m%d-%H%M%S')}-#{label}")
   FileUtils.mkdir_p(RESULTS_DIR)
   FileUtils.cp_r(latest, dest)
-  puts "Результаты: #{dest}"
+  step "Results: #{dest}"
 end
 
 def ensure_downloaded!(spec)
   Rake::Task["download"].invoke(spec)
 end
 
-# ————— deps: зависимости хоста (Linux/Mac) —————
+# ————— deps: host dependencies (Linux/Mac) —————
 
-desc "Проверить и установить зависимости хоста (docker, ruby, rust, node, sqlite3+FTS5, ffmpeg)"
+desc "Check and install host dependencies (docker, ruby, rust, node, sqlite3+FTS5, ffmpeg)"
 task :deps do
   unless have?("docker")
     if darwin?
-      sh?("brew", "install", "--cask", "docker") || abort("Установи Docker Desktop: https://docs.docker.com/desktop/setup/install/mac-install/")
+      sh?("brew", "install", "--cask", "docker") || abort("Install Docker Desktop: https://docs.docker.com/desktop/setup/install/mac-install/")
     else
-      abort "Docker не найден — установи и запусти демон: https://docs.docker.com/get-docker/"
+      abort "Docker not found — install it and start the daemon: https://docs.docker.com/get-docker/"
     end
   end
   sh!("docker", "version", "--format", "server={{.Server.Version}}")
 
   missing = %w[ruby node git curl ffmpeg sqlite3 python3].reject { |t| have?(t) }
   unless missing.empty?
-    puts "Отсутствуют: #{missing.join(", ")}"
+    step "Missing: #{missing.join(", ")}"
     if linux?
       sh!("sudo", "apt-get", "update")
       sh!("sudo", "apt-get", "install", "-y", *%w[ruby-full nodejs git curl ffmpeg sqlite3 python3 build-essential cmake unzip pkg-config])
     elsif darwin?
-      abort "Homebrew не найден: brew.sh" unless have?("brew")
+      abort "Homebrew not found: brew.sh" unless have?("brew")
       sh!("brew", "install", *missing)
     end
   end
 
-  # Rust для loadgen (rustc >= 1.88, edition 2024).
+  # Rust for loadgen (rustc >= 1.88, edition 2024).
   cargo = File.expand_path("~/.cargo/bin/cargo")
   unless have?("cargo") || File.executable?(cargo)
-    puts "Устанавливаю rustup (нужен для генератора нагрузки)..."
+    step "Installing rustup (needed for the load generator)..."
     sh!("bash", "-c", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal")
   end
 
   if fts5_sqlite3_dir.nil?
-    puts "ПРЕДУПРЕЖДЕНИЕ: ни один sqlite3 в PATH не поддерживает FTS5 — аудиты harness упадут."
-    puts "Проверка: sqlite3 :memory: 'CREATE VIRTUAL TABLE t USING fts5(c);'"
+    puts "WARNING: no sqlite3 in PATH supports FTS5 — harness audits will fail."
+    puts "Check: sqlite3 :memory: 'CREATE VIRTUAL TABLE t USING fts5(c);'"
   end
 
-  puts "deps: OK (#{RbConfig::CONFIG["host_os"]})"
+  step "deps: OK (#{RbConfig::CONFIG["host_os"]})"
 end
 
-# ————— download: клоны на пинах —————
+# ————— download: clones at pins —————
 
-desc "Скачать репозитории конкурентов на пинах (download[c,go] — выборочно)"
+desc "Download competitor repositories at pinned revisions (download[c,go] — selectively)"
 task :download, [:app] do |_t, args|
   FileUtils.mkdir_p(WORKSPACE)
   each_app(args[:app]).each do |app|
     dir = app_dir(app)
     if app == CRAILS_APP
-      # Локальный репозиторий: символлинк, чтобы harness видел source-ревизию.
+      # Local repository: a symlink so the harness sees the source revision.
       FileUtils.ln_sf(REPO_ROOT, dir) unless File.symlink?(dir)
-      puts "crails: символлинк #{dir} → #{REPO_ROOT}"
+      step "crails: symlink #{dir} → #{REPO_ROOT}"
       next
     end
     cfg = APPS.fetch(app)
     if File.directory?(File.join(dir, ".git"))
       rev = capture!("git", "-C", dir, "rev-parse", "HEAD").strip
       if rev == cfg[:rev]
-        puts "#{app}: уже на пине #{rev[0, 7]}"
+        step "#{app}: already at pin #{rev[0, 7]}"
       else
-        puts "#{app}: на #{rev[0, 7]}, возвращаю пин #{cfg[:rev][0, 7]}"
+        step "#{app}: at #{rev[0, 7]}, checking out pin #{cfg[:rev][0, 7]}"
         sh?("git", "-C", dir, "checkout", "-q", "-d", cfg[:rev]) ||
           (sh!("git", "-C", dir, "fetch", "origin") && sh!("git", "-C", dir, "checkout", "-q", "-d", cfg[:rev]))
       end
     else
-      puts "#{app}: клонирую #{cfg[:repo]} @ #{cfg[:rev][0, 7]}"
+      step "#{app}: cloning #{cfg[:repo]} @ #{cfg[:rev][0, 7]}"
       sh!("git", "clone", cfg[:repo], dir)
       sh!("git", "-C", dir, "checkout", "-q", "-d", cfg[:rev])
     end
-    # Сабмодули рекурсивно (Go: reference → once-campfire-rust → once-campfire).
+    # Submodules recursively (Go: reference → once-campfire-rust → once-campfire).
     sh!("git", "-C", dir, "submodule", "update", "--init", "--recursive")
   end
 end
 
-# ————— build: docker-образы —————
+# ————— build: docker images —————
 
-desc "Собрать docker-образы приложений (build[rust] — выборочно; REBUILD=1 пересобрать)"
+desc "Build application docker images (build[rust] — selectively; REBUILD=1 to rebuild)"
 task :build, [:app] do |_t, args|
   ensure_downloaded!(args[:app])
   each_app(args[:app]).each { |app| send("build_#{app}") }
@@ -289,7 +296,7 @@ end
 def need_image?(app)
   image = IMAGE.fetch(app)
   if image_exists?(image) && ENV["REBUILD"] != "1"
-    puts "#{app}: образ #{image} существует (REBUILD=1 для пересборки)"
+    step "#{app}: image #{image} exists (REBUILD=1 to rebuild)"
     return false
   end
   true
@@ -298,9 +305,9 @@ end
 def build_rails
   return unless need_image?("rails")
   dir = app_dir("rails")
-  # Строка `redis:` из Procfile вырезается: хостовый redis на 6379 не даёт
-  # контейнерному забиндиться (harness гоняет --network host; Rails и так
-  # ходит на redis://localhost:6379). См. REPORT.md.
+  # The `redis:` line is cut from the Procfile: a host redis on 6379 prevents
+  # the container one from binding (the harness runs --network host; Rails
+  # talks to redis://localhost:6379 anyway). See REPORT.md.
   Dir.mktmpdir("rails-ctx") do |ctx|
     FileUtils.cp_r(File.join(dir, "."), ctx)
     FileUtils.rm_rf(File.join(ctx, ".git"))
@@ -330,8 +337,9 @@ end
 def build_c
   return unless need_image?("c")
   dir = app_dir("c")
-  # У репозитория C нет Dockerfile: бинарь собирается в контейнере fedora
-  # (vendored-зависимости линкуются статически), образ — по bench/image/Dockerfile.c.
+  # The C repository has no Dockerfile: the binary is built inside a fedora
+  # container (vendored dependencies linked statically), the image — from
+  # bench/image/Dockerfile.c.
   builder = "campfire-c-builder:1"
   unless image_exists?(builder)
     Dir.mktmpdir("c-builder") do |ctx|
@@ -361,13 +369,15 @@ end
 def build_elixir
   return unless need_image?("elixir")
   dir = app_dir("elixir")
-  # Этапу нужен campfire-reference:app, отождествлённый с пином сабмодуля
-  # reference (bin/export-assets сверяет GIT_REVISION).
+  # The stage needs campfire-reference:app matching the pin of the reference
+  # submodule (bin/export-assets verifies GIT_REVISION).
   ref_dir = File.join(dir, "reference")
+  ref_rev = capture!("git", "-C", ref_dir, "rev-parse", "HEAD").strip
   unless image_exists?("campfire-reference:app") &&
-         image_env("campfire-reference:app", "GIT_REVISION") == capture!("git", "-C", ref_dir, "rev-parse", "HEAD").strip
-    puts "elixir: строю campfire-reference:app из сабмодуля reference"
-    sh!("docker", "build", "-t", "campfire-reference:app", ref_dir)
+         image_env("campfire-reference:app", "GIT_REVISION") == ref_rev
+    step "elixir: building campfire-reference:app from the reference submodule"
+    # GIT_REVISION is mandatory: bin/export-assets checks it against the submodule pin.
+    sh!("docker", "build", "--build-arg", "GIT_REVISION=#{ref_rev}", "-t", "campfire-reference:app", ref_dir)
   end
 
   toolchain = "campfire-elixir:toolchain"
@@ -377,14 +387,14 @@ def build_elixir
         FileUtils.cp_r(File.join(dir, "."), ctx)
         FileUtils.rm_rf(File.join(ctx, ".git"))
         df = File.join(ctx, "Dockerfile.dev")
-        # Пины trixie-пакетов гниют (deb13u1 → u2 → …): опция снять точные версии.
+        # trixie package pins rot (deb13u1 → u2 → …): the option drops exact versions.
         File.write(df, File.read(df).gsub(/(libvips-dev|ffmpeg)=\S+/, '\1')) if strip_pins
         sh?("docker", "build", "-f", df, "-t", toolchain, ctx)
       end
     end
     build_toolchain.call(false) || begin
-      puts "Elixir toolchain: точные пины пакетов недоступны, собираю без них (см. REPORT.md)..."
-      build_toolchain.call(true) || abort("Elixir toolchain не собрался")
+      step "Elixir toolchain: exact package pins unavailable, building without them (see REPORT.md)..."
+      build_toolchain.call(true) || abort("Elixir toolchain build failed")
     end
   end
 
@@ -398,20 +408,20 @@ def build_elixir
   mix.call("local.hex", "--force")
   mix.call("local.rebar", "--force")
   mix.call("deps.get")
-  # Экспорт ассетов из reference-образа (docker-режим скрипта).
+  # Export assets from the reference image (docker mode of the script).
   sh!(File.join(dir, "bin", "export-assets"))
   sh!("docker", "build", "-t", IMAGE["elixir"], dir)
 end
 
 def build_crails
   return unless need_image?(CRAILS_APP)
-  # Digest-ассеты генерируются сборкой Express (шаг спрятан в комментарии
-  # .gitignore — без него static_css отдаёт 404; см. REPORT.md).
+  # Digest assets are generated by the Express build (the step is hidden in a
+  # .gitignore comment — without it static_css returns 404; see REPORT.md).
   express = app_dir("express")
   express_assets = File.join(express, "assets", "generated", "public", "assets")
   unless File.directory?(express_assets)
-    puts "crails: генерирую ассеты сборкой Express (нужен node на хосте)..."
-    abort "Сначала `rake build[express]`" unless File.directory?(File.join(express, ".git"))
+    step "crails: generating assets via the Express build (requires node on the host)..."
+    abort "Run `rake build[express]` first" unless File.directory?(File.join(express, ".git"))
     sh!("node", File.join(express, "bin", "build-assets.js"), chdir: express)
   end
   assets_dir = File.join(REPO_ROOT, "public", "assets")
@@ -420,22 +430,22 @@ def build_crails
   sh!("bash", File.join(REPO_ROOT, "bin", "docker-build.sh"))
 end
 
-# ————— harness: верификатор + сид —————
+# ————— harness: verifier + seed —————
 
-desc "Клонировать harness, применить патч crails, bin/check, собрать loadgen, построить сид-базу"
+desc "Clone the harness, apply the crails patch, bin/check, build loadgen, build the seed database"
 task :harness do
   unless File.directory?(File.join(HARNESS, ".git"))
-    puts "Клонирую harness #{HARNESS_REPO} @ #{HARNESS_REV[0, 7]}"
+    step "Cloning harness #{HARNESS_REPO} @ #{HARNESS_REV[0, 7]}"
     sh!("git", "clone", HARNESS_REPO, HARNESS)
     sh!("git", "-C", HARNESS, "checkout", "-q", "-d", HARNESS_REV)
   end
   dirty = !capture!("git", "-C", HARNESS, "status", "--porcelain", "--untracked-files=no").strip.empty?
   unless dirty
-    abort "Патч не найден: #{HARNESS_PATCH}" unless File.readable?(HARNESS_PATCH)
+    abort "Patch not found: #{HARNESS_PATCH}" unless File.readable?(HARNESS_PATCH)
     sh!("git", "-C", HARNESS, "apply", HARNESS_PATCH)
-    puts "harness: патч crails применён"
+    step "harness: crails patch applied"
   end
-  # CRails в workspace (harness ищет сиблинги).
+  # CRails into the workspace (the harness looks for siblings).
   FileUtils.ln_sf(REPO_ROOT, app_dir(CRAILS_APP)) unless File.symlink?(app_dir(CRAILS_APP))
 
   env = harness_env
@@ -444,9 +454,9 @@ task :harness do
 
   fixtures = File.join(HARNESS, "fixtures", "default")
   if File.directory?(fixtures)
-    puts "harness: сид уже построен (#{fixtures})"
+    step "harness: seed already built (#{fixtures})"
   else
-    sh!(File.join(HARNESS, "bin", "seed"), env: env) # долго: строит Rails-reference-образ + фикстуры
+    sh!(File.join(HARNESS, "bin", "seed"), env: env) # long: builds the Rails reference image + fixtures
   end
 end
 
@@ -454,33 +464,33 @@ end
 
 def run_henchmark(apps, extra)
   server, client = cpu_sets
-  puts "CPU: сервер=#{server} клиент=#{client}"
+  step "CPU: server=#{server} client=#{client}"
   sh!(File.join(HARNESS, "bin", "benchmark"), "--apps", apps.join(","),
       "--cpus", server, "--client-cpus", client,
       "--rounds", ENV.fetch("BENCH_ROUNDS", "3"),
       "--duration", ENV.fetch("BENCH_DURATION", "8"), *extra, env: harness_env)
 end
 
-desc "Preflight-верификация образов: контракты без нагрузки (verify[c] — выборочно)"
+desc "Preflight verification of images: contracts without load (verify[c] — selectively)"
 task :verify, [:app] do |_t, args|
-  abort "Верификация требует Linux (docker --network host + taskset)." unless linux?
+  abort "Verification requires Linux (docker --network host + taskset)." unless linux?
   apps = each_app(args[:app])
-  apps.each { |a| abort "Образ #{IMAGE[a]} не собран: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
-  Rake::Task["harness"].invoke # идемпотентно: докачивает/проверяет harness перед запуском
+  apps.each { |a| abort "Image #{IMAGE[a]} not built: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
+  Rake::Task["harness"].invoke # idempotent: fetches/checks the harness before the run
   run_henchmark(apps, ["--preflight"])
 end
 
-desc "Формальный бенчмарк (benchmark[c] — одно приложение; без аргумента — все, один прогон)"
+desc "Formal benchmark (benchmark[c] — a single app; without an argument — all apps, one run)"
 task :benchmark, [:app] do |_t, args|
-  abort "Бенчмарк требует Linux (docker --network host + taskset)." unless linux?
+  abort "Benchmarking requires Linux (docker --network host + taskset)." unless linux?
   apps = each_app(args[:app])
-  apps.each { |a| abort "Образ #{IMAGE[a]} не собран: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
-  Rake::Task["harness"].invoke # идемпотентно: докачивает/проверяет harness перед запуском
+  apps.each { |a| abort "Image #{IMAGE[a]} not built: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
+  Rake::Task["harness"].invoke # idempotent: fetches/checks the harness before the run
   run_henchmark(apps, [])
   save_results(apps.join("_"))
 end
 
-# ————— report: сводная таблица сравнения из отчётов —————
+# ————— report: summary comparison table from reports —————
 
 def bold(s) = $stdout.tty? ? "\e[1m#{s}\e[0m" : s
 
@@ -493,8 +503,8 @@ task :report do
   reports = Dir[File.join(RESULTS_DIR, "*", "summary.json")].sort
   abort "No reports in benchmarks/ — run `rake benchmark` first." if reports.empty?
 
-  # app → { medians: route → median_rps, rev:, dir: }; более поздний отчёт
-  # (имя каталога — UTC-таймстамп) затирает более ранний по тому же app.
+  # app → { medians: route → median_rps, rev:, dir: }; a later report
+  # (directory name is a UTC timestamp) overwrites an earlier one for the same app.
   data_by_app = {}
   skipped = []
   reports.each do |path|
@@ -505,8 +515,8 @@ task :report do
     revs = data.dig("metadata", "source_revisions") || {}
     data.fetch("results").each do |app, summary|
       medians = summary.filter_map { |route, v| [route, v["median_rps"]] if v.is_a?(Hash) && v["median_rps"] }.to_h
-      # Отчёты до патча compare.rb держали в summary только 5 роутов —
-      # недостающие добираем медианой из по-раундовых файлов <app>-N.json.
+      # Reports predating the compare.rb patch kept only 5 routes in summary —
+      # pick up the missing ones with the median from per-round files <app>-N.json.
       measured = (data.dig("metadata", "routes") || "").split(",")
       missing = measured - medians.keys
       unless missing.empty?
@@ -548,24 +558,24 @@ task :report do
   puts
 end
 
-desc "Полный цикл: deps → download → build (crails последним) → harness → verify → benchmark"
+desc "Full cycle: deps → download → build (crails last) → harness → verify → benchmark"
 task :run do
   %w[deps download build harness verify benchmark].each { |t| Rake::Task[t].invoke }
 end
 
 task default: :run
 
-# ————— Глоб-безопасные алиасы —————
-# Bash разворачивает `rake benchmark[crails]` в существующий каталог
-# benchmarks/ (класс [crails] содержит 's') — rake молча считает это
-# file-task'ей и выходит без работы. То же ждёт rails/express. Аргументы
-# в кавычках (`rake 'benchmark[crails]'`) работают, но удобнее алиасы
-# через двоеточие, которые глоб не трогает:
+# ————— Glob-safe aliases —————
+# Bash expands `rake benchmark[crails]` into the existing benchmarks/
+# directory (the class [crails] contains 's') — rake silently treats it as a
+# file task and exits without doing work. Same awaits rails/express. Quoted
+# arguments (`rake 'benchmark[crails]'`) work, but colon-style aliases that
+# the glob cannot touch are more convenient:
 
 %w[download build verify benchmark].each do |base|
   namespace base do
     APP_ORDER.each do |app|
-      desc "#{base}: только #{app} (алиас без квадратных скобок)"
+      desc "#{base}: only #{app} (bracket-free alias)"
       task(app) { Rake::Task[base].invoke(app) }
     end
   end
