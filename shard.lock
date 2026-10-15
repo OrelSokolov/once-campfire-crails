@@ -22,7 +22,7 @@ shards:
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
-    version: 0.1.1
+    version: 0.1.2
 
   bcrypt:
     git: https://github.com/jgaskins/bcrypt.git
