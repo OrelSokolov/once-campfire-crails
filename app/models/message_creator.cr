@@ -125,9 +125,11 @@ module MessageCreator
     html.gsub(/<[^>]*>/, " ").gsub(/\s+/, " ").strip
   end
 
-  # В WAL отложенная транзакция с чтением→записью при конкуренции
-  # fork-воркеров за write-lock ловит SQLITE_BUSY мгновенно, минуя
-  # PRAGMA busy_timeout; повтор транзакции целиком берёт свежий снапшот.
+  # Транзакция стартует BEGIN IMMEDIATE (active_record.cr 0.1.2, как
+  # Rails 8.1 sqlite3_adapter): писатель берёт write-lock сразу и ждёт
+  # его через busy_timeout драйвера. Повтор остаётся страховкой от
+  # истечения busy_timeout при сильной конкуренции fork-воркеров —
+  # повтор транзакции целиком берёт свежий снапшот.
   private def self.retry_on_lock(attempts : Int32 = 5, &)
     tries = 0
     loop do

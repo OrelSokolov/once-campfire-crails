@@ -43,28 +43,24 @@ abstract class ApplicationController < ActionController::Base
   # "active_record/signed_id" (см. campfire-express/src/rails.js: key()).
   # Формат — data-конверт Rails 8.1 (urlsafe b64 без padding).
   def generate_signed_id(user_id : Int64, purpose : String, expires_at : Time? = nil) : String
-    verifier_for_signed_ids.generate(user_id, purpose: purpose, expires_at: expires_at)
+    CRails.application.message_verifier("active_record/signed_id", url_safe: true)
+      .generate(user_id, purpose: purpose, expires_at: expires_at)
   end
 
   def verify_signed_id(token : String, purpose : String) : Int64?
-    # express/verifier: digest sha256, fallback sha1
-    value = verifier_for_signed_ids.verified_any(token, purpose: purpose)
+    # express/verifier: digest sha256, fallback sha1. Верификаторы —
+    # мемоизированы на CRails.application (PBKDF2-вывод ключа один раз
+    # на процесс, не на каждый запрос).
+    value = CRails.application.message_verifier("active_record/signed_id",
+      url_safe: true).verified_any(token, purpose: purpose)
     if value.nil?
-      value = verifier_for_signed_ids(digest: :sha1).verified_any(token, purpose: purpose)
+      value = CRails.application.message_verifier("active_record/signed_id",
+        digest: :sha1, url_safe: true).verified_any(token, purpose: purpose)
     end
     if (raw = value.try(&.as_i?)) || (raw = value.try(&.as_s?.try(&.to_i64?)))
       return raw.to_i64
     end
     nil
-  end
-
-  private def verifier_for_signed_ids(digest : Symbol = :sha256)
-    secret = ENV["SECRET_KEY_BASE"]? ||
-             raise RuntimeError.new("SECRET_KEY_BASE is not configured")
-    key = ActiveSupport::CachingKeyGenerator.new(
-      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha256))
-      .generate_key("active_record/signed_id")
-    ActiveSupport::MessageVerifier.new(key, url_safe: true, digest: digest)
   end
 
   # origin(req) референса: схема://host — для session transfer / invite URL.

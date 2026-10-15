@@ -18,7 +18,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.1
+    version: 0.1.2
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
@@ -44,9 +44,13 @@ shards:
     git: https://github.com/will/crystal-pg.git
     version: 0.31.0
 
+  propshaft_cr:
+    git: https://github.com/orelsokolov/propshaft.cr.git
+    version: 0.1.1
+
   railties_cr:
     git: https://github.com/orelsokolov/railties.cr.git
-    version: 0.1.1
+    version: 0.1.4
 
   redis:
     git: https://github.com/jgaskins/redis.git

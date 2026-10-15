@@ -7,10 +7,10 @@ crystal: ">= 1.21.0"
 dependencies:
   railties_cr:
     github: OrelSokolov/railties.cr
-    version: ~> 0.1.1
+    version: ~> 0.1.4
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.1
+    version: ~> 0.1.2
   action_cable_cr:
     github: OrelSokolov/action_cable.cr
     version: ~> 0.1.1
