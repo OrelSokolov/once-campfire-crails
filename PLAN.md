@@ -511,15 +511,21 @@ IN-запросом, рендер и запись в кэш. Подключен�
 
 **Roadmap (framework, бенчмарк) — НЕ сделано, осознанно отложено:**
 
-1. *post_message, −46% к Rust (2 010 vs 2 935).* Причины по коду:
+1. *post_message, −31% к Rust (2 033 vs 2 935).* Причины по коду:
    - джобы: `enqueue_batch` — синхронная вторая SQLite-транзакция в отдельной
      `jobs.sqlite3` до ответа, под глобальным WriteQueue-мьютексом; в seed HQ
      каждый POST создаёт 2 push-джобы → ~5 лишних транзакций очереди на запрос
      (enqueue + claim×2 + finish×2), все в критической секции production-писателя.
      У Rust — in-process mpsc-очереди без блокировки writer'а, lossy при краше
-     (осознанное решение их плана). Фикс: асинхронный/батч-флаш enqueue или
-     in-process очередь — меняет durability-семантику (контракт validate_acks
-     первых трёх записей не нарушает);
+     (осознанное решение их плана); у Go — то же (chan 1024, drop при
+     переполнении). 2026-10-15: реализовывали раздельные WriteQueue
+     (production/jobs по своей странице-мьютексу) + async enqueue с 50-мс
+     батч-флашем — РАБОТА ОТКАЧЕНА РЕШЕНИЕМ: ответ до записи джобов в очередь
+     (окно потери ≤50 мс) признан недопустимым изменением семантики
+     «persisted before response» порта express. Компромисс-кандидат на будущее:
+     синхронный enqueue через ОТДЕЛЬНУЮ jobs-очередь (свой мьютекс, durability
+     прежняя, но без конкуренции с production-критической секцией) + claim/finish
+     через неё же;
    - notify-скан (`memberships JOIN users`) внутри production-транзакции — у
      Rust `unread_memberships` одним UPDATE после commit;
    - `message_dom` рендерится дважды на POST (broadcast в MessageCreator +
