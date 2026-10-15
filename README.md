@@ -59,13 +59,16 @@ The `post_message` row is not equivalent across apps (durability): Rust
 and Go run push/webhook notification jobs in in-process queues with no
 persistence at all, and the POST response does not wait for them — Rust
 accepts losing queued work on a crash
-([`jobs.rs`](https://github.com/basecamp/once-campfire-rust/blob/6dae2fd/crates/campfire/src/jobs.rs)),
-Go drops jobs when the channel overflows and loses them on a crash
-([`jobs.go`](https://github.com/basecamp/once-campfire-go/blob/c4ab53d/internal/jobs/jobs.go)).
+([`jobs.rs` L7-L8](https://github.com/basecamp/once-campfire-rust/blob/6dae2fd/crates/campfire/src/jobs.rs#L7-L8):
+"Queued work is lost if the process crashes, which the plan accepts"), Go
+drops jobs when the channel overflows and loses them on a crash
+([`jobs.go` L90](https://github.com/basecamp/once-campfire-go/blob/c4ab53d/internal/jobs/jobs.go#L90):
+"background job queue full; job dropped").
 Express and CRails persist every notification job into the leased-SQLite
-queue before responding (express: `src/jobs.js` enqueueMany; crails:
-`app/jobs/job_queue.cr`) — that guarantee costs RPS on this route and
-explains the gap.
+queue before responding (express:
+[`src/jobs.js` `enqueueMany` L52-L64](https://github.com/basecamp/once-campfire-express/blob/bb70a7d/src/jobs.js#L52-L64);
+crails: [`app/jobs/job_queue.cr` L90-L103](https://github.com/OrelSokolov/once-campfire-crails/blob/6528f85/app/jobs/job_queue.cr#L90-L103))
+— that guarantee costs RPS on this route and explains the gap.
 
 ### Intel Core Ultra 7 155H laptop (previous stand)
 
