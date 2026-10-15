@@ -37,22 +37,49 @@ module Campfire
 
     @@db : DB::Database?
 
+    # Межпроцессная сериализация писателей — flock (WriteQueue): к
+    # SQLite процессы приходят строго по одному, BUSY-ошибки и
+    # «отравление» соединений застрявшими стейтментами (perform_exec
+    # шарда не делает reset при ошибке) не возникают. retry_on_lock —
+    # страховка для внешних писателей (CLI-диагностика и т.п.).
     def self.db : DB::Database
       @@db ||= begin
         path = File.expand_path(ENV["CAMPFIRE_JOBS_DB"]? || "db/jobs.sqlite3")
         Dir.mkdir_p(File.dirname(path))
-        database = DB.open("sqlite3://#{path}")
+        # пул 2: writer-фибера (claim/enqueue/finish через WriteQueue)
+        # + фибера периодического чекпоинта
+        database = DB.open("sqlite3://#{path}?max_pool_size=2&max_idle_pool_size=2")
         database.setup_connection do |conn|
-          # busy_timeout=0: SQLITE_BUSY возвращается мгновенно, а ожидание
-          # идёт фиберами retry_on_lock (sleep в шедулере Crystal, event-loop
-          # жив). C-сон busy-хендлера из фиберы джоб-воркера заморозил бы
-          # воркер при занятом локе (см. Campfire::WriteQueue).
-          conn.exec("PRAGMA busy_timeout=0")
+          # Межпроцессная сериализация писателей — flock в WriteQueue:
+          # к SQLite они приходят по одному, busy-хендлер не участвует.
+          # busy_timeout — чистая страховка от внешних писателей (CLI).
+          conn.exec("PRAGMA busy_timeout=10000")
+          # WAL обязателен (DELETE-журнал в fork-конфигурации ловил
+          # "attempt to write a readonly database" на hot journal), но
+          # авто-чекпоинты не завершаются под непрерывными клеймами —
+          # wal_autocheckpoint=0 + PASSIVE-чекпоинт из checkpoint_fiber.
           conn.exec("PRAGMA journal_mode=WAL")
+          conn.exec("PRAGMA wal_autocheckpoint=0")
           conn.exec("PRAGMA synchronous=NORMAL")
         end
         database.exec(SCHEMA)
         database
+      end
+    end
+
+    # Периодический PASSIVE-чекпоинт jobs-WAL: без него непрерывные
+    # читатели-клеймы не дают чекпоинтам завершаться, и WAL раздувался
+    # до гигабайта при 0 строк. PASSIVE никого не блокирует.
+    def self.start_checkpoint_fiber(interval : Time::Span = 3.seconds) : Nil
+      spawn do
+        loop do
+          sleep interval
+          begin
+            db.exec("PRAGMA wal_checkpoint(PASSIVE)")
+          rescue e
+            STDERR.puts "Campfire jobs checkpoint failed: #{e.message}"
+          end
+        end
       end
     end
 
@@ -82,31 +109,46 @@ module Campfire
       end
     end
 
+    # Claim через WriteQueue на единственном соединении очереди:
+    # в процессе за jobs write-lock не конкурируют enqueue/claim/finish
+    # (см. write_queue.cr), межпроцессная конкуренция — retry_on_lock.
+    # Сначала SELECT без транзакции: пустой поллинг (клеймы каждые
+    # 250 мс × JOB_CONCURRENCY × воркеры) не трогает write-lock вовсе.
     def self.claim(now : Float64 = Time.utc.to_unix_f) : Job?
-      retry_on_lock do
-        db.using_connection do |conn|
-          conn.exec("BEGIN IMMEDIATE")
-          begin
-            row = conn.query_one?(
-              "SELECT id, payload, attempts FROM jobs " \
-              "WHERE status='ready' AND available_at <= ? " \
-              "AND (lease_until IS NULL OR lease_until <= ?) ORDER BY id LIMIT 1",
-              now, now) do |rs|
-              {id: rs.read(Int64), payload: rs.read(String), attempts: rs.read(Int32)}
+      Campfire::WriteQueue.perform do
+        has_row = db.using_connection do |conn|
+          conn.query_one?(
+            "SELECT 1 FROM jobs WHERE status='ready' AND available_at <= ? " \
+            "AND (lease_until IS NULL OR lease_until <= ?) LIMIT 1",
+            now, now) { |rs| rs.read(Int32) }
+        end
+        next nil unless has_row
+
+        retry_on_lock do
+          db.using_connection do |conn|
+            conn.exec("BEGIN IMMEDIATE")
+            begin
+              row = conn.query_one?(
+                "SELECT id, payload, attempts FROM jobs " \
+                "WHERE status='ready' AND available_at <= ? " \
+                "AND (lease_until IS NULL OR lease_until <= ?) ORDER BY id LIMIT 1",
+                now, now) do |rs|
+                {id: rs.read(Int64), payload: rs.read(String), attempts: rs.read(Int32)}
+              end
+              job = nil
+              if row
+                token = Random::Secure.hex(16)
+                conn.exec(
+                  "UPDATE jobs SET attempts = attempts + 1, lease_until = ?, lease_token = ? WHERE id = ?",
+                  now + 120, token, row[:id])
+                job = Job.new(row[:id], row[:payload], row[:attempts] + 1, token)
+              end
+              conn.exec("COMMIT")
+              job
+            rescue e
+              conn.exec("ROLLBACK") rescue nil
+              raise e
             end
-            job = nil
-            if row
-              token = Random::Secure.hex(16)
-              conn.exec(
-                "UPDATE jobs SET attempts = attempts + 1, lease_until = ?, lease_token = ? WHERE id = ?",
-                now + 120, token, row[:id])
-              job = Job.new(row[:id], row[:payload], row[:attempts] + 1, token)
-            end
-            conn.exec("COMMIT")
-            job
-          rescue e
-            conn.exec("ROLLBACK") rescue nil
-            raise e
           end
         end
       end
@@ -114,25 +156,32 @@ module Campfire
 
     def self.finish(job : Job, error : String? = nil,
                     now : Float64 = Time.utc.to_unix_f) : Nil
-      if error.nil?
-        db.exec("DELETE FROM jobs WHERE id = ? AND lease_token = ?",
-          job.id, job.lease_token)
-      else
-        backoff = Math.min(300, 2 ** job.attempts)
-        db.exec(
-          "UPDATE jobs SET lease_until = NULL, lease_token = NULL, " \
-          "available_at = ?, status = ?, last_error = ? " \
-          "WHERE id = ? AND lease_token = ?",
-          now + backoff,
-          job.attempts >= 5 ? "dead" : "ready",
-          error[0, 1000],
-          job.id, job.lease_token)
+      Campfire::WriteQueue.perform do
+        retry_on_lock do
+          db.using_connection do |conn|
+            if error.nil?
+              conn.exec("DELETE FROM jobs WHERE id = ? AND lease_token = ?",
+                job.id, job.lease_token)
+            else
+              backoff = Math.min(300, 2 ** job.attempts)
+              conn.exec(
+                "UPDATE jobs SET lease_until = NULL, lease_token = NULL, " \
+                "available_at = ?, status = ?, last_error = ? " \
+                "WHERE id = ? AND lease_token = ?",
+                now + backoff,
+                job.attempts >= 5 ? "dead" : "ready",
+                error[0, 1000],
+                job.id, job.lease_token)
+            end
+          end
+        end
       end
     end
 
     def self.start_worker : Nil
       concurrency = ENV["JOB_CONCURRENCY"]?.try(&.to_i?) || 3
       concurrency.times { spawn { worker_loop } }
+      start_checkpoint_fiber
     end
 
     # После fork (serverX Cluster): унаследованные sqlite-дескрипторы
@@ -142,17 +191,22 @@ module Campfire
       @@db = nil
     end
 
-    # См. комментарий у enqueue_batch: мгновенный SQLITE_BUSY у
-    # отложенных транзакций лечится повтором со свежим снапшотом.
-    private def self.retry_on_lock(attempts : Int32 = 5, &)
+    # См. комментарий у enqueue_batch: мгновенный SQLITE_BUSY лечится
+    # повтором со свежим снапшотом. 30 коротких попыток: окно конкуренции
+    # суб-миллисекундное, длинные рандомные сны лишь простоивали лок;
+    # "statements in progress" ретраится потому же (застрявший после
+    # ошибки стейтмент самолечится повторным exec на том же соединении).
+    private def self.retry_on_lock(attempts : Int32 = 30, &)
       tries = 0
       loop do
         tries += 1
         begin
           return yield
         rescue e : SQLite3::Exception
-          if e.message.to_s.includes?("database is locked") && tries < attempts
-            sleep Random.new.rand(0.005..0.05)
+          msg = e.message.to_s
+          if (msg.includes?("database is locked") ||
+              msg.includes?("statements in progress")) && tries < attempts
+            sleep Random.new.rand(0.001..0.008).seconds
             next
           end
           raise e

@@ -1,0 +1,8 @@
+#!/usr/bin/env crystal
+# Binstub from `crails new`: thin wrapper over the railties_cr CLI
+# (server / build / routes / middleware / db:* / generate / console).
+# Crystal has no runtime require, so the CLI runs through `crystal run`.
+require "railties_cr"
+require "railties_cr/cli"
+
+CRails::CLI.run(ARGV)

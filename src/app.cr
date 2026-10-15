@@ -12,6 +12,7 @@ require "../app/helpers/avatar_cache"
 require "../app/helpers/identity_cache"
 require "../app/helpers/cable_bus"
 require "../app/helpers/write_queue"
+require "../app/helpers/sqlite_tmpfs"
 require "../app/jobs/**"
 require "../config/cable"
 require "../app/channels/application_cable/channel"
@@ -22,8 +23,18 @@ require "../config/routes"
 require "../config/environments/development"
 require "../config/environments/production"
 
-if (url = ENV["DATABASE_URL"]?)
-  ActiveRecord::Base.establish_connection(url)
+database_url = ENV["DATABASE_URL"]?
+if database_url
+  # SQLite-базы обязаны лежать на tmpfs (RAM): на дисковых ФС этого
+  # класса (ext4, ~97% заполнения) fsync чекпоинтов ловит журнальные
+  # столлы (jbd2) в сотни мс, замораживающие воркеров (диагностика
+  # 2026-10-15: locks_lock_inode_wait → jbd2_log_wait_commit).
+  # Проще требование, чем конвой: на tmpfs этого нет вовсе.
+  Campfire.require_sqlite_tmpfs!(database_url, "DATABASE_URL")
+  Campfire.require_sqlite_tmpfs!(
+    ENV["CAMPFIRE_JOBS_DB"]? || File.join("db", "jobs.sqlite3"),
+    "CAMPFIRE_JOBS_DB")
+  ActiveRecord::Base.establish_connection(database_url)
 elsif File.exists?("config/database.yml")
   ActiveRecord::Base.establish_connection_from_yaml(
     "config/database.yml", CRails.env.to_s.downcase)
@@ -62,7 +73,6 @@ if {"", "serve"}.includes?(ARGV[0]? || "") && ENV["CRAILS_TRANSPORT"]? == "serve
 
   # Выполняется в каждом воркере (в fork-ребёнке при Cluster): унаследованные
   # sqlite-дескрипторы переоткрываем, middleware compose до listen.
-  database_url = ENV["DATABASE_URL"]?
   worker_block = ->do
     if db_url = database_url
       ActiveRecord::Base.establish_connection(db_url)
@@ -79,6 +89,9 @@ if {"", "serve"}.includes?(ARGV[0]? || "") && ENV["CRAILS_TRANSPORT"]? == "serve
   end
 
   workers = ENV["WEB_CONCURRENCY"]?.try(&.to_i?) || 1
+  # Разделяемая страница с write-мьютексом — ДО форка: дети наследуют
+  # маппинг и инициализированный мьютекс (см. WriteQueue.prepare_fork!).
+  Campfire::WriteQueue.prepare_fork!
   if workers > 1
     ServerX::Cluster.run(host, port, workers, worker_block)
   else

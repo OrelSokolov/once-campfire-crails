@@ -5,6 +5,16 @@ abstract class ApplicationController < ActionController::Base
 
   before_action :require_authentication
 
+  # Campfire authentication.rb: protect_from_forgery using: :header_only,
+  # with: :exception, unless: -> { authenticated_by.bot_key? } —
+  # Sec-Fetch-Site-защита Rails 8.2 (без токенов в формах), бот-ключи
+  # в URL (не из браузера) защиту отключают.
+  protect_from_forgery using: :header_only, with: :exception, unless: :bot_request?
+
+  def bot_request? : Bool
+    params["bot_key"]? != nil
+  end
+
   def current_session : Session?
     raw = cookies.signed["session_token"]?
     token = case raw
