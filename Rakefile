@@ -8,6 +8,12 @@
 #   rake download[c,go]        # ...selectively
 #   rake build                 # build docker images of all applications
 #   rake build[rust]           # ...selectively
+#   rake clean                 # remove built application images (keeps
+#                              # builder/toolchain caches: campfire-c-builder,
+#                              # campfire-elixir:toolchain, campfire-reference)
+#   rake clean[c]              # ...selectively
+#   rake rebuild               # clean + build of all applications
+#   rake rebuild[crails]       # ...selectively
 #   rake harness               # clone the harness, apply the crails patch,
 #                              # bin/check, build loadgen, build the seed database (bin/seed)
 #   rake verify                # preflight verification of each image (contracts, no load)
@@ -293,6 +299,26 @@ task :build, [:app] do |_t, args|
   each_app(args[:app]).each { |app| send("build_#{app}") }
 end
 
+desc "Remove built application images (clean[rust] — selectively; builder/toolchain caches kept)"
+task :clean, [:app] do |_t, args|
+  each_app(args[:app]).each do |app|
+    image = IMAGE.fetch(app)
+    if image_exists?(image)
+      step "#{app}: removing image #{image}"
+      # -f: not blocked by stopped harness containers left after a run
+      sh!("docker", "rmi", "-f", image)
+    else
+      step "#{app}: image #{image} not built"
+    end
+  end
+end
+
+desc "Force a clean rebuild of application images (rebuild[rust] — selectively)"
+task :rebuild, [:app] do |_t, args|
+  Rake::Task["clean"].invoke(args[:app])
+  Rake::Task["build"].invoke(args[:app])
+end
+
 def need_image?(app)
   image = IMAGE.fetch(app)
   if image_exists?(image) && ENV["REBUILD"] != "1"
@@ -572,7 +598,7 @@ task default: :run
 # arguments (`rake 'benchmark[crails]'`) work, but colon-style aliases that
 # the glob cannot touch are more convenient:
 
-%w[download build verify benchmark].each do |base|
+%w[download build clean rebuild verify benchmark].each do |base|
   namespace base do
     APP_ORDER.each do |app|
       desc "#{base}: only #{app} (bracket-free alias)"
