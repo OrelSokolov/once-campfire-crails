@@ -15,9 +15,62 @@ implementations (route contracts validated on every response under load,
 write audits against the seed database, browser gate via Playwright,
 Action Cable live messaging) — and then be measured on requests per second.
 
-## Measurement environment
+## Benchmark results
 
-All CRails, C and Elixir numbers below were measured on this machine:
+Median RPS of the official harness — 3 rounds × 16 concurrent clients,
+seed database, every response validated against the route contract — on
+two stands. CRails is **#1 on every measured GET route on both**, C and
+Elixir included.
+
+### AMD Ryzen 9 3900X (current stand)
+
+All seven apps were measured on the same machine with an identical stand:
+
+- **AMD Ryzen 9 3900X** — 12 cores / 24 threads, up to 4.6 GHz; 46 GB RAM
+- Linux kernel 7.0, Docker (`--network host`)
+- Server pinned to `--cpuset-cpus 0,1,12,13` (4 hardware threads);
+  load generator pinned to cpuset 2,3,4,5 — client and server never
+  share cores
+- Rails/Express/Go/Rust/C/Elixir: run `20261015-105858-…` (all seven in
+  one pass); CRails: dedicated re-run `20261015-193908-crails` on the
+  same stand — adds the whole-response avatar token cache
+
+| Route      | [Rails](https://github.com/basecamp/once-campfire) | [Express](https://github.com/basecamp/once-campfire-express) | [Go](https://github.com/basecamp/once-campfire-go) | [Rust](https://github.com/basecamp/once-campfire-rust) | [C](https://github.com/basecamp/once-campfire-c) | [Elixir](https://github.com/basecamp/once-campfire-elixir) | [CRails](https://github.com/OrelSokolov/once-campfire-crails) |
+|-----------:|------:|--------:|------:|-------:|-------:|-------:|-----------:|
+| room_show  |   1 731 |  10 430 | 14 316 | 21 953 | 31 698 |   2 346 | **38 092** |
+| messages_page | 1 641 | 16 248 | 14 336 | 21 539 | 32 114 |   2 480 | **37 553** |
+| sidebar    |   1 804 |  19 979 | 14 945 | 24 411 | 34 857 |   2 566 | **52 299** |
+| search     |   1 801 |  17 764 | 15 988 | 25 113 | 33 460 |   2 522 | **48 930** |
+| avatar     |  28 046 |  40 989 | 48 656 | 74 442 | 18 920 |  31 896 | **76 669** |
+| static_css |  37 048 |  42 843 | 59 413 | 72 389 | 37 095 |  36 788 | **75 962** |
+| /up        |   2 571 |  20 531 | 29 238 | 36 557 | 62 890 |   4 230 | **82 265** |
+| post_message |   166 |   1 015 | 2 442 | **2 935** | 1 303 |    556 |      2 033 |
+| Revision   | [`edbc779`](https://github.com/basecamp/once-campfire/commit/edbc779) | [`bb70a7d`](https://github.com/basecamp/once-campfire-express/commit/bb70a7d) | [`c4ab53d`](https://github.com/basecamp/once-campfire-go/commit/c4ab53d) | [`6dae2fd`](https://github.com/basecamp/once-campfire-rust/commit/6dae2fd) | [`873a51f`](https://github.com/basecamp/once-campfire-c/commit/873a51f) | [`58964cf`](https://github.com/basecamp/once-campfire-elixir/commit/58964cf) | [`6528f85`](https://github.com/OrelSokolov/once-campfire-crails/commit/6528f85) |
+
+**#1 on every measured GET route**, avatar and static files included.
+The `avatar` row: CRails verifies the signed Rails token (PBKDF2 key
+derivation) on the first hit and then serves the avatar from a
+whole-response cache (bytes + Content-Type keyed by the public token,
+invalidated by the DB epoch); the previous leader Rust routes avatars as
+"live responses" past its cache — token verification, an SQL lookup and
+a file read on every request.
+
+The `post_message` row is not equivalent across apps (durability): Rust
+and Go run push/webhook notification jobs in in-process queues with no
+persistence at all, and the POST response does not wait for them — Rust
+accepts losing queued work on a crash
+([`jobs.rs`](https://github.com/basecamp/once-campfire-rust/blob/6dae2fd/crates/campfire/src/jobs.rs)),
+Go drops jobs when the channel overflows and loses them on a crash
+([`jobs.go`](https://github.com/basecamp/once-campfire-go/blob/c4ab53d/internal/jobs/jobs.go)).
+Express and CRails persist every notification job into the leased-SQLite
+queue before responding (express: `src/jobs.js` enqueueMany; crails:
+`app/jobs/job_queue.cr`) — that guarantee costs RPS on this route and
+explains the gap.
+
+### Intel Core Ultra 7 155H laptop (previous stand)
+
+All CRails, C and Elixir numbers in this section were measured on this
+machine:
 
 - **Xiaomi Redmi Book Pro 16 2024** laptop
 - **Intel Core Ultra 7 155H** — 6 P-cores + 8 E-cores + 2 LP E-cores
@@ -32,8 +85,6 @@ As a laptop (shared memory bandwidth, thermals), absolute numbers are
 specific to this machine; the Rails/Express/Go/Rust columns are the
 harness's recorded baselines taken with an equivalent CPU split
 (4 P-core threads for the server, E-core threads for the client).
-
-## Benchmark results
 
 Official harness, median of 3 rounds, 16 concurrent clients, 4 physical cores
 (`--cpuset-cpus 8-11`, WEB_CONCURRENCY=3 fork workers), seed database.
