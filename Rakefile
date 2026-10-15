@@ -92,7 +92,7 @@ def linux?   = RbConfig::CONFIG["host_os"].include?("linux")
 def dry_run? = ENV["DRY_RUN"] == "1"
 
 def sh!(*cmd, env: {}, chdir: nil)
-  puts "+ #{env.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}".strip
+  puts "+ #{env.reject { |_k, v| v.nil? }.map { |k, v| "#{k}=#{v}" }.join(" ")} #{cmd.join(" ")}".strip
   return if dry_run?
   ok = chdir ? system(env, *cmd, chdir: chdir) : system(env, *cmd)
   abort "FAILED: #{cmd.join(" ")}" unless ok
@@ -141,10 +141,16 @@ def fts5_sqlite3_dir
   nil
 end
 
-# PATH для запуска harness: cargo (rustup) и sqlite3-with-FTS5 впереди.
+# PATH для запуска harness: ruby текущего интерпретатора (иначе `#!/usr/bin/env ruby`
+# в скриптах harness возьмёт системный ruby с GEM-путями от rvm — смесь падает
+# на "can't find gem bundler"), cargo (rustup) и sqlite3-with-FTS5 впереди.
 def harness_env
-  path = [File.expand_path("~/.cargo/bin"), fts5_sqlite3_dir, ENV["PATH"]].compact.join(":")
+  path = [RbConfig::CONFIG["bindir"], File.expand_path("~/.cargo/bin"), fts5_sqlite3_dir, ENV["PATH"]].compact.join(":")
   env = { "PATH" => path }
+  # Изолируем скрипты harness от bundler-окружения родителя: rubygems грузит
+  # bundler/setup уже при старте по BUNDLER_SETUP/BUNDLE_GEMFILE, а harness —
+  # не bundler-проект (minitest/stdlib) и своей Gemfile-привязки не имеет.
+  %w[BUNDLER_SETUP BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLE_EXEC_OPTS RUBYOPT].each { |k| env[k] = nil }
   # Хостовый redis на 6379 не даёт контейнерным забиндиться (harness --
   # network host); Rails-образ уже без локального redis, Elixir переключаем
   # на внешний через REDIS_URL. См. REPORT.md.
@@ -460,6 +466,7 @@ task :verify, [:app] do |_t, args|
   abort "Верификация требует Linux (docker --network host + taskset)." unless linux?
   apps = each_app(args[:app])
   apps.each { |a| abort "Образ #{IMAGE[a]} не собран: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
+  Rake::Task["harness"].invoke # идемпотентно: докачивает/проверяет harness перед запуском
   run_henchmark(apps, ["--preflight"])
 end
 
@@ -468,6 +475,7 @@ task :benchmark, [:app] do |_t, args|
   abort "Бенчмарк требует Linux (docker --network host + taskset)." unless linux?
   apps = each_app(args[:app])
   apps.each { |a| abort "Образ #{IMAGE[a]} не собран: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
+  Rake::Task["harness"].invoke # идемпотентно: докачивает/проверяет harness перед запуском
   run_henchmark(apps, [])
   save_results(apps.join("_"))
 end
