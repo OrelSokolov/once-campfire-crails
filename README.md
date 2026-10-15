@@ -5,7 +5,7 @@
 <h1 align="center">ONCE Campfire on CRails</h1>
 
 A from-scratch implementation of [ONCE Campfire](https://once.com/campfire)
-in [Crystal](https://crystal-lang.org) on **CRails** — a Rails-inspired
+in [Crystal](https://crystal-lang.org) on **[CRails](https://github.com/OrelSokolov/crails)** — a Rails-inspired
 application framework (ActionPack/ActiveRecord/ActionCable/Turbo ports as
 shards) with an nginx-style HTTP transport.
 
@@ -118,8 +118,9 @@ numbers above.
 smallest code base. KLOC counts non-blank, non-comment lines of the
 application's own source in its primary language (Rails: `app/**/*.rb`;
 Express: `src/*.js`; Elixir: `lib/**/*.ex`; Go, Rust, C: repository
-sources; CRails: `app/`, `src/`, `config/` in Crystal — the CRails
-framework itself is published as separate reusable shards, so this is
+sources; CRails: `app/`, `src/`, `config/` in Crystal — the
+[CRails framework](https://github.com/OrelSokolov/crails) itself is
+published as separate reusable shards, so this is
 Campfire-the-product). Remaining routes from the same runs:
 
 | Route        |      C | Elixir | **CRails** |
