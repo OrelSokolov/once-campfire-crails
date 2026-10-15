@@ -580,18 +580,19 @@ task :report do
   puts table
   puts
   puts <<~NOTE
-    post_message — маршруты не эквивалентны по надёжности (durability). Rust и Go
-    выполняют джобы уведомлений (push/webhook) в in-process очередях без всякой
-    персистентности, и ответ POST их не ждёт:
+    post_message is not equivalent across apps (durability). Rust and Go run
+    push/webhook notification jobs in in-process queues with no persistence at
+    all, and the POST response does not wait for them:
 
-      rust: «Queued work is lost if the process crashes, which the plan accepts» —
+      rust: "Queued work is lost if the process crashes, which the plan accepts" —
             https://github.com/basecamp/once-campfire-rust/blob/6dae2fd/crates/campfire/src/jobs.rs
-      go:   drop при переполнении канала и потеря при краше процесса —
+      go:   dropped when the channel overflows, lost on a crash —
             https://github.com/basecamp/once-campfire-go/blob/c4ab53d/internal/jobs/jobs.go
 
-    Express и CRails пишут джобы в leased-SQLite очередь до ответа (express:
-    src/jobs.js enqueueMany; crails: app/jobs/job_queue.cr) — эта гарантия
-    стоит RPS на post_message и объясняет разрыв с rust/go в строке выше.
+    Express and CRails persist every notification job into the leased-SQLite
+    queue before responding (express: src/jobs.js enqueueMany; crails:
+    app/jobs/job_queue.cr) — that guarantee costs RPS on post_message and
+    explains the gap in the row above.
   NOTE
   puts
   apps.each { |a| puts "  #{a}: #{data_by_app[a][:dir]} @ #{data_by_app[a][:rev]}" }

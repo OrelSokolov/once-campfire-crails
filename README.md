@@ -84,6 +84,17 @@ delivery is a no-op without VAPID keys — the same trade-off as the official
 Express implementation (`if (!VAPID_PRIVATE_KEY) return`); the notification
 jobs themselves are still created and persisted before the response.
 
+The `post_message` row is not an apples-to-apples comparison: Rust and Go run
+their notification jobs in in-memory queues and never persist them — Rust
+accepts losing queued work when the process crashes
+([`jobs.rs`](https://github.com/basecamp/once-campfire-rust/blob/6dae2fd/crates/campfire/src/jobs.rs):
+"Queued work is lost if the process crashes, which the plan accepts"), Go
+drops jobs when the bounded channel overflows and loses them on a crash
+([`jobs.go`](https://github.com/basecamp/once-campfire-go/blob/c4ab53d/internal/jobs/jobs.go)).
+Express and CRails write every job into the leased-SQLite queue before the
+response is sent — that is the durability the reference product promises,
+and it is what the RPS gap on this route buys.
+
 ## Methodology
 
 - Every response is validated against a route contract captured from the
