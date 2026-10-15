@@ -18,20 +18,32 @@ class AvatarsController < ApplicationController
               end
     return render(plain: "invalid avatar token", status: 404) if user_id.nil?
 
+    # Публичный токен-путь кэшируется целиком (байты + Content-Type):
+    # аватары запрашиваются часто и не зависят от зрителя. Инвалидация —
+    # DB-эпоха (ср. PageCache): смена аватара — чужой коммит.
+    cache_epoch = db_epoch
+    if (hit = AvatarCache.get(raw_token, cache_epoch))
+      response.headers["Cache-Control"] = "public, max-age=1800"
+      return render(html: hit.bytes, content_type: hit.content_type)
+    end
+
     user = User.find?(user_id)
     blob = user.try(&.avatar_blob)
     unless blob
       # Референс: без аватара рендерятся SVG-инициалы (render_initials),
       # не 404 — страницы сообщений всегда линкуют /users/<id>/avatar.
-      return render_initials(user)
+      return render_initials(user, raw_token, cache_epoch)
     end
 
     key = blob.not_nil!.key.not_nil!
     path = File.join(storage_root, key[0, 2], key[2, 2], key)
     return render(plain: "avatar file missing", status: 404) unless File.exists?(path)
 
+    content_type = blob.not_nil!.content_type.to_s
+    bytes = File.read(path)
+    AvatarCache.set(raw_token, cache_epoch, bytes, content_type)
     response.headers["Cache-Control"] = "public, max-age=1800"
-    send_file(path, disposition: "inline", content_type: blob.not_nil!.content_type.to_s)
+    render(html: bytes, content_type: content_type)
   end
 
   # Storage root: harness монтирует сид в /rails/storage/files; локально —
@@ -41,7 +53,9 @@ class AvatarsController < ApplicationController
   end
 
   # users/avatars/show.svg.erb референса: квадрат с инициалами имени.
-  private def render_initials(user : User?) : Nil
+  # cache_epoch передаётся из show — SVG тоже кэшируется по токену.
+  private def render_initials(user : User?, cache_key : String? = nil,
+                              cache_epoch : String? = nil) : Nil
     name = user.try(&.name).to_s
     initials = name.split(/\s+/).reject(&.empty?)
       .map(&.[0]?.try(&.upcase).to_s).join[0, 2]? || ""
@@ -53,8 +67,12 @@ class AvatarsController < ApplicationController
       io << %(font-family="system-ui, sans-serif" font-size="104" font-weight="600" fill="#fff">)
       io << HTML.escape(initials) << %(</text></svg>)
     end
-    response.headers["Content-Type"] = "image/svg+xml"
+    if cache_key && cache_epoch
+      AvatarCache.set(cache_key, cache_epoch, svg, "image/svg+xml")
+    end
+    # content_type: явный аргумент — render(html:) по умолчанию ставит
+    # text/html и затирает выставленный заранее заголовок.
     response.headers["Cache-Control"] = "public, max-age=1800"
-    render(html: svg)
+    render(html: svg, content_type: "image/svg+xml")
   end
 end
