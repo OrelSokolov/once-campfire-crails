@@ -20,20 +20,31 @@ class RoomsController < ApplicationController
       return send_page(cached)
     end
 
-    # Контракт: 40 последних по created_at DESC, вывод в ASC.
-    # Фрагментный кэш: хиты из FragmentCache без SQL (тело rich text,
-    # авторы), промахи — с батч-загрузкой авторов одним IN-запросом
-    # (было User.find? на каждое сообщение, ~85 SQL на промахе).
-    messages = Message.where("room_id = ?", room.id.not_nil!)
-      .order("created_at DESC").limit(40).to_a.reverse
+    # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
+    # /rooms/:id/@:message_id — page_around (pagination.rb): 40 до якоря
+    # + якорь + 40 после (first_page), вывод ASC.
+    messages = if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
+                   (anchor = Message.where("room_id = ? AND id = ?",
+                     room.id.not_nil!, mid).first?)
+      before = Message.where(
+        "room_id = ? AND created_at < ?", room.id.not_nil!, anchor.created_at.not_nil!)
+        .order("created_at DESC").limit(40).to_a.reverse
+      after = Message.where(
+        "room_id = ? AND created_at > ?", room.id.not_nil!, anchor.created_at.not_nil!)
+        .order("created_at ASC").limit(40).to_a
+      before + [anchor] + after
+    else
+      Message.where("room_id = ?", room.id.not_nil!)
+        .order("created_at DESC").limit(40).to_a.reverse
+    end
 
-    messages_html = ChatLayout.messages_html(messages, epoch, room)
+    messages_html = ChatLayout.messages_html(messages, epoch, room, origin)
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     html = String.build do |io|
       io << ChatLayout.head(room.name.to_s, user, room.id, chat: true)
       io << ChatLayout.body_open(room, user)
-      io << ChatLayout.message_area(room, messages_html, user)
+      io << ChatLayout.message_area(room, messages_html, user, base_url: origin)
       io << ChatLayout.composer(room)
       io << ChatLayout.body_close(chat: true)
     end

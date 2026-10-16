@@ -54,7 +54,7 @@ class SearchesController < ApplicationController
       io << %(data-search-results-threaded-class="message--threaded" )
       io << %(data-search-results-mentioned-class="message--mentioned" )
       io << %(data-search-results-formatted-class="message--formatted" data-query=") << HTML.escape(query) << %(">\n)
-      ChatLayout.messages_to(io, messages, epoch)
+      ChatLayout.messages_to(io, messages, epoch, nil, origin)
       io << %(</div>\n)
       io << %(</div>\n)
       io << ChatLayout.page_close(search_composer(query, return_room),

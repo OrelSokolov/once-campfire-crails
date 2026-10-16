@@ -30,8 +30,9 @@ class BotsController < ApplicationController
     sync_webhook(bot.id.not_nil!, nested("webhook_url"))
     # createUser эталона (domain.js): новый пользователь (включая бота)
     # получает membership во все Rooms::Open (involvement "mentions").
-    # STI-порт хранит type коротким именем подкласса ("Open").
-    Room.where("type = 'Open'").each do |room|
+    # STI-порт пишет короткий type ('Open'), сид хранит полный
+    # ('Rooms::Open') — матчим оба.
+    Room.where("type IN ('Open', 'Rooms::Open')").each do |room|
       Membership.new(room_id: room.id.not_nil!, user_id: bot.id.not_nil!,
         involvement: "mentions", connections: 0,
         created_at: now, updated_at: now).save!
@@ -72,7 +73,11 @@ class BotsController < ApplicationController
         io << %(style="view-transition-name: chat-bot-) << bid << %(">)
         io << ChatLayout.icon("pencil.svg")
         io << %(<span class="for-screen-reader">Edit ) << HTML.escape(bot.name.to_s) << %(</span></a></div>\n)
-        Room.visible_for(bot).order("id").each do |room|
+        # _bot.html.erb: bot.rooms.without_directs.ordered — без Direct
+        # (сид: 'Rooms::Direct', наши: 'Direct'), по LOWER(name).
+        Room.visible_for(bot)
+          .where("rooms.type NOT IN ('Rooms::Direct', 'Direct')")
+          .order("lower(name)").each do |room|
           bot_key = "#{bid}-#{bot.bot_token.to_s}"
           text = "curl -d 'Hello!' #{origin}/rooms/#{room.id.not_nil!}/#{bot_key}/messages"
           upload = "curl -F 'file=@yourfile' #{origin}/rooms/#{room.id.not_nil!}/#{bot_key}/messages"

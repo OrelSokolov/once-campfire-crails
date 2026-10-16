@@ -25,14 +25,27 @@ class MessagesController < ApplicationController
     end
 
     anchor = params["before"]?
+    after_anchor = params["after"]?
     messages = if anchor && (anchor_id = anchor.to_s.to_i64?)
       Message.where(
         "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
         room.id.not_nil!, anchor_id)
         .order("created_at DESC").limit(40).to_a.reverse
+    elsif after_anchor && (after_id = after_anchor.to_s.to_i64?)
+      Message.where(
+        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, after_id)
+        .order("created_at ASC").limit(40).to_a
     else
       Message.where("room_id = ?", room.id.not_nil!)
         .order("created_at DESC").limit(40).to_a.reverse
+    end
+
+    # Rails messages#index: пустая страница → 204 No Content (пагинатор
+    # по нему понимает, что история дочитана).
+    if messages.empty?
+      response.status = :no_content
+      return render(plain: "")
     end
 
     page = Campfire::PageCache::Page.new(messages_page_html(room, messages, epoch))
@@ -72,12 +85,12 @@ class MessagesController < ApplicationController
     # (аудит validate_acks требует первые три с точным телом).
     # attachment: файл → blob + active_storage_attachments (storage.js).
     message = MessageCreator.create!(room, user, body_html, client_message_id,
-      attachment: upload)
+      attachment: upload, base_url: origin)
 
     attachment = upload ? ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]? : nil
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
-      io << ChatLayout.message_dom(message, room, user, attachment)
+      io << ChatLayout.message_dom(message, room, user, attachment, base_url: origin)
       io << %(</template></turbo-stream>\n)
     end
 
@@ -106,11 +119,12 @@ class MessagesController < ApplicationController
     body_html = "<p>#{HTML.escape(plain)}</p>"
     client_message_id = UUID.random.to_s
 
-    message = MessageCreator.create!(room, bot, body_html, client_message_id)
+    message = MessageCreator.create!(room, bot, body_html, client_message_id,
+      base_url: origin)
 
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
-      io << ChatLayout.message_dom(message, room, bot)
+      io << ChatLayout.message_dom(message, room, bot, base_url: origin)
       io << %(</template></turbo-stream>\n)
     end
     Campfire.broadcast(
@@ -118,8 +132,34 @@ class MessagesController < ApplicationController
       turbo_frame)
     render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
   end
+  # GET /rooms/:id/messages/:message_id — show.html.erb (render @message):
+  # страница с DOM сообщения. Turbo извлекает из ответа фрейм
+  # edit_message_<id> — это завершает навигацию фрейма после редиректа
+  # update (фрейм получает [complete]) и подтягивает отрендеренное
+  # сообщение.
+  def show
+    room = Room.find?(params["id"].to_s.to_i64)
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    unless room && message && message.room_id == room.id
+      response.status = :not_found
+      return render(plain: "Message not found")
+    end
+    message = message.not_nil!
+    room = room.not_nil!
+
+    attachment = ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]?
+    dom = ChatLayout.message_dom(message, room,
+      User.find?(message.creator_id.not_nil!), attachment, base_url: origin)
+    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    render(html: String.build do |io|
+      io << "<!doctype html>\n<html>\n<head><title>Campfire</title></head>\n<body>\n"
+      io << dom
+      io << "\n</body>\n</html>\n"
+    end)
+  end
+
   # GET /rooms/:id/messages/:message_id/edit — форма редактирования в
-  # turbo-frame edit_message_<cid> (edit_message.eta).
+  # turbo-frame edit_message_<id> (edit.html.erb).
   def edit
     room = Room.find?(params["id"].to_s.to_i64)
     message = Message.find?(params["message_id"].to_s.to_i64)
@@ -128,48 +168,64 @@ class MessagesController < ApplicationController
       response.status = :not_found
       return render(plain: "Message not found")
     end
-    if message.creator_id != user.id
+    room = room.not_nil!
+    message = message.not_nil!
+    if message.creator_id != user.id && user.role != 1
       response.status = :forbidden
       return render(plain: "Cannot edit this message")
     end
 
-    cid = message.client_message_id.to_s.presence || message.id.to_s
-    body = message.body.to_s
+    mid = message.id.not_nil!
+    attachment = ChatLayout.attachments_for([mid])[mid]?
+    room_path = "/rooms/#{room.id}/messages/#{mid}"
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
-      io << %(<turbo-frame id="edit_message_#{cid}">\n)
+      io << %(<turbo-frame id="edit_message_#{mid}">\n)
       io << %(<div class="message__body position-relative" data-controller="scroll-into-view">\n)
       io << %(<div class="message__body-content message__body-content--editing gap">\n)
-      io << %(<div class="composer--edit composer--rich-text">\n)
-      io << %(<form id="form_message_#{cid}" data-controller="form" )
-      io << %(data-action="keydown.esc-&gt;form#cancel keydown.ctrl+enter-&gt;form#submit:prevent keydown.meta+enter-&gt;form#submit:prevent" )
-      io << %(action="/rooms/#{room.id}/messages/#{message.id}" accept-charset="UTF-8" method="post">)
-      io << %(<input type="hidden" name="_method" value="patch">\n)
-      io << %(<div class="full-width input input--actor min-width fill-white">)
-      io << %(<lexxy-editor rows="1" class="input lexxy-content" aria-multiline="true" aria-label="Edit message" autofocus="autofocus" )
-      io << %(permitted-attachment-types="application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed" )
-      io << %(data-action="lexxy:change-&gt;typing-notifications#start keydown-&gt;composer#submitByKeyboard:capture" )
-      io << %(id="message_body" name="message[body]" value=") << HTML.escape(body) << %(">)
-      io << %(<lexxy-prompt trigger="@" name="mention" src="/autocompletable/users?room_id=#{room.id}" )
-      io << %(remote-filtering="true" empty-results="No matches"></lexxy-prompt>)
-      io << %(</lexxy-editor>\n</div>\n)
-      io << %(<a data-form-target="cancel" hidden="hidden" href="/rooms/#{room.id}/messages/#{message.id}">)
-      io << %(Close editor and discard changes</a>\n)
-      io << %(<div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half">)
-      io << %(<button name="button" type="submit" class="btn btn--reversed">)
-      io << ChatLayout.icon("check.svg")
-      io << %(<span class="for-screen-reader">Save changes</span></button>\n)
-      io << %(<button name="button" type="submit" class="btn btn--negative" form="delete_form_message_#{cid}" )
-      io << %(data-turbo-confirm="Are you sure you want to delete this message?">)
-      io << ChatLayout.icon("trash.svg")
-      io << %(<span class="for-screen-reader">Delete message</span></button>\n)
-      io << %(</div>\n</form>\n</div>\n</div>\n)
+      if attachment
+        io << ChatLayout.attachment_presentation(attachment)
+        io << %(<div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half">)
+        io << %(<button name="button" type="submit" class="btn btn--negative center margin-block-end" )
+        io << %(form="delete_form_message_#{mid}" data-turbo-confirm="Are you sure you want to delete this message?">)
+        io << ChatLayout.icon("trash.svg")
+        io << %(<span class="for-screen-reader">Delete message</span></button>\n)
+        io << %(</div>\n)
+      else
+        io << %(<div class="composer--edit composer--rich-text">\n)
+        io << %(<form id="form_message_#{mid}" data-controller="form" )
+        io << %(data-action="lexxy:file-accept-&gt;form#preventAttachment keydown.esc-&gt;form#cancel keydown.ctrl+enter-&gt;form#submit:prevent keydown.meta+enter-&gt;form#submit:prevent" )
+        io << %(action="#{room_path}" accept-charset="UTF-8" method="post">)
+        io << %(<input type="hidden" name="_method" value="patch">\n)
+        io << %(<div class="full-width input input--actor min-width fill-white">)
+        io << %(<lexxy-editor rows="1" class="input lexxy-content" aria-multiline="true" aria-label="Edit message" autofocus="autofocus" )
+        io << %(permitted-attachment-types="application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed" )
+        io << %(data-action="lexxy:change-&gt;typing-notifications#start keydown-&gt;composer#submitByKeyboard:capture" )
+        io << %(data-direct-upload-url="#{origin}/rails/active_storage/direct_uploads" )
+        io << %(data-blob-url-template="#{origin}/rails/active_storage/blobs/redirect/:signed_id/:filename" )
+        io << %(id="message_body" name="message[body]" value=") << HTML.escape(message.body.to_s) << %(">)
+        io << %(<lexxy-prompt trigger="@" name="mention" src="/autocompletable/users?room_id=#{room.id}" )
+        io << %(remote-filtering="true" empty-results="No matches"></lexxy-prompt>)
+        io << %(</lexxy-editor>\n</div>\n)
+        io << %(<a data-form-target="cancel" hidden="hidden" href="#{room_path}">)
+        io << %(Close editor and discard changes</a>\n)
+        io << %(<div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half">)
+        io << %(<button name="button" type="submit" class="btn btn--reversed">)
+        io << ChatLayout.icon("check.svg")
+        io << %(<span class="for-screen-reader">Save changes</span></button>\n)
+        io << %(<button name="button" type="submit" class="btn btn--negative" form="delete_form_message_#{mid}" )
+        io << %(data-turbo-confirm="Are you sure you want to delete this message?">)
+        io << ChatLayout.icon("trash.svg")
+        io << %(<span class="for-screen-reader">Delete message</span></button>\n)
+        io << %(</div>\n</form>\n</div>\n)
+      end
+      io << %(</div>\n)
       io << %(<div class="message__actions flex flex-wrap">)
-      io << %(<a class="message__action-btn message__edit-close-btn txt-small btn btn--borderless" href="/rooms/#{room.id}/messages/#{message.id}">)
-      io << ChatLayout.icon("remove.svg", 20, "colorize--black")
+      io << %(<a class="message__action-btn message__edit-close-btn txt-small btn btn--borderless" href="#{room_path}">)
+      io << ChatLayout.icon("remove.svg", cls: "colorize--black")
       io << %(<span class="for-screen-reader">Close editor and discard changes</span></a></div>\n)
-      io << %(<form id="delete_form_message_#{cid}" data-turbo-frame="edit_message_#{cid}" )
-      io << %(action="/rooms/#{room.id}/messages/#{message.id}" accept-charset="UTF-8" method="post">)
+      io << %(<form id="delete_form_message_#{mid}" data-turbo-frame="edit_message_#{mid}" )
+      io << %(action="#{room_path}" accept-charset="UTF-8" method="post">)
       io << %(<input type="hidden" name="_method" value="delete"></form>\n)
       io << %(</div>\n</turbo-frame>\n)
     end)
@@ -192,15 +248,16 @@ class MessagesController < ApplicationController
     end
 
     mid = message.id.not_nil!
-    cid = message.client_message_id.to_s.presence || mid.to_s
     ActiveRecord::Base.connection.exec(
       "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
     ActiveRecord::Base.connection.exec(
       "DELETE FROM message_search_index WHERE rowid=?", mid)
     message.destroy
 
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+
     stream = String.build do |io|
-      io << %(<turbo-stream action="remove" target="message_#{cid}"></turbo-stream>\n)
+      io << %(<turbo-stream action="remove" target="message_#{mid}"></turbo-stream>\n)
     end
     Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from([room, "messages"]), stream)
@@ -208,8 +265,11 @@ class MessagesController < ApplicationController
   end
 
   # PATCH /rooms/:id/messages/:message_id — обновление тела: rich text,
-  # FTS5-индекс, updated_at; ответ и broadcast — turbo-stream replace
-  # message_<cid> (publishMessage(message, "replace") у express).
+  # FTS5-индекс, updated_at (messages_controller.rb#update): broadcast
+  # turbo-stream replace presentation-дива (maintain_scroll, как Rails
+  # attributes: { maintain_scroll: true }), HTTP-ответ — редирект на
+  # message show; Turbo проводит редирект внутри edit-фрейма и
+  # перерисовывает сообщение (фрейм становится complete).
   def update
     room = Room.find?(params["id"].to_s.to_i64)
     message = Message.find?(params["message_id"].to_s.to_i64)
@@ -245,16 +305,14 @@ class MessagesController < ApplicationController
     end
 
     message = Message.find?(message.id.not_nil!).not_nil!
-    cid = message.client_message_id.to_s.presence || message.id.to_s
-    turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="replace" target="message_#{cid}"><template>)
-      io << ChatLayout.message_dom(message, room, user)
-      io << %(</template></turbo-stream>\n)
-    end
+    mid = message.id.not_nil!
+    presentation = ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s))
+    stream = %(<turbo-stream action="replace" target="presentation_message_#{mid}" maintain_scroll="true"><template>) +
+      presentation + %(</template></turbo-stream>\n)
     Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-      turbo_frame)
-    render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
+      stream)
+    redirect_to "/rooms/#{room.id.not_nil!}/messages/#{mid}"
   end
 
   private def message_body_param : String
@@ -330,19 +388,13 @@ class MessagesController < ApplicationController
   # loadgen'а (<div ... data-message-id> + </turbo-frame></div>$).
   # Список — через fragment-кэш (было User.find?/rich_text на каждое
   # сообщение): хиты без SQL, авторы промахов — одним IN-запросом.
+  # Rails messages/index.html.erb (layout false): голая коллекция
+  # message-партиалов — без doctype/обёрток; JS-пагинатор вставляет
+  # ответ как фрагмент прямо в .messages.
   private def messages_page_html(room : Room, messages : Array(Message),
                                  epoch : String) : String
     String.build do |io|
-      io << "<!doctype html>\n<html>\n<head><title>"
-      io << HTML.escape(room.name.to_s)
-      io << "</title></head>\n<body>\n"
-      io << %(<main id="messages_room_#{room.id}">\n)
-      ChatLayout.messages_to(io, messages, epoch, room)
-      # Без закрывающих </main></body></html>: route-contract-v1 требует,
-      # чтобы сегмент последнего сообщения заканчивался ровно на
-      # "</turbo-frame></div>" (closure); messages_page — partial-ответ
-      # истории (подгружается в turbo-frame), полной HTML-страницей
-      # быть не обязан.
+      ChatLayout.messages_to(io, messages, epoch, room, origin)
     end
   end
 end

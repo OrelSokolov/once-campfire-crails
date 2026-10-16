@@ -8,6 +8,9 @@ module ChatLayout
   # file_uploader.js читает meta[name=csrf-token] перед fetch; сервер
   # CSRF не проверяет, поэтому достаточно стабильного значения на процесс.
   CSRF_TOKEN = Random::Secure.hex(32)
+  # config/initializers/vapid.rb — credentials бенч-приложения
+  # (детерминированное значение).
+  VAPID_PUBLIC_KEY = "BIoPd4akjKCmMf6bLDelJ40J5QnaHtttIHNVqfnhiWpR9Vd-9oJxGb7IuVDO3v4dEzJBzWLXOYTo8KHZO3Y_vtY="
 
   # asset("arrow-up.svg") → "/assets/arrow-up-f96b3895.svg" (manifest
   # пребилда референса).
@@ -50,17 +53,22 @@ module ChatLayout
     String.build do |io|
       io << "<!DOCTYPE html>\n<html><head>\n<title>" << HTML.escape(title) << "</title>\n"
       io << %(<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, interactive-widget=resizes-content">\n)
+      # layouts/application.html.erb:7-21 — точный порядок метатегов.
+      # csp_meta_tag пуст (CSP не сконфигурирован); csrf-token meta у Rails
+      # нет (защита форм на Sec-Fetch-Site, без токенов).
+      io << %(<meta name="view-transition" content="same-origin">\n)
       io << %(<meta name="color-scheme" content="light dark">\n)
-      io << %(<meta name="turbo-prefetch" content="true">\n)
-      io << %(<meta name="csrf-token" content="#{CSRF_TOKEN}">\n)
+      io << %(<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">\n)
+      io << %(<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">\n)
+      io << %(<meta name="apple-mobile-web-app-capable" content="yes">\n)
       if u = user
         io << %(<meta name="current-user-id" content="#{u.id}">\n)
         io << %(<meta name="current-user-name" content=") << HTML.escape(u.name.to_s) << %(">\n)
       end
       io << %(<meta name="action-cable-url" content="/cable">\n)
-      # layouts/application.html.erb: tag.link rel: "manifest"/"icon"/
-      # "apple-touch-icon" → fresh_account_logo (логотип аккаунта как
-      # favicon, с cache-busting по updated_at).
+      io << %(<meta name="vapid-public-key" content="#{VAPID_PUBLIC_KEY}">\n)
+      io << %(<meta name="turbo-prefetch" content="true">\n)
+      # tag.link manifest/icon/apple-touch-icon → fresh_account_logo
       account = Account.take
       if account
         logo = fresh_account_logo_path(account)
@@ -68,11 +76,12 @@ module ChatLayout
         io << %(<link rel="icon" href="#{logo}" type="image/png">\n)
         io << %(<link rel="apple-touch-icon" href="#{logo}">\n)
       end
-      io << STYLESHEETS << "\n" << IMPORTMAP << "\n"
-      # Custom CSS аккаунта (custom_styles_tag: <style> в head)
+      io << STYLESHEETS << "\n"
+      # custom_styles_tag — до importmap (layouts/application.html.erb:30-32)
       if account && (styles = account.custom_styles.to_s) != ""
         io << "<style>\n" << styles << "\n</style>\n"
       end
+      io << IMPORTMAP << "\n"
       if chat && room_id
         io << %(<meta name="turbo-cache-control" content="no-preview">\n)
         io << %(<meta name="current-room-id" content="#{room_id}">\n)
@@ -160,10 +169,12 @@ module ChatLayout
 
   # ===== Страничный layout не-chat экранов (layout_start.eta/layout_end.eta)
 
-  # <img>-иконка из пребилда ассетов референса.
-  def self.icon(name : String, size : Int32 = 20, cls : String? = nil) : String
+  # <img>-иконка из пребилда ассетов референса. size=nil — без
+  # width/height (Rails image_tag без size).
+  def self.icon(name : String, size : Int32? = 20, cls : String? = nil) : String
     c = cls ? %( class="#{cls}") : ""
-    %(<img src="#{asset(name)}" aria-hidden="true" width="#{size}" height="#{size}"#{c}>)
+    dims = size ? %( width="#{size}" height="#{size}") : ""
+    %(<img src="#{asset(name)}" aria-hidden="true"#{dims}#{c}>)
   end
 
   # nav-кнопка «Go Back» (layout_start.eta: form-экраны).
@@ -195,9 +206,10 @@ module ChatLayout
       io << %(<footer id="footer">) << footer_html << %(</footer></main>\n)
       io << %(<aside id="sidebar" data-controller="toggle-class" data-toggle-class-toggle-class="open">)
       io << sidebar_html << "</aside>\n"
-      io << %(<a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">)
-      io << %(<img alt="Campfire logo" src="#{asset("campfire-icon.png")}" width="256" height="216"></a>\n)
-      io << %(</body></html>\n)
+      io << lightbox_dialog
+      io << %(<a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">\n)
+      io << %(<img alt="Campfire logo" src="#{asset("campfire-icon.png")}" width="256" height="216">\n</a>\n)
+      io << %(</body>\n</html>\n)
     end
   end
 
@@ -218,6 +230,111 @@ module ChatLayout
       icon("copy-paste.svg", 20, "colorize--black flex-item-no-shrink") + %(</button>)
   end
 
+  # translations_helper.rb: TRANSLATIONS — словари кнопки перевода
+  # (порядок флагов: US, ES, FR, IN, DE, BR, JP).
+  TRANSLATIONS = {
+    "email_address" => {"Enter your email address", "Introduce tu correo electrónico",
+      "Entrez votre adresse courriel", "अपना ईमेल पता दर्ज करें",
+      "Geben Sie Ihre E-Mail-Adresse ein", "Insira seu endereço de email",
+      "メールアドレスを入力してください"},
+    "password" => {"Enter your password", "Introduce tu contraseña",
+      "Saisissez votre mot de passe", "अपना पासवर्ड दर्ज करें",
+      "Geben Sie Ihr Passwort ein", "Insira sua senha", "パスワードを入力してください"},
+    "update_password" => {"Change password", "Cambiar contraseña",
+      "Changer le mot de passe", "पासवर्ड बदलें", "Passwort ändern",
+      "Alterar senha", "パスワードを変更"},
+    "user_name" => {"Enter your name", "Introduce tu nombre", "Entrez votre nom",
+      "अपना नाम दर्ज करें", "Geben Sie Ihren Namen ein", "Insira seu nome",
+      "お名前を入力してください"},
+    "account_name" => {"Name this account", "Nombre de esta cuenta",
+      "Nommez ce compte", "इस खाते का नाम दें", "Benennen Sie dieses Konto",
+      "Dê um nome a essa conta", "アカウントに名前を付ける"},
+    "room_name" => {"Name the room", "Nombrar la sala", "Nommez la salle",
+      "कमरे का नाम दें", "Geben Sie dem Raum einen Namen", "Dê um nome a essa sala",
+      "ルームに名前を付ける"},
+    "invite_message" => {"Welcome to Campfire. To invite some people to chat with you, share the join link below.",
+      "Bienvenido a Campfire. Para invitar a algunas personas a chatear contigo, comparte el enlace de unión que se encuentra a continuación.",
+      "Bienvenue sur Campfire. Pour inviter des personnes à discuter avec vous, partagez le lien pour rejoindre ci-dessous.",
+      "Campfire में आपका स्वागत है। अधिक लोगों को चैट के लिए आमंत्रित करने के लिए, नीचे जुड़ने का लिंक साझा करें।",
+      "Willkommen bei Campfire. Um einige Personen zum Chatten einzuladen, teilen Sie den unten stehenden Beitrittslink.",
+      "Boas vindas ao Campfire. Para convidar pessoas para conversarem com você, compartilhe o link de convite abaixo.",
+      "Campfireへようこそ。他の人をチャットに招待するには、下記の参加リンクを共有してください。"},
+    "incompatible_browser_messsage" => {"Upgrade to a supported web browser. Campfire requires a modern web browser. Please use one of the browsers listed below and make sure auto-updates are enabled.",
+      "Actualiza a un navegador web compatible. Campfire requiere un navegador web moderno. Utiliza uno de los navegadores listados a continuación y asegúrate de que las actualizaciones automáticas estén habilitadas.",
+      "Mettez à jour vers un navigateur web pris en charge. Campfire nécessite un navigateur web moderne. Veuillez utiliser l'un des navigateurs répertoriés ci-dessous et assurez-vous que les mises à jour automatiques sont activées.",
+      "समर्थित वेब ब्राउज़र में अपग्रेड करें। Campfire को एक आधुनिक वेब ब्राउज़र की आवश्यकता है। कृपया नीचे सूचीबद्ध ब्राउज़रों में से कोई एक का उपयोग करें और सुनिश्चित करें कि स्वचालित अपडेट्स सक्षम हैं।",
+      "Aktualisieren Sie auf einen unterstützten Webbrowser. Campfire erfordert einen modernen Webbrowser. Verwenden Sie bitte einen der unten aufgeführten Browser und stellen Sie sicher, dass automatische Updates aktiviert sind.",
+      "Atualize para um navegador compatível. O Campfire requer um navegador moderno. Por favor, use um dos navegadores listados abaixo e certifique-se de que as atualizações automáticas estão ativadas.",
+      "サポートされたウェブブラウザーにアップグレードしてください。Campfireはモダンなウェブブラウザーが必要です。下記のブラウザーのいずれかを使用し、自動更新が有効になっていることを確認してください。"},
+    "bio" => {"Enter a few words about yourself.",
+      "Ingresa algunas palabras sobre ti mismo.",
+      "Saisissez quelques mots à propos de vous-même.",
+      "अपने बारे में कुछ शब्द लिखें.",
+      "Geben Sie ein paar Worte über sich selbst ein.",
+      "Insira alguma palavras sobre você.", "ご自分について簡単に記入してください。"},
+    "webhook_url" => {"Webhook URL", "URL del Webhook", "URL du webhook",
+      "वेबहुक URL", "Webhook-URL", "URL do Webhook", "Webhook URL"},
+    "chat_bots" => {"Chat bots. With Chat bots, other sites and services can post updates directly to Campfire.",
+      "Bots de chat. Con los bots de chat, otros sitios y servicios pueden publicar actualizaciones directamente en Campfire.",
+      "Bots de discussion. Avec les bots de discussion, d'autres sites et services peuvent publier des mises à jour directement dans Campfire.",
+      "चैट बॉट। चैट बॉट के साथ, अन्य साइटों और सेवाएं सीधे कैम्पफायर में अपडेट पोस्ट कर सकती हैं।",
+      "Chat-Bots. Mit Chat-Bots können andere Websites und Dienste Updates direkt in Campfire veröffentlichen.",
+      "Chat bots. Com Chat bots, outros sites e serviços podem postar atualizações diretamente no Campfire.",
+      "チャットボット。チャットボットを使用すると、他のサイトやサービスがCampfireに直接更新情報を投稿できます。"},
+    "bot_name" => {"Name the bot", "Nombrar al bot", "Nommer le bot",
+      "बॉट का नाम दें", "Benenne den Bot", "Dê um nome ao bot", "ボットに名前を付ける"},
+    "custom_styles" => {"Add custom CSS styles. Use Caution: you could break things.",
+      "Agrega estilos CSS personalizados. Usa precaución: podrías romper cosas.",
+      "Ajoutez des styles CSS personnalisés. Utilisez avec précaution : vous pourriez casser des choses.",
+      "कस्टम CSS स्टाइल जोड़ें। सावधानी बरतें: आप चीज़ों को तोड़ सकते हैं।",
+      "Fügen Sie benutzerdefinierte CSS-Stile hinzu. Vorsicht: Sie könnten Dinge kaputt machen.",
+      "Adicione estilos CSS personalizados. Use com cuidado: você pode quebrar coisas.",
+      "カスタムCSSスタイルを追加。注意: サイトが壊れる可能性があります。"},
+  }
+  LANGUAGE_FLAGS = {"🇺🇸", "🇪🇸", "🇫🇷", "🇮🇳", "🇩🇪", "🇧🇷", "🇯🇵"}
+
+  # translations_helper.rb: translation_button — details/popup с меню
+  # переводов (globe.svg, for-screen-reader «Translate»).
+  def self.translation_button(key : String) : String
+    return "" unless (texts = TRANSLATIONS[key]?)
+    String.build do |io|
+      io << %(<details class="position-relative" data-controller="popup" )
+      io << %(data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside" )
+      io << %(data-popup-orientation-top-class="popup-orientation-top">)
+      io << %(<summary class="btn" tabindex="-1">)
+      io << icon("globe.svg", 20, "color-icon")
+      io << %(<span class="for-screen-reader">Translate</span></summary>)
+      io << %(<div class="language-list-menu shadow" data-popup-target="menu">)
+      io << %(<dl class="language-list">)
+      texts.each_with_index do |text, i|
+        io << "<dt>" << LANGUAGE_FLAGS[i] << "</dt>"
+        io << %(<dd class="margin-none">) << HTML.escape(text) << "</dd>"
+      end
+      io << %(</dl></div></details>)
+    end
+  end
+
+  # Lightbox-диалог layout'а (все страницы, после </aside>): диалог
+  # просмотра изображений с кнопками close/download/share.
+  def self.lightbox_dialog : String
+    String.build do |io|
+      io << %(<dialog aria-label="Image Viewer (Press escape to close)" class="lightbox" )
+      io << %(data-action="close-&gt;lightbox#reset" data-lightbox-target="dialog">\n)
+      io << %(<img class="lightbox__image" data-lightbox-target="zoomedImage" src="">\n)
+      io << %(<form class="lightbox__btn" method="dialog">\n<button class="btn">\n)
+      io << icon("remove.svg", size: nil) << "\n"
+      io << %(<span class="for-screen-reader">Close image viewer</span>\n</button>\n</form>\n)
+      io << %(<a class="lightbox__btn--download btn hide-in-ios-pwa" data-lightbox-target="download" href="">\n)
+      io << icon("download.svg", size: nil) << "\n"
+      io << %(<span class="for-screen-reader">Download file</span>\n</a>\n)
+      io << %(<button class="lightbox__btn--share btn" data-action="web-share#share" )
+      io << %(data-controller="web-share" data-lightbox-target="share" )
+      io << %(data-web-share-files-value="" hidden="">\n)
+      io << icon("share.svg", size: nil) << "\n"
+      io << %(<span class="for-screen-reader">Share file</span>\n</button>\n</dialog>\n)
+    end
+  end
+
   # footer + sidebar (turbo-frame user_sidebar) + app-logo.
   def self.body_close(chat : Bool) : String
     String.build do |io|
@@ -231,53 +348,392 @@ module ChatLayout
         io << %(data-action="presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload"></turbo-frame>)
       end
       io << "</aside>\n"
-      io << %(<a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">)
-      io << %(<img alt="Campfire logo" src="#{asset("campfire-icon.png")}" width="256" height="216"></a>\n)
-      io << "</body></html>\n"
+      io << lightbox_dialog
+      io << %(<a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">\n)
+      io << %(<img alt="Campfire logo" src="#{asset("campfire-icon.png")}" width="256" height="216">\n</a>\n)
+      io << "</body>\n</html>\n"
     end
   end
 
-  # DOM одного сообщения — message_uncached.eta + presentation.eta
-  # (id="message_<cmid>", data-client-message-id: контрактную проверку
-  # проходит подстрокой id="<cmid>"). Вложение (attachment) заменяет
+  # Быстрые реакции (EmojiHelper::REACTIONS референса) — форма на каждую.
+  REACTIONS = {
+    "👍"  => "Thumbs up",
+    "👏"  => "Clapping",
+    "👋"  => "Waving hand",
+    "💪"  => "Muscle",
+    "❤️"  => "Red heart",
+    "😂"  => "Face with tears of joy",
+    "🎉"  => "Party popper",
+    "🔥"  => "Fire",
+  }
+
+  # User#title референса: «name – bio» (bio может быть NULL).
+  def self.user_title(name : String?, bio : String?) : String
+    bio.to_s.empty? ? name.to_s : "#{name} – #{bio}"
+  end
+
+  # fresh_user_avatar_path (avatars_helper референса): публичный путь
+  # /users/<signed_id purpose=user/avatar>/avatar?v=<updated_at YYYYMMDDHHMMSS>.
+  # Токен детерминирован (общий секрет) и байт-в-байт равен Rails-токену.
+  def self.fresh_user_avatar_path(user_id : Int64, updated_at : Time?) : String
+    token = CRails.application
+      .message_verifier("active_record/signed_id", url_safe: true)
+      .generate(user_id, purpose: "user/avatar")
+    stamp = (updated_at || Time.utc).to_s("%Y%m%d%H%M%S")
+    "/users/#{token}/avatar?v=#{stamp}"
+  end
+
+  # room_display_name(room, for_user: nil) RoomsHelper: обычные комнаты —
+  # имя; direct (name NULL) — имена всех участников через запятую.
+  def self.room_display_name(room : Room) : String
+    if room.name.nil?
+      members = User.where(
+        %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), room.id.not_nil!)
+        .order("id").map(&.name.to_s)
+      sentence(members)
+    else
+      room.name.to_s
+    end
+  end
+
+  # avatar_tag референса (users/avatars_helper): ссылка на профиль,
+  # img 48×48 по токен-путя с cache-buster.
+  def self.avatar_link(user : User?) : String
+    return %(<a class="btn avatar" data-turbo-frame="_top" href="/users/0"><img aria-hidden="true" src="/users/0/avatar" width="48" height="48"></a>) unless user
+    uid = user.id.not_nil!
+    String.build do |io|
+      io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
+      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{uid}">)
+      io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a>)
+    end
+  end
+
+  # Буст одного сообщения для рендера (boost + booster одним JOIN).
+  struct BoostEntry
+    property id : Int64
+    property content : String
+    property booster_id : Int64
+    property booster_name : String
+    property booster_bio : String?
+    property booster_updated_at : Time?
+
+    def initialize(@id, @content, @booster_id, @booster_name,
+                   @booster_bio, @booster_updated_at)
+    end
+  end
+
+  # Бусты для списка сообщений одним запросом (includes(:booster)),
+  # отсортированы по created_at (boosts.ordered).
+  def self.boosts_for(message_ids : Array(Int64)) : Hash(Int64, Array(BoostEntry))
+    table = {} of Int64 => Array(BoostEntry)
+    return table if message_ids.empty?
+    placeholders = message_ids.map { "?" }.join(", ")
+    rows = ActiveRecord::Base.connection.query_all(
+      %(SELECT b.message_id, b.id, b.content, b.booster_id, u.name, u.bio, u.updated_at
+        FROM boosts b JOIN users u ON u.id = b.booster_id
+        WHERE b.message_id IN (#{placeholders}) ORDER BY b.created_at),
+      args: message_ids,
+      as: {Int64, Int64, String, Int64, String, String?, Time?})
+    rows.each do |(mid, bid, content, booster_id, name, bio, updated)|
+      list = table[mid] ||= [] of BoostEntry
+      list << BoostEntry.new(bid, content, booster_id, name, bio, updated)
+    end
+    table
+  end
+
+  # _presentation.html.erb: div id="presentation_message_<id>" с телом
+  # сообщения (target turbo-stream replace при редактировании). Текст —
+  # в обёртке lexxy-content (layouts/action_text/contents/_content),
+  # вложение — без обёртки (message_attachment_presentation).
+  def self.presentation_dom(mid : Int64, body_html : String,
+                            lexxy_wrapper : Bool = true) : String
+    inner = lexxy_wrapper ? %(<div class="lexxy-content">\n) + body_html +
+      (body_html.ends_with?("\n") ? "" : "\n") + %(</div>\n) : body_html
+    %(<div id="presentation_message_#{mid}" dir="auto" data-reply-target="body" data-messages-target="body">\n) +
+      inner + %(</div>\n)
+  end
+
+  # Текстовая presentation сообщения: рендер action-text-attachment
+  # (OG-embed из content-атрибута, mention по sgid) + autolink URL/email
+  # (rails_autolink). См. MessagesHelper#message_presentation.
+  def self.text_presentation(body : String?) : String
+    auto_link(render_embeds(body.to_s))
+  end
+
+  # <action-text-attachment> → итоговая разметка:
+  #  * opengraph-embed: content-атрибут (figure/actiontext-обёртки и
+  #    rel/target срезает финальный sanitize Rails — сразу отдаём
+  #    внутренность og-embed);
+  #  * mention: sgid → User → span.mention (sanitize снимает sgid и
+  #    data-turbo-frame, потому их не рендерим);
+  #  * прочие: content-атрибут как есть.
+  # Значения атрибутов содержат сырые «>», поэтому тег разбирается
+  # посимвольно с учётом кавычек, а не регекспом.
+  def self.render_embeds(body : String) : String
+    outp = IO::Memory.new
+    cursor = 0
+    while (start = body.index("<action-text-attachment", cursor))
+      attrs, tag_end = parse_tag(body, start)
+      outp << body[cursor...start]
+      if (close = body.index("</action-text-attachment>", tag_end))
+        content = attrs["content"]?
+        content_type = attrs["content-type"]?
+        sgid = attrs["sgid"]?
+        if content_type.try(&.includes?("application/vnd.actiontext.opengraph-embed")) && content
+          outp << strip_embed_wrappers(unescape_entities(content.not_nil!))
+        elsif content_type.try(&.includes?("application/vnd.campfire.mention")) && sgid
+          outp << mention_dom(sgid.not_nil!)
+        elsif content
+          outp << unescape_entities(content.not_nil!)
+        end
+        cursor = close + "</action-text-attachment>".size
+      else
+        outp << body[start...tag_end]
+        cursor = tag_end
+      end
+    end
+    outp << body[cursor..]
+    outp.to_s
+  end
+
+  # Разбор одного тега: пары имя/значение до настоящего «>» (вне кавычек).
+  private def self.parse_tag(html : String, start : Int32) : {Hash(String, String), Int32}
+    attrs = {} of String => String
+    i = start + "<action-text-attachment".size
+    while i < html.bytesize
+      byte = html.to_unsafe[i]
+      if byte == '>'.ord
+        return {attrs, i + 1}
+      elsif byte == ' '.ord || byte == '\n'.ord || byte == '\t'.ord || byte == '\r'.ord
+        i += 1
+        next
+      end
+      name_start = i
+      while i < html.bytesize
+        b = html.to_unsafe[i]
+        break if b == '='.ord || b == ' '.ord || b == '>'.ord || b == '\n'.ord
+        i += 1
+      end
+      name = html.byte_slice(name_start, i - name_start)
+      value = ""
+      if i < html.bytesize && html.to_unsafe[i] == '='.ord
+        i += 1
+        if i < html.bytesize && (html.to_unsafe[i] == '"'.ord || html.to_unsafe[i] == '\''.ord)
+          quote = html.to_unsafe[i]
+          i += 1
+          vstart = i
+          while i < html.bytesize && html.to_unsafe[i] != quote
+            i += 1
+          end
+          value = html.byte_slice(vstart, i - vstart)
+          i += 1
+        else
+          vstart = i
+          while i < html.bytesize && (b = html.to_unsafe[i]) != ' '.ord && b != '>'.ord
+            i += 1
+          end
+          value = html.byte_slice(vstart, i - vstart)
+        end
+      end
+      attrs[name] = value unless name.empty?
+    end
+    {attrs, html.bytesize}
+  end
+
+  # Срезает обёртки, которые снимает финальный sanitize Rails:
+  # figure.attachment…og, actiontext-opengraph-embed и атрибуты
+  # rel/target на якорях (не входят в allowed_attributes).
+  private def self.strip_embed_wrappers(html : String) : String
+    html.gsub(/<\/?figure\b[^>]*>/, "")
+      .gsub(/<\/?actiontext-opengraph-embed\b[^>]*>/, "")
+      .gsub(/\s(?:rel|target)="[^"]*"/, "")
+      .strip
+  end
+
+  # users/_mention.html.erb после sanitize: span.mention с аватаром
+  # (токен-путь, ?v=) и именем; без sgid/data-turbo-frame.
+  private def self.mention_dom(sgid : String) : String
+    user = mention_user(sgid)
+    return "" unless user
+    uid = user.not_nil!.id.not_nil!
+    String.build do |io|
+      io << %(<span class="mention">)
+      io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
+      io << %(" class="btn avatar" href="/users/#{uid}">)
+      io << %(<img src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a> )
+      io << HTML.escape(user.name.to_s) << %(</span>)
+    end
+  end
+
+  # sgid → User: конверт _rails (data — gid-URL, возможно base64, у
+  # attachable-sgid с query «?expires_in»).
+  private def self.mention_user(sgid : String) : User?
+    sep = sgid.rindex("--") || return nil
+    json = decode_base64_lenient(sgid[0...sep]) || return nil
+    envelope = JSON.parse(json)
+    data = envelope["_rails"]?.try &.["data"]?
+    return nil unless data
+    gid = data.to_s
+    gid = decode_base64_lenient(gid) || return nil unless gid.starts_with?("gid:")
+    id = gid[/\/User\/(\d+)/, 1]?.try(&.to_i64?)
+    id.try { |i| User.find?(i) }
+  end
+
+  private def self.decode_base64_lenient(text : String) : String?
+    sanitized = text.tr("-_", "+/").gsub(/\s+/, "")
+    sanitized += "=" * ((4 - sanitized.size % 4) % 4)
+    Base64.decode_string(sanitized)
+  rescue
+    nil
+  end
+
+  # ————— Autolink (порт rails_autolink: auto_link_urls + emails) —————
+
+  AUTO_LINK_RE = /(?:(?:(?:ed2k|ftp|http|https|irc|mailto|news|gopher|nntp|telnet|webcal|xmpp|callto|feed|svn|urn|aim|rsync|tag|ssh|sftp|rtsp|afs|file):\/\/|www\.\w)[^\s<\x{a0}"]+)/imx
+
+  AUTO_EMAIL_RE = /(?<![\w.!#$%&'*\/=?^`{|}~+-])[\w.!#$%+-]\.?[\w.!#$%&'*\/=?^`{|}~+-]*@[\w-]+(?:\.[\w-]+)+/
+
+  # escape_once: & не дублируется в уже-сущностях (Rails escape_once).
+  private def self.escape_once(text : String) : String
+    text.gsub(/&(?!#\d+;|#x[0-9a-fA-F]+;|[a-zA-Z][a-zA-Z0-9]*;)/, "&amp;")
+      .gsub("<", "&lt;").gsub(">", "&gt;")
+      .gsub('"', "&quot;").gsub("'", "&#39;")
+  end
+
+  def self.auto_link(text : String) : String
+    auto_link_emails(auto_link_urls(text))
+  end
+
+  private def self.auto_link_urls(text : String) : String
+    outp = IO::Memory.new
+    cursor = 0
+    while match = AUTO_LINK_RE.match_at_byte_index(text, cursor)
+      m_begin = match.begin.not_nil!
+      m_end = match.end.not_nil!
+      href = match[0]
+      left = text[0...m_begin]
+      right = text[m_end..]
+      outp << text[cursor...m_begin]
+      if auto_linked?(left, right)
+        outp << href
+      else
+        # хвостовая пунктуация не входит в ссылку (rails_autolink)
+        punctuation = [] of String
+        while (ch = href[-1]?) && !(ch.alphanumeric? || ch == '_' || ch == '/' || ch == '-' || ch == '=' || ch == ';')
+          href = href[0...-1]
+          punctuation << ch.to_s
+          if opening = {"]" => "[", ")" => "(", "}" => "{"}[ch.to_s]?
+            if href.count(opening) > punctuation.count(ch.to_s)
+              href += punctuation.pop.to_s
+              break
+            end
+          end
+        end
+        trailing_gt = ""
+        if href.ends_with?("&gt;")
+          trailing_gt = "&gt;"
+          href = href[0...-4]
+        end
+        full = href.starts_with?("www.") ? "http://#{href}" : href
+        outp << %(<a target="_blank" href=") << escape_once(full) << %(">)
+        outp << escape_once(href) << %(</a>)
+        outp << punctuation.reverse.join << trailing_gt
+      end
+      cursor = m_end
+    end
+    outp << text[cursor..]
+    outp.to_s
+  end
+
+  private def self.auto_link_emails(text : String) : String
+    text.gsub(AUTO_EMAIL_RE) do
+      m = $~
+      left = text[0...m.begin.not_nil!]
+      right = text[m.end.not_nil!..]
+      next m[0] if auto_linked?(left, right)
+      email = m[0]
+      %(<a target="_blank" href="mailto:) + escape_once(email) + %(">) +
+        escape_once(email) + %(</a>)
+    end
+  end
+
+  # URL уже внутри <a>…</a> или посреди тега — не линкуем.
+  private def self.auto_linked?(left : String, right : String) : Bool
+    return true if left =~ /<[^>]+$/ && right =~ /\A[^>]*>/
+    if idx = left.rindex(/<a[\s>]/)
+      return !(left[idx..] =~ /<\/a>/i)
+    end
+    false
+  end
+
+  # ————— HTML-сущности (разбор content-атрибута вложений) —————
+
+  def self.unescape_entities(text : String) : String
+    text.gsub(/&(quot|amp|lt|gt|apos|nbsp|#39|#x27);/) do
+      case $~[1]
+      when "quot", "apos", "39", "x27" then "\""
+      when "amp"                       then "&"
+      when "lt"                        then "<"
+      when "gt"                        then ">"
+      when "nbsp"                      then " "
+      else                                  $~[0]
+      end
+    end.gsub(/&#(\d+);/) { |m| ((m[/\d+/].to_i32?) || 63).chr.to_s }
+  end
+
+  # DOM одного сообщения — порт _message.html.erb референса: id по
+  # message.id (dom_id; client_message_id — только data-атрибут),
+  # turbo-frame edit_message_<id> вокруг body, presentation div
+  # message_<id>_presentation, бусты (boosts/_boosts). Вложение заменяет
   # rich-text тело (message_attachment_presentation).
   def self.message_dom(m : Message, room : Room, creator : User?,
-                       attachment : Attachment? = nil) : String
-    cid = m.client_message_id.to_s.presence || m.id.to_s
+                       attachment : Attachment? = nil,
+                       boosts : Array(BoostEntry)? = nil,
+                       base_url : String = "") : String
     mid = m.id.not_nil!
-    creator_name = creator.try(&.name).to_s
+    cid = m.client_message_id.to_s
     created = m.created_at || Time.utc
     updated = m.updated_at || created
     permalink = "/rooms/#{room.id}/@#{mid}"
-    avatar_src = "/users/#{m.creator_id}/avatar"
-    body_html = attachment ? attachment_presentation(attachment) : m.body.to_s
-    emoji = all_emoji?(body_html) ? " message--emoji" : ""
+    presentation_html = attachment ? attachment_presentation(attachment) : text_presentation(m.body.to_s)
+    emoji = all_emoji?(presentation_html) ? " message--emoji" : ""
+    entries = boosts || boosts_for([mid])[mid]? || [] of BoostEntry
+
+    # message_tag rescue → _unrenderable.html.erb: автор записи удалён —
+    # плейсхолдер вместо сообщения (broken room).
+    unless creator
+      return %(<div class="message message--formatted message--failed center">\n) +
+             %(<div class="message__body">\n) +
+             %(<div class="message__body-content txt-align-center">\n) +
+             %(    Failed to load message content\n) +
+             %(  </div>\n</div>\n</div>\n)
+    end
+    creator = creator.not_nil!
 
     String.build do |io|
-      io << %(<div id="message_#{cid}" class="message#{emoji}" data-controller="reply" )
+      io << %(<div id="message_#{mid}" class="message#{emoji}" data-controller="reply" )
       io << %(data-user-id="#{m.creator_id}" data-message-id="#{mid}" )
-      io << %(data-message-timestamp="#{created.to_unix}" data-message-updated-at="#{updated.to_unix}" )
-      io << %(data-sort-value="#{created.to_unix}" data-messages-target="message" )
+      io << %(data-message-timestamp="#{created.to_unix_ms}" data-message-updated-at="#{updated.to_unix_ms}" )
+      io << %(data-sort-value="#{created.to_unix_ms}" data-messages-target="message" )
       io << %(data-search-results-target="message" data-refresh-room-target="message" )
       io << %(data-reply-composer-outlet="#composer" data-client-message-id=") << HTML.escape(cid) << %(">\n)
       io << %(<h2 class="message__day-separator"><time datetime="#{created.to_rfc3339}" data-local-time-target="date"></time></h2>\n)
-      io << %(<figure class="avatar message__avatar"><a title=") << HTML.escape(creator_name)
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{m.creator_id}">)
-      io << %(<img aria-hidden="true" src="#{avatar_src}" width="48" height="48" loading="lazy"></a></figure>\n)
-      io << %(<turbo-frame id="edit_message_#{cid}"><div class="message__body"><div class="message__body-content">)
-      io << %(<div class="message__meta"><h3 class="message__heading">)
-      io << %(<span class="message__author" title=") << HTML.escape(creator_name)
-      io << %("><strong data-reply-target="author">) << HTML.escape(creator_name) << %(</strong></span>)
+      io << %(<figure class="avatar message__avatar">\n) << avatar_link(creator) << %(\n</figure>\n)
+      io << %(<turbo-frame id="edit_message_#{mid}">\n<div class="message__body">\n<div class="message__body-content">\n)
+      io << %(<div class="message__meta">\n<h3 class="message__heading">\n)
+      io << %(<span class="message__author" title=")
+      io << HTML.escape(user_title(creator.try(&.name), creator.try(&.bio)))
+      io << %(">\n<strong data-reply-target="author">) << HTML.escape(creator.try(&.name).to_s) << %(</strong>\n</span>\n)
       io << %(<a target="_top" class="message__permalink" href="#{permalink}">)
-      io << %(<time class="message__timestamp" datetime="#{created.to_rfc3339}" data-local-time-target="time"></time></a>)
-      io << %(<span class="message__room"> <a target="_top" data-reply-target="link" href="#{permalink}">)
-      io << HTML.escape(room.name.to_s) << %(</a></span>)
+      io << %(<time class="message__timestamp" datetime="#{created.to_rfc3339}" data-local-time-target="time"></time></a>\n)
+      io << %(<span class="message__room">\n<a target="_top" data-reply-target="link" href="#{permalink}">)
+      io << HTML.escape(room_display_name(room)) << %(</a>\n</span>\n)
       io << %(</h3>\n)
-      io << message_actions(mid, cid, permalink, room)
+      io << message_actions(mid, room, permalink, attachment, base_url)
       io << %(</div>\n)
-      io << %(<div id="presentation_message_#{cid}" dir="auto" data-reply-target="body" data-messages-target="body">)
-      io << %(<div class="lexxy-content">) << body_html << %(</div></div>\n)
-      io << %(</div></div></turbo-frame></div>\n)
+      io << presentation_dom(mid, presentation_html, lexxy_wrapper: attachment.nil?)
+      io << boosts_dom(mid, entries)
+      io << %(</div>\n</div>\n</turbo-frame>\n</div>\n)
     end
   end
 
@@ -372,30 +828,122 @@ module ChatLayout
     end
   end
 
-  # message_actions.eta (ядро): summary-меню с иконками Reply / Copy
-  # link / Edit (quick-boosts и attachment-действия не портированы —
-  # нет роутов /messages/:id/boosts и blob-путей).
-  private def self.message_actions(mid : Int64, cid : String, permalink : String, room : Room) : String
+  # message_actions — порт _actions.html.erb: summary-меню с quick-boosts
+  # (форма на каждую реакцию, submit в turbo-frame message_<id>_boosting),
+  # кнопка кастомного буста (message__boost-btn → new boost frame),
+  # Reply/Download+Share (attachment), Copy link (абсолютный URL),
+  # Edit (edit_message_<id>).
+  private def self.message_actions(mid : Int64, room : Room, permalink : String,
+                                   attachment : Attachment?,
+                                   base_url : String) : String
+    url = base_url.empty? ? permalink : "#{base_url}#{permalink}"
+    boost_path = "/messages/#{mid}/boosts"
+    boost_frame = "boosting_message_#{mid}"
+
     String.build do |io|
-      io << %(<div class="message__actions"><details class="position-relative" data-controller="popup" )
+      io << %(<div class="message__actions" data-controller="soft-keyboard">\n)
+      io << %(<details class="position-relative" data-controller="popup" )
       io << %(data-popup-orientation-top-class="popup-orientation-top" )
-      io << %(data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside">)
-      io << %(<summary class="btn message__action-btn message__options-btn">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("menu-dots-horizontal.svg")}" width="20" height="20">)
-      io << %(<span class="for-screen-reader">Message options</span></summary>)
-      io << %(<div class="message__actions-menu border shadow" data-popup-target="menu">)
-      io << %(<div class="flex flex-wrap border-top margin-block-start-half pad-block-start-half message__actions-grid">)
-      io << %(<button class="btn message__action-btn center full-width" data-action="reply#reply" )
-      io << %(title="Reply" aria-label="Reply">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("reply.svg")}" width="20" height="20"></button>\n)
+      io << %(data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside">\n)
+      io << %(<summary class="btn message__action-btn message__options-btn">\n)
+      io << icon("menu-dots-horizontal.svg", 20, "colorize--black") << "\n"
+      io << %(<span class="for-screen-reader">Message options</span>\n</summary>\n)
+      io << %(<div class="message__actions-menu border shadow" data-popup-target="menu">\n)
+      io << %(<div class="quick-boosts">\n)
+      REACTIONS.each do |character, title|
+        io << %(<form data-turbo-frame="#{boost_frame}" data-action="popup#close" )
+        io << %(action="#{boost_path}" accept-charset="UTF-8" method="post">\n)
+        io << %(<input type="hidden" name="boost[content]" id="boost_content" value=") << HTML.escape(character)
+        io << %(">\n)
+        io << %(<button name="button" type="submit" title=") << HTML.escape(title)
+        io << %(" class="btn message__action-btn" data-emoji=") << HTML.escape(character) << %(">\n)
+        io << %(<figure class="margin-none boost-character">) << character << %(</figure>\n)
+        io << %(<span class="for-screen-reader">) << HTML.escape(title) << %(</span>\n)
+        io << %(</button>\n</form>\n)
+      end
+      io << %(<a class="btn message__action-btn message__boost-btn" )
+      io << %(data-turbo-frame="new_boost_message_#{mid}" data-action="soft-keyboard#open popup#close" )
+      io << %(href="#{boost_path}/new">\n)
+      io << icon("boost.svg", 20, "colorize--black") << "\n"
+      io << %(<span class="for-screen-reader">New boost</span>\n</a>      </div>\n)
+      io << %(<div class="flex flex-wrap border-top margin-block-start-half pad-block-start-half message__actions-grid">\n)
+      if attachment
+        io << %(<a class="btn message__action-btn center full-width hide-in-ios-pwa" title="Download" )
+        io << %(aria-label="Download" href="#{blob_url(attachment)}?disposition=attachment">\n)
+        io << icon("download.svg", 20, "colorize--black") << "\n</a>\n"
+        io << %(<button class="btn message__action-btn center full-width" data-controller="web-share" )
+        io << %(data-action="web-share#share" data-web-share-files-value="#{blob_url(attachment)}" )
+        io << %(data-web-share-title-value=") << HTML.escape(attachment.filename)
+        io << %(" title="Share" aria-label="Share" hidden="">\n)
+        io << icon("share.svg", 20, "colorize--black") << "\n</button>\n"
+        io << %(</button>)
+      else
+        io << %(<button class="btn message__action-btn center full-width" data-action="reply#reply" )
+        io << %(title="Reply" aria-label="Reply">\n)
+        io << icon("reply.svg", 20, "colorize--black") << "\n</button>\n"
+      end
       io << %(<button class="btn message__action-btn center full-width" title="Copy link" aria-label="Copy link" )
       io << %(data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" )
-      io << %(data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-url-value="#{permalink}">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("link.svg")}" width="20" height="20"></button>\n)
-      io << %(<a class="btn message__action-btn center full-width message__edit-btn" data-turbo-frame="edit_message_#{cid}" )
-      io << %(title="Edit" aria-label="Edit" href="/rooms/#{room.id}/messages/#{mid}/edit">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("pencil.svg")}" width="20" height="20"></a>)
-      io << %(</div></div></details></div>\n)
+      io << %(data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-content-value=")
+      io << HTML.escape(url) << %(">\n)
+      io << icon("link.svg", 20, "colorize--black") << "\n</button>\n"
+      io << %(<a class="btn message__action-btn center full-width message__edit-btn" )
+      io << %(data-turbo-frame="edit_message_#{mid}" title="Edit" aria-label="Edit" )
+      io << %(href="/rooms/#{room.id}/messages/#{mid}/edit">\n)
+      io << icon("pencil.svg", 20, "colorize--black") << "\n"
+      io << %(</a>      </div>\n)
+      io << %(</div>\n</details></div>\n)
+    end
+  end
+
+  # _boosts.html.erb: turbo-frame boosting_message_<id> с контейнером
+  # бустов (boosts_message_<id> — target append-стрима) и lazy-фреймом
+  # new_boost_message_<id> (кнопка «Add a boost»).
+  def self.boosts_dom(mid : Int64, boosts : Array(BoostEntry)) : String
+    String.build do |io|
+      io << %(<turbo-frame id="boosting_message_#{mid}">\n)
+      io << %(<div class="boosts flex flex-wrap align-center gap full-width" style="--column-gap: 0.4ch; --row-gap: 0" )
+      io << %(data-controller="turbo-streaming" data-action="turbo:submit-start-&gt;turbo-streaming#unsubscribe">\n)
+      io << %(<div class="flex-inline flex-wrap gap" id="boosts_message_#{mid}" data-turbo-streaming-target="container">\n)
+      boosts.each { |b| io << boost_dom(mid, b) << "\n" }
+      io << %(</div>\n)
+      io << %(<turbo-frame id="new_boost_message_#{mid}">\n)
+      io << %(<div class="flex-inline message__boost-inline" data-controller="soft-keyboard">\n)
+      io << %(<a class="boost__action txt-small btn" data-action="soft-keyboard#open" href="/messages/#{mid}/boosts/new">\n)
+      io << icon("boost.svg", 20) << "\n"
+      io << %(<span class="for-screen-reader">Add a boost</span>\n)
+      io << %(</a>      </div>\n)
+      io << %(</turbo-frame>  </div>\n)
+      io << %(</turbo-frame>\n)
+    end
+  end
+
+  # _boost.html.erb: буст с аватаром бустера, контентом (клик раскрывает
+  # удаление) и delete-формой (button_to _method=delete).
+  def self.boost_dom(mid : Int64, b : BoostEntry) : String
+    medium = all_emoji?(b.content) ? " txt-medium" : ""
+    String.build do |io|
+      io << %(<div id="boost_#{b.id}" class="boost boost-item flex-inline postion--relative max-width align-center fill-white gap" )
+      io << %(data-controller="boost-delete" data-boost-delete-perform-class="boost--deleting" )
+      io << %(data-boost-delete-reveal-class="expanded" data-boost-delete-booster-id-value="#{b.booster_id}">\n)
+      io << %(<figure class="avatar boost__avatar flex-item-no-shrink">\n)
+      io << %(<a title=") << HTML.escape(user_title(b.booster_name, b.booster_bio))
+      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{b.booster_id}">)
+      io << %(<img aria-label=")
+      io << HTML.escape("#{b.booster_name} boosted #{b.content}")
+      io << %(" src="#{fresh_user_avatar_path(b.booster_id, b.booster_updated_at)}" width="48" height="48"></a>\n)
+      io << %(</figure>\n)
+      io << %(<span role="button" class="txt-small#{medium}" )
+      io << %(data-action="click-&gt;boost-delete#reveal keydown.enter-&gt;boost-delete#reveal:prevent" )
+      io << %(data-boost-delete-target="content">) << HTML.escape(b.content) << %(</span>\n)
+      io << %(<form class="button_to" action="/messages/#{mid}/boosts/#{b.id}" method="post">)
+      io << %(<input type="hidden" name="_method" value="delete">)
+      io << %(<button class="btn btn--negative flex-item-justify-end boost__delete" )
+      io << %(data-action="boost-delete#perform" data-boost-delete-target="button" type="submit">\n)
+      io << icon("minus.svg", 20) << "\n"
+      io << %(<span class="for-screen-reader">Delete this boost</span>\n)
+      io << %(</button></form></div>\n)
+      io << %(<span id="delete_boost_accessible_label" class="for-screen-reader">Press enter to delete this boost</span>)
     end
   end
 
@@ -407,7 +955,7 @@ module ChatLayout
   # Ключ = cache_key_with_version (id + updated_at), свежесть — общий
   # DB-epoch (см. FragmentCache).
   def self.messages_to(io : IO, messages : Array(Message), epoch : String,
-                       room : Room? = nil) : Nil
+                       room : Room? = nil, base_url : String = "") : Nil
     hits = {} of Int64 => String
     misses = [] of Message
     messages.each do |m|
@@ -433,15 +981,16 @@ module ChatLayout
       User.where(id: creator_ids).each { |u| creators[u.id.not_nil!] = u }
     end
 
-    # Вложения одним IN-запросом (attachment → blob, без N+1).
+    # Вложения и бусты одним IN-запросом на сущность (без N+1).
     attachments = attachments_for(messages.map(&.id.not_nil!))
+    boosts = boosts_for(messages.map(&.id.not_nil!))
 
     messages.each do |m|
       if (html = hits[m.id.not_nil!]?)
         io << html
       elsif (r = rooms[m.room_id.not_nil!]?)
         html = message_dom(m, r, creators[m.creator_id.not_nil!]?,
-          attachments[m.id.not_nil!]?)
+          attachments[m.id.not_nil!]?, boosts[m.id.not_nil!]?, base_url)
         FragmentCache.set(FragmentCache.key(m), epoch, html)
         io << html
       end
@@ -451,8 +1000,8 @@ module ChatLayout
   # String-обёртка над messages_to (rooms#show: результат уходит в
   # message_area).
   def self.messages_html(messages : Array(Message), epoch : String,
-                         room : Room? = nil) : String
-    String.build { |io| messages_to(io, messages, epoch, room) }
+                         room : Room? = nil, base_url : String = "") : String
+    String.build { |io| messages_to(io, messages, epoch, room, base_url) }
   end
 
   # composer.eta / rooms/show/_composer.html.erb — форма отправки
@@ -507,14 +1056,18 @@ module ChatLayout
   # message-area целиком (optimistic-шаблон + .messages + стрим-источник
   # + composer) — room.eta + optimistic.eta. Optimistic-template нужен
   # messages-контроллеру как target "template".
-  def self.message_area(room : Room, messages_html : String, user : User) : String
+  def self.message_area(room : Room, messages_html : String, user : User,
+                        base_url : String = "") : String
     signed_name = HTML.escape(Turbo::Streams::StreamName.signed_stream_name([room, "messages"]))
+    # messages_helper.rb:16 — messages_page_url_value: room_messages_url(room)
+    # (абсолютный URL: JS-пагинатор делает new URL(value) без базы).
+    page_url = base_url.empty? ? "/rooms/#{room.id}/messages" : "#{base_url}/rooms/#{room.id}/messages"
     String.build do |io|
       io << %(<div id="message-area" class="message-area" contents="true" data-controller="messages presence drop-target" )
       io << %(data-action="turbo:before-stream-render@document-&gt;messages#beforeStreamRender keydown.up@document-&gt;messages#editMyLastMessage visibilitychange@document-&gt;presence#visibilityChanged" )
       io << %(data-messages-first-of-day-class="message--first-of-day" data-messages-formatted-class="message--formatted" )
       io << %(data-messages-me-class="message--me" data-messages-mentioned-class="message--mentioned" )
-      io << %(data-messages-threaded-class="message--threaded" data-messages-page-url-value="/rooms/#{room.id}/messages">\n)
+      io << %(data-messages-threaded-class="message--threaded" data-messages-page-url-value="#{HTML.escape(page_url)}">\n)
       io << %(<script type="text/template" data-messages-target="template">\n)
       io << %(<div class="message message--me $messageClasses$" id="message_$clientMessageId$" )
       io << %(data-format-message-target="message" data-pending-message="true" )

@@ -1,0 +1,155 @@
+# Boosts — бусты сообщения (messages/boosts_controller.rb референса).
+# Роуты вложены в сообщение (/messages/:message_id/boosts), стрим —
+# комната сообщения ([room, :messages]).
+#
+#   GET    /messages/:message_id/boosts        — index (boosts-partial в
+#            turbo-frame message_<id>_boosting; redirect-цель формы буста)
+#   GET    /messages/:message_id/boosts/new    — new (форма в лениво
+#            загружаемый фрейм message_<id>_new_boost)
+#   POST   /messages/:message_id/boosts        — create: broadcast append
+#            boost в контейнер message_<id>_boosts (maintain_scroll) +
+#            redirect на index (фрейм message_<id>_boosting)
+#   DELETE /messages/:message_id/boosts/:id    — destroy своего буста:
+#            broadcast remove boost_<id>
+class BoostsController < ApplicationController
+  # set_message: Current.user.reachable_messages.find(params[:message_id])
+  # — сообщение из комнаты, доступной текущему юзеру (membership).
+  private def find_reachable_message : Message?
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    return nil unless message
+    user = current_user.not_nil!
+    member = Membership.where(
+      "room_id = ? AND user_id = ?", message.room_id.not_nil!, user.id.not_nil!).take
+    member ? message : nil
+  end
+
+  # GET /messages/:message_id/boosts — index.html.erb + boosts partial.
+  def index
+    message = find_reachable_message
+    return head(:not_found) unless message
+    mid = message.id.not_nil!
+    boosts = ChatLayout.boosts_for([mid])[mid]? || [] of ChatLayout::BoostEntry
+
+    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    render(html: String.build do |io|
+      io << %(<span id="delete_boost_accessible_label" class="for-screen-reader">Press enter to delete this boost</span>\n)
+      io << ChatLayout.boosts_dom(mid, boosts)
+    end)
+  end
+
+  # GET /messages/:message_id/boosts/new — new.html.erb: форма кастомного
+  # буста в turbo-frame message_<id>_new_boost (submit в фрейм boosting).
+  def new
+    message = find_reachable_message
+    return head(:not_found) unless message
+    mid = message.id.not_nil!
+    user = current_user.not_nil!
+
+    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    render(html: String.build do |io|
+      io << %(<turbo-frame id="new_boost_message_#{mid}">\n)
+      io << %(<div class="boost flex-inline postion--relative max-width fill-white" style="--column-gap: var(--inline-space-half)">\n)
+      io << %(<form class="boost__form flex align-center gap expanded" data-controller="form scroll-into-view" )
+      io << %(data-turbo-frame="boosting_message_#{mid}" data-action="keydown.esc-&gt;form#cancel" )
+      io << %(action="/messages/#{mid}/boosts" accept-charset="UTF-8" method="post">)
+      io << %(<label class="boost__form-label flex gap" style="--column-gap: 0.7ch;" role="button" tabindex="0" aria-label="Add a boost">\n)
+      io << %(<figure class="avatar boost__avatar flex-item-no-shrink">\n)
+      io << %(<a title=") << HTML.escape(ChatLayout.user_title(user.name, user.bio))
+      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{user.id}">)
+      io << %(<img aria-hidden="true" src="#{ChatLayout.fresh_user_avatar_path(user.id.not_nil!, user.updated_at)}" width="48" height="48">)
+      io << %(<span class="for-screen-reader">) << HTML.escape(user.name.to_s) << %(</span></a>\n)
+      io << %(</figure>\n)
+      io << %(<input autofocus="autofocus" autocomplete="off" autocorrect="off" )
+      io << %(maxlength="16" required="required" pattern="\\S+.*" data-boost-form-target="input" )
+      io << %(class="input input--boost txt-small" size="16" type="text" name="boost[content]">\n)
+      io << %(</label>\n)
+      io << %(<button name="button" type="submit" class="btn btn--reversed">)
+      io << ChatLayout.icon("check.svg")
+      io << %(<span class="for-screen-reader">Submit</span></button>\n)
+      io << %(<a data-turbo-frame="boosts_message_#{mid}" data-form-target="cancel" class="btn btn--negative" )
+      io << %(href="/messages/#{mid}/boosts">)
+      io << ChatLayout.icon("minus.svg")
+      io << %(<span class="for-screen-reader">Cancel</span></a>\n)
+      io << %(</form>\n</div>\n</turbo-frame>\n)
+    end)
+  end
+
+  # POST /messages/:message_id/boosts — boost_params (boost[content]),
+  # создание + touch сообщения (инвалидация fragment-кэша), broadcast
+  # append в контейнер message_<id>_boosts (maintain_scroll), redirect
+  # на index (Turbo подставляет ответ в фрейм message_<id>_boosting).
+  def create
+    message = find_reachable_message
+    return head(:not_found) unless message
+    user = current_user.not_nil!
+    content = boost_content_param
+    return head(:unprocessable_entity) if content.empty?
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    message = message.not_nil!
+    mid = message.id.not_nil!
+    now = Time.utc
+    boost = Campfire::WriteQueue.perform do
+      record = Boost.new(message_id: mid, booster_id: user.id.not_nil!,
+        content: content, created_at: now, updated_at: now)
+      record.save!
+      # belongs_to :message, touch: true —Rails трогает messages.updated_at
+      ActiveRecord::Base.connection.exec(
+        "UPDATE messages SET updated_at = ? WHERE id = ?", now, mid)
+      record
+    end
+
+    room = Room.find?(message.room_id.not_nil!)
+    if room
+      entry = ChatLayout.boosts_for([mid])[mid]?.try(&.last?)
+      if entry
+        stream = %(<turbo-stream action="append" target="boosts_message_#{mid}" maintain_scroll="true"><template>) +
+          ChatLayout.boost_dom(mid, entry) + %(</template></turbo-stream>\n)
+        Campfire.broadcast(
+          Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
+          stream)
+      end
+    end
+    redirect_to "/messages/#{mid}/boosts"
+  end
+
+  # DELETE /messages/:message_id/boosts/:id — удаление своего буста,
+  # broadcast remove boost_<id>.
+  def destroy
+    message = find_reachable_message
+    return head(:not_found) unless message
+    message = message.not_nil!
+    user = current_user.not_nil!
+    boost_id = params["id"].to_s.to_i64
+    boost = Boost.where(
+      "id = ? AND message_id = ? AND booster_id = ?",
+      boost_id, message.id.not_nil!, user.id.not_nil!).take
+    return head(:not_found) unless boost
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    now = Time.utc
+    mid = message.id.not_nil!
+    Campfire::WriteQueue.perform do
+      boost.not_nil!.destroy
+      ActiveRecord::Base.connection.exec(
+        "UPDATE messages SET updated_at = ? WHERE id = ?", now, mid)
+    end
+
+    if (room = Room.find?(message.room_id.not_nil!))
+      stream = %(<turbo-stream action="remove" target="boost_#{boost_id}"></turbo-stream>\n)
+      Campfire.broadcast(
+        Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
+        stream)
+    end
+    render(plain: "", status: :no_content)
+  end
+
+  private def boost_content_param : String
+    nested = params["boost"]?
+    value = case nested
+            when ActionController::Parameters then nested["content"]?
+            else nested ? nested : nil
+            end
+    value.to_s
+  end
+end

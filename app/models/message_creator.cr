@@ -18,7 +18,8 @@ module MessageCreator
   # (storage.js storeUpload + attachMessage; FTS-индекс — тело или filename).
   def self.create!(room : Room, creator : User, body_html : String,
                    client_message_id : String, webhooks : Bool = true,
-                   attachment : UploadedFile? = nil) : Message
+                   attachment : UploadedFile? = nil,
+                   base_url : String = "") : Message
     now = Time.utc
     plain = plain_text(body_html)
 
@@ -68,16 +69,17 @@ module MessageCreator
     # publishMessage: presentation вместо rich-text тела).
     record = message[:record]
     rendered = attachment ? ChatLayout.attachments_for([record.id.not_nil!])[record.id.not_nil!]? : nil
-    broadcast(room, record, creator, rendered)
+    broadcast(room, record, creator, rendered, base_url)
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     record
   end
 
   def self.broadcast(room : Room, message : Message, author : User,
-                     attachment : ChatLayout::Attachment? = nil) : Nil
+                     attachment : ChatLayout::Attachment? = nil,
+                     base_url : String = "") : Nil
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
-      io << ChatLayout.message_dom(message, room, author, attachment)
+      io << ChatLayout.message_dom(message, room, author, attachment, base_url: base_url)
       io << %(</template></turbo-stream>\n)
     end
     Campfire.broadcast(
