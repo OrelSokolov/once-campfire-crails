@@ -25,6 +25,8 @@ shards install
 bin/crails db:create
 bin/crails db:migrate
 
+bin/crails assets:precompile
+
 bin/crails server
 
 ```
