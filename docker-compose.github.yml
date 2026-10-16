@@ -12,7 +12,8 @@
 # network_mode: host — как в бенчмарк-harness (compare.rb): приложение
 # слушает loopback, поэтому проброс портов через -p не работает; порт
 # задаётся через HTTP_PORT. Топология и WEB_CONCURRENCY — как в прогоне.
-# БД и storage живут в named-волюмах (db/files/logs), переживают restart.
+# БД и storage живут в named-волюмах (files/logs), переживают restart.
+# База НЕ персистится: пересоздаётся с нуля при каждом старте контейнера.
 # Точную ревизию можно зафиксировать: COMMIT=<sha> rake compose:up.
 
 services:
@@ -28,12 +29,10 @@ services:
       WEB_CONCURRENCY: "3"
       COMMIT: "${COMMIT:-}"
     volumes:
-      - reference_db:/rails/storage/db
       - reference_files:/rails/storage/files
       - reference_logs:/rails/storage/logs
     restart: unless-stopped
 
 volumes:
-  reference_db:
   reference_files:
   reference_logs:

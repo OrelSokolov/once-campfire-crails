@@ -15,8 +15,8 @@ RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev git
 
 WORKDIR /app
 
-# Полный пайплайн запуска контейнера. БД и SECRET_KEY_BASE живут в
-# volume (переживают рестарт), исходники и бинарники — ephemeral.
+# Полный пайплайн запуска контейнера. БД пересоздаётся с нуля при каждом
+# старте; SECRET_KEY_BASE и исходники/бинарники — ephemeral.
 COPY <<'EOF' /app/bin/runtime.sh
 #!/bin/sh
 set -e
@@ -36,16 +36,15 @@ cd /repo
 # 2. Зависимости и release-бинарник (без fork-воркеров, WEB_CONCURRENCY).
 echo "==> shards install"
 shards install
-echo "==> crystal build src/app.cr (release)"
-crystal build src/app.cr -o bin/app-release --release -Dwithout_mt
+echo "==> crystal build src/app.cr (development)"
+crystal build src/app.cr -o bin/app-release  -Dwithout_mt
 
-# 3. База: файл в volume, миграции (раннер компилируется на месте).
+# 3. База: файл ephemeral — пересоздаётся и мигрируется при каждом старте.
 DB_PATH="${DATABASE_URL#sqlite3://}"
 mkdir -p "$(dirname "$DB_PATH")"
-if [ ! -f "$DB_PATH" ]; then
-  echo "==> db:create $DB_PATH"
-  : > "$DB_PATH"
-fi
+rm -f "$DB_PATH" "$DB_PATH-shm" "$DB_PATH-wal" "$CAMPFIRE_JOBS_DB" "$CAMPFIRE_JOBS_DB-shm" "$CAMPFIRE_JOBS_DB-wal"
+echo "==> db:create $DB_PATH"
+: > "$DB_PATH"
 echo "==> db:migrate $DB_PATH"
 bin/crails db:migrate
 
@@ -64,6 +63,8 @@ if [ -z "${SECRET_KEY_BASE:-}" ]; then
   export SECRET_KEY_BASE="$(cat "$SECRET_FILE")"
 fi
 
+
+echo "Run server: http://127.0.0.1:5555"
 exec ./bin/app-release serve
 EOF
 RUN chmod +x /app/bin/runtime.sh

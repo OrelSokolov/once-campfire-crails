@@ -2,6 +2,8 @@
 # (референс: routes.js registerUsers + prompt_item.eta): HTML-фрагмент
 # lexxy-prompt-item на каждого пользователя (до 20, filter по имени).
 class AutocompletableUsersController < ApplicationController
+  # jbuilder-вьюха JSON-ветки (show.json.jbuilder)
+  @users : Array(User) = [] of User
   def show
     user = current_user.not_nil!
     filter = (params["filter"]? || params["query"]?).to_s.downcase
@@ -25,16 +27,8 @@ class AutocompletableUsersController < ApplicationController
     # HTML-ветка (prompt_item.eta) — для серверного рендера.
     accept = request.headers["Accept"]?.to_s
     if accept.includes?("application/json") && !accept.includes?("text/html")
-      json = users.map do |u|
-        name_json = u.name.to_s.to_json
-        sgid_json = generate_sgid(u.id.not_nil!).to_json
-        id = u.id.not_nil!
-        %({"id":#{id},"name":#{name_json},"label":#{name_json},) +
-          %("avatar":"/users/#{id}/avatar","avatar_url":"/users/#{id}/avatar",) +
-          %("sgid":#{sgid_json},"value":#{id}})
-      end
-      response.headers["Content-Type"] = "application/json; charset=utf-8"
-      return render(plain: "[#{json.join(",")}]")
+      @users = users
+      return render(template: "autocompletable_users/show")
     end
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
@@ -57,16 +51,8 @@ class AutocompletableUsersController < ApplicationController
     end)
   end
 
-  # Rails SignedGlobalID: подпись "gid://campfire/User/<id>?expires_in"
-  # ключом "signed_global_ids", purpose "attachable" (rails.js sgid).
+  # Rails SignedGlobalID (rails.js sgid) — общий генератор в ChatLayout.
   private def generate_sgid(user_id : Int64) : String
-    secret = ENV["SECRET_KEY_BASE"]? ||
-             raise RuntimeError.new("SECRET_KEY_BASE is not configured")
-    key = ActiveSupport::CachingKeyGenerator.new(
-      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha1))
-      .generate_key("signed_global_ids")
-    verifier = ActiveSupport::MessageVerifier.new(key, url_safe: true, digest: :sha1)
-    verifier.generate("gid://campfire/User/#{user_id}?expires_in",
-      purpose: "attachable")
+    ChatLayout.attachable_sgid(user_id)
   end
 end

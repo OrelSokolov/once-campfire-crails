@@ -10,13 +10,3 @@ class Room < ActiveRecord::Base
       user.id.not_nil!)
   end
 end
-
-# STI-подклассы (колонка type): сид и first_run создают их.
-class Rooms::Open < Room
-end
-
-class Rooms::Closed < Room
-end
-
-class Rooms::Direct < Room
-end

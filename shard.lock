@@ -44,6 +44,10 @@ shards:
     git: https://github.com/orelsokolov/importmap.cr.git
     version: 0.1.0
 
+  jbuilder_cr:
+    git: https://github.com/orelsokolov/jbuilder.cr.git
+    version: 0.1.0+git.commit.620efd6861a1590550f845be103bffccdef18642
+
   pg:
     git: https://github.com/will/crystal-pg.git
     version: 0.31.0

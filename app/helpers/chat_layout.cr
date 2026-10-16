@@ -38,6 +38,27 @@ module ChatLayout
   # direct :fresh_account_logo (config/routes.rb референса): account_logo
   # c cache-busting v=account.updated_at (to_fs(:number)) — смена логотипа
   # или настроек меняет URL и обходит кэш иконки. size=small — 192px.
+  # Rails SignedGlobalID: подпись "gid://campfire/User/<id>?expires_in"
+  # ключом "signed_global_ids", purpose "attachable" (rails.js sgid).
+  # Общий для контроллера и jbuilder-партиалов — живёт в ChatLayout.
+  def self.attachable_sgid(user_id : Int64) : String
+    secret = ENV["SECRET_KEY_BASE"]? ||
+             raise RuntimeError.new("SECRET_KEY_BASE is not configured")
+    key = ActiveSupport::CachingKeyGenerator.new(
+      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha1))
+      .generate_key("signed_global_ids")
+    verifier = ActiveSupport::MessageVerifier.new(key, url_safe: true, digest: :sha1)
+    verifier.generate("gid://campfire/User/#{user_id}?expires_in",
+      purpose: "attachable")
+  end
+
+  # ISO-8601 UTC с миллисекундами — формат Date#toISOString() эталона
+  # и Time#to_json Rails (jbuilder-вьюхи bots-API; доступен и из
+  # партиалов JbuilderTemplate, где контекста контроллера нет).
+  def self.iso8601_ms(time : Time) : String
+    time.to_utc.to_s("%Y-%m-%dT%H:%M:%S.%LZ")
+  end
+
   def self.fresh_account_logo_path(account : Account?, size : String? = nil) : String
     return "/account/logo" unless account
     query = [] of String

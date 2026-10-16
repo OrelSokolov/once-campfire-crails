@@ -2,6 +2,7 @@ require "railties_cr"
 require "active_record_cr"
 require "bcrypt"
 require "rqrcode_cr"
+require "jbuilder_cr"
 require "serverx"
 
 require "../config/application"
@@ -14,6 +15,27 @@ require "../app/helpers/identity_cache"
 require "../app/helpers/cable_bus"
 require "../app/helpers/write_queue"
 require "../app/jobs/**"
+
+# jbuilder-партиалы (compile-time регистрация — рантайм-подстановки
+# файлов шаблоны Crystal себе позволить не так, как в Ruby; пути —
+# относительно корня запуска crystal, как у compile_template).
+# Партиалы — методы JbuilderTemplate без контекста контроллера:
+# origin им недоступен, экшен-шаблон проставляет jb_origin.
+class JbuilderTemplate
+  property jb_origin : String = "http://localhost"
+
+  compile_partials({
+    "users/user"                 => {path: "app/views/users/_user.json.jbuilder",
+                                    locals: {"user" => User}},
+    "messages/message"           => {path: "app/views/messages/_message.json.jbuilder",
+                                    locals: {"message" => Message}},
+    "messages/boosts/boost"      => {path: "app/views/messages/boosts/_boost.json.jbuilder",
+                                    locals: {"boost" => Boost}},
+    "autocompletable_users/user" => {path: "app/views/autocompletable_users/_user.json.jbuilder",
+                                    locals: {"user" => User}},
+  })
+end
+
 require "../config/cable"
 require "../app/channels/application_cable/channel"
 require "../app/channels/application_cable/connection"
