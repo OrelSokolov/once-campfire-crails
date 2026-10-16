@@ -81,14 +81,20 @@ class RoomsController < ApplicationController
   end
 
   # GET /rooms/:room_id/edit — настройки комнаты (ссылка "Settings for
-  # this room"): та же форма с текущим именем, _method=patch.
+  # this room"): opens/closeds — та же форма с текущим именем,
+  # _method=patch; directs — отдельная страница (directs/edit.html.erb:
+  # аватары участников + кнопка Delete Ping).
   def edit
     user = current_user.not_nil!
     room = Room.find?(params["room_id"].to_s.to_i64)
     return head(:not_found) unless room
-    kind = (room.type.to_s.split("::").last? || "").downcase + "s"
     response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build { |io| room_form(io, room, kind, user) })
+    if room.type.to_s.ends_with?("Direct")
+      render(html: String.build { |io| direct_edit(io, room, user) })
+    else
+      kind = (room.type.to_s.split("::").last? || "").downcase + "s"
+      render(html: String.build { |io| room_form(io, room, kind, user) })
+    end
   end
 
   # POST /rooms/:kind — создание (registerRoomForms): opens дают
@@ -194,6 +200,38 @@ class RoomsController < ApplicationController
       end
     end
     ids
+  end
+
+  # rooms/directs/edit.html.erb: панель с карточками участников (аватар
+  # 10ch + имя) и кнопкой удаления Ping (button_to _method=delete).
+  # Заголовок — room_display_name: имена остальных участников через
+  # to_sentence, соль-комнате — имя самого юзера.
+  private def direct_edit(io, room : Room, user : User) : Nil
+    members = User.where(
+      %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
+      room.id.not_nil!).order("id").to_a
+    uid = user.id.not_nil!
+    others = members.reject { |m| m.id == uid }.map(&.name.to_s)
+    io << ChatLayout.page_open("room-form",
+      "Edit settings for #{ChatLayout.display_sentence(others, user.name.to_s)}", user,
+      nav_html: ChatLayout.nav_back("/rooms/#{room.id.not_nil!}"))
+    io << %(<div class="panel txt-align-center">\n)
+    io << %(<section class="directs--edit margin-block-end">\n)
+    shown = members.size > 1 ? members.reject { |m| m.id == uid } : members
+    shown.each do |member|
+      io << %(<div class="member flex flex-column gap fill-shade pad border-radius">\n)
+      io << %(<figure class="avatar center" style="--avatar-border-radius: 10ch; --avatar-size: 10ch;">\n)
+      io << ChatLayout.avatar_link(member, "lazy") << %(\n</figure>\n\n)
+      io << %(<strong>) << HTML.escape(member.name.to_s) << %(</strong>\n</div>\n)
+    end
+    io << %(</section>\n)
+    io << %(<form class="button_to" method="post" action="/rooms/) << room.id.not_nil! << %(">)
+    io << %(<input type="hidden" name="_method" value="delete">)
+    io << %(<button class="btn btn--negative center" aria-label="Delete Ping" )
+    io << %(data-turbo-confirm="Are you sure you want to delete this ping and all messages in it? This can’t be undone." )
+    io << %(type="submit">) << ChatLayout.icon("trash.svg") << %(Ping</button></form>\n)
+    io << %(</div>\n)
+    io << ChatLayout.page_close
   end
 
   # room_form.eta: панель с именем, списком доступа (аватары, свитчи,

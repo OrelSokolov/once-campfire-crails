@@ -157,13 +157,13 @@ module ChatLayout
     "invisible"  => "Notifications are off and room invisible in sidebar",
   }
 
-  # to_sentence: "A, B and C"
+  # to_sentence (Rails default): "A", "A and B", "A, B, and C"
   private def self.sentence(parts : Array(String)) : String
     case parts.size
     when 0 then ""
     when 1 then parts.first
     when 2 then "#{parts[0]} and #{parts[1]}"
-    else        parts[0..-2].join(", ") + " and " + parts[-1]
+    else        parts[0..-2].join(", ") + ", and " + parts[-1]
     end
   end
 
@@ -383,6 +383,14 @@ module ChatLayout
     "/users/#{token}/avatar?v=#{stamp}"
   end
 
+  # room_display_name(room, for_user:) RoomsHelper для direct-комнат:
+  # имена остальных участников через to_sentence; пусто (соль-комната) —
+  # fallback (имя viewer'а).
+  def self.display_sentence(names : Array(String), fallback : String) : String
+    joined = sentence(names)
+    joined.empty? ? fallback : joined
+  end
+
   # room_display_name(room, for_user: nil) RoomsHelper: обычные комнаты —
   # имя; direct (name NULL) — имена всех участников через запятую.
   def self.room_display_name(room : Room) : String
@@ -397,14 +405,16 @@ module ChatLayout
   end
 
   # avatar_tag референса (users/avatars_helper): ссылка на профиль,
-  # img 48×48 по токен-путя с cache-buster.
-  def self.avatar_link(user : User?) : String
+  # img 48×48 по токен-путя с cache-buster. loading — опция image_tag
+  # (directs/edit передаёт loading: :lazy).
+  def self.avatar_link(user : User?, loading : String? = nil) : String
+    lazy = loading ? %( loading="#{loading}") : ""
     return %(<a class="btn avatar" data-turbo-frame="_top" href="/users/0"><img aria-hidden="true" src="/users/0/avatar" width="48" height="48"></a>) unless user
     uid = user.id.not_nil!
     String.build do |io|
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
       io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{uid}">)
-      io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a>)
+      io << %(<img aria-hidden="true"#{lazy} src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a>)
     end
   end
 

@@ -15,6 +15,20 @@ implementations (route contracts validated on every response under load,
 write audits against the seed database, browser gate via Playwright,
 Action Cable live messaging) — and then be measured on requests per second.
 
+## Local run
+
+```
+# install crystal language 1.21
+
+shards install
+
+bin/crails db:create
+bin/crails db:migrate
+
+bin/crails server
+
+```
+
 ## Benchmark results
 
 Median RPS of the official harness — 3 rounds × 16 concurrent clients,

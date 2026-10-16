@@ -8,6 +8,9 @@ class SessionsController < ApplicationController
   skip_before_action :require_authentication
 
   def new
+    # sessions_controller.rb:27 референса — на чистой установке логин
+    # редиректит на first_run.
+    return redirect_to "/first_run" if User.count == 0
     render_login
   end
 
