@@ -54,7 +54,7 @@ shards:
 
   railties_cr:
     git: https://github.com/orelsokolov/railties.cr.git
-    version: 0.1.8
+    version: 0.1.10
 
   redis:
     git: https://github.com/jgaskins/redis.git

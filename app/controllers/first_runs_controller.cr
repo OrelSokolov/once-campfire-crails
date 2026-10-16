@@ -80,7 +80,8 @@ class FirstRunsController < ApplicationController
     room.save!
 
     membership = Membership.new(room_id: room.id.not_nil!, user_id: user.id.not_nil!,
-      involvement: "member", connections: 0,
+      involvement: "mentions", # Room#default_involvement референса
+      connections: 0,
       created_at: now, updated_at: now)
     membership.save!
 
