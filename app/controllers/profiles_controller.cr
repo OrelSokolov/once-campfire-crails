@@ -126,7 +126,7 @@ class ProfilesController < ApplicationController
 
   # involvement.eta (статически, без involvement-роута).
   private def involvement_chip(room : Room, membership : Membership) : String
-    involvement = membership.involvement.to_s.presence || "member"
+    involvement = membership.involvement.to_s.presence || "mentions"
     human = ChatLayout::INVOLVEMENT_LABELS[involvement]? || involvement
     %(<turbo-frame id="involvement_room_#{room.id.not_nil!}">) +
       %(<button role="checkbox" aria-checked="true" tabindex="0" class="btn #{involvement}" type="button">) +

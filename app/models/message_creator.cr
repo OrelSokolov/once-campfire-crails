@@ -190,7 +190,7 @@ module MessageCreator
         return yield
       rescue e : SQLite3::Exception
         if e.message.to_s.includes?("database is locked") && tries < attempts
-          sleep Random.new.rand(0.005..0.05)
+          sleep Random.new.rand(0.005..0.05).seconds
           next
         end
         raise e

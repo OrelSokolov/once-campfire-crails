@@ -1,0 +1,84 @@
+# once-campfire-crails — runtime-сборка. Образ содержит только тулчейн
+# (crystal, shards, git, sqlite), а весь пайплайн выполняется ПРИ СТАРТЕ
+# контейнера: git clone → shards install → release-билд → db:migrate →
+# assets:precompile → serve. Docker-кэш слоёв в пайплайне не участвует,
+# поэтому подсунуть старый код невозможно в принципе.
+#
+# Плата за это: первый старт контейнера идёт минуты (компиляция Crystal).
+# Прогресс: docker logs -f once-campfire-reference.
+#
+# Ревизия: по умолчанию свежий BRANCH=main; точный коммит — через
+# переменную окружения COMMIT (docker-compose / -e).
+
+FROM crystallang/crystal:1.21-alpine
+RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev git
+
+WORKDIR /app
+
+# Полный пайплайн запуска контейнера. БД и SECRET_KEY_BASE живут в
+# volume (переживают рестарт), исходники и бинарники — ephemeral.
+COPY <<'EOF' /app/bin/runtime.sh
+#!/bin/sh
+set -e
+
+# 1. Свежий клон при каждом старте — без docker-кэша.
+rm -rf /repo
+if [ -n "${COMMIT:-}" ]; then
+  echo "==> git clone ${REPO_URL} @ ${COMMIT}"
+  git clone "$REPO_URL" /repo
+  git -C /repo checkout "$COMMIT"
+else
+  echo "==> git clone ${REPO_URL} @ ${BRANCH}"
+  git clone --depth 1 --branch "$BRANCH" "$REPO_URL" /repo
+fi
+cd /repo
+
+# 2. Зависимости и release-бинарник (без fork-воркеров, WEB_CONCURRENCY).
+echo "==> shards install"
+shards install
+echo "==> crystal build src/app.cr (release)"
+crystal build src/app.cr -o bin/app-release --release -Dwithout_mt
+
+# 3. База: файл в volume, миграции (раннер компилируется на месте).
+DB_PATH="${DATABASE_URL#sqlite3://}"
+mkdir -p "$(dirname "$DB_PATH")"
+if [ ! -f "$DB_PATH" ]; then
+  echo "==> db:create $DB_PATH"
+  : > "$DB_PATH"
+fi
+echo "==> db:migrate $DB_PATH"
+bin/crails db:migrate
+
+# 4. Ассеты: прекомпиляция в public/assets (digest-имена + манифест).
+echo "==> assets:precompile"
+bin/crails assets:precompile
+
+# 5. Стабильный SECRET_KEY_BASE (signed/encrypted cookies): если не задан
+# снаружи — генерируем один раз и храним рядом с базой в volume.
+if [ -z "${SECRET_KEY_BASE:-}" ]; then
+  SECRET_FILE="$(dirname "$DB_PATH")/secret_key_base"
+  if [ ! -s "$SECRET_FILE" ]; then
+    echo "==> generating SECRET_KEY_BASE -> $SECRET_FILE"
+    od -An -tx1 -N64 /dev/urandom | tr -d ' \n' > "$SECRET_FILE"
+  fi
+  export SECRET_KEY_BASE="$(cat "$SECRET_FILE")"
+fi
+
+exec ./bin/app-release serve
+EOF
+RUN chmod +x /app/bin/runtime.sh
+
+ENV CRAILS_ENV=production \
+    CRAILS_TRANSPORT=serverx \
+    DATABASE_URL=sqlite3:///rails/storage/db/production.sqlite3 \
+    CAMPFIRE_STORAGE_ROOT=/rails/storage/files \
+    CAMPFIRE_JOBS_DB=/rails/storage/db/jobs.sqlite3 \
+    RAILS_LOG_LEVEL=warn \
+    REPO_URL=https://github.com/OrelSokolov/once-campfire-crails.git \
+    BRANCH=main
+
+# Метка стенда: по ней rake compose:clean находит старые dangling-образы.
+LABEL once-campfire-crails.stand="reference"
+
+EXPOSE 3000
+ENTRYPOINT ["/app/bin/runtime.sh"]

@@ -1,0 +1,39 @@
+# Эталонный стенд: образ — только тулчейн, весь пайплайн (clone → build →
+# migrate → assets) выполняется при СТАРТЕ контейнера из свежего main.
+# Приложение поднимается на http://127.0.0.1:5555.
+#
+#   docker compose -f docker-compose.github.yml up -d --build
+#   curl http://127.0.0.1:5555/up
+#   docker compose -f docker-compose.github.yml down
+#
+# Первый старт идёт минуты (компиляция Crystal в рантайме):
+#   docker logs -f once-campfire-reference
+#
+# network_mode: host — как в бенчмарк-harness (compare.rb): приложение
+# слушает loopback, поэтому проброс портов через -p не работает; порт
+# задаётся через HTTP_PORT. Топология и WEB_CONCURRENCY — как в прогоне.
+# БД и storage живут в named-волюмах (db/files/logs), переживают restart.
+# Точную ревизию можно зафиксировать: COMMIT=<sha> rake compose:up.
+
+services:
+  reference:
+    build:
+      context: .
+      dockerfile: Dockerfile.github
+    image: once-campfire-crails:app-github
+    container_name: once-campfire-reference
+    network_mode: host
+    environment:
+      HTTP_PORT: "5555"
+      WEB_CONCURRENCY: "3"
+      COMMIT: "${COMMIT:-}"
+    volumes:
+      - reference_db:/rails/storage/db
+      - reference_files:/rails/storage/files
+      - reference_logs:/rails/storage/logs
+    restart: unless-stopped
+
+volumes:
+  reference_db:
+  reference_files:
+  reference_logs:
