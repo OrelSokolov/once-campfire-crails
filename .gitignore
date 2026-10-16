@@ -16,17 +16,21 @@ db/*.sqlite3-wal
 /storage
 .env
 
-# Сгенерированные ассеты (~20MB): `node bin/build-assets.js` в
-# ~/rails.cr/tmp/campfire-express → assets/generated/public/assets
-# копировать сюда целиком (app/views/*.html фрагменты — те же исходники).
+# Сгенерированные ассеты: `bin/crails assets:precompile` собирает
+# public/assets из исходников в репо (app/assets, app/javascript,
+# vendor/assets, vendor/javascript — как Rails-референс с importmap,
+# без node). app/views/manifest.json — тот же пребилд, встраивается
+# при компиляции.
 /public/assets/
 
 # Rake-бенчмарк: рабочее окружение (клоны конкурентов, harness, сид)
 /bench-workspace/
 
-# Ruby-гемы rake-пайплайна (Gemfile → vendor/bundle)
+# Ruby-гемы rake-пайплайна (Gemfile → vendor/bundle); исходники
+# vendor-ассетов (vendor/javascript, vendor/assets, vendor/licenses)
+# — в репо, как у Rails-референса.
 /.bundle/
-/vendor/
+/vendor/bundle/
 
 benchmarks/
 
