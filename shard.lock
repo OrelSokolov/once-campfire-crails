@@ -18,7 +18,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.5
+    version: 0.1.6
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
