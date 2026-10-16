@@ -1,5 +1,6 @@
 require "json"
 require "sqlite3"
+require "digest/md5"
 
 # Создание сообщения со всеми побочными эффектами комнаты — порт
 # MessagesController#create + Room#receive + notifyMessage
@@ -8,9 +9,16 @@ require "sqlite3"
 # уведомлений (push/webhook) в leased-SQLite очередь — всё persisted ДО
 # HTTP-ответа.
 module MessageCreator
+  # Загруженный файл (multipart от file_uploader.js): клиент шлёт файл
+  # прямо в POST /rooms/:id/messages, без ActiveStorage direct uploads.
+  record UploadedFile, filename : String, content_type : String, bytes : Bytes
+
   # Возвращает созданное сообщение (после вставки тела/индекса и broadcast).
+  # attachment: сохранить файл как blob + active_storage_attachments
+  # (storage.js storeUpload + attachMessage; FTS-индекс — тело или filename).
   def self.create!(room : Room, creator : User, body_html : String,
-                   client_message_id : String, webhooks : Bool = true) : Message
+                   client_message_id : String, webhooks : Bool = true,
+                   attachment : UploadedFile? = nil) : Message
     now = Time.utc
     plain = plain_text(body_html)
 
@@ -38,9 +46,12 @@ module MessageCreator
           conn.exec(
             "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
             "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
+          store_attachment(conn, message_id, attachment, now) if attachment
+          # indexMessage: plainText(body) || filename — файл без текста
+          # индексируется именем файла.
           conn.exec(
             "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
-            message_id, plain)
+            message_id, plain.presence || attachment.try(&.filename) || "")
 
           pending_jobs = notify(room, record, creator, body_html, webhooks)
           {record: record, jobs: pending_jobs}
@@ -53,20 +64,50 @@ module MessageCreator
       Campfire::JobQueue.enqueue_batch(created[:jobs])
       created
     end
-    broadcast(room, message[:record], creator)
+    # Broadcast с вложением, если файл был сохранён (attachMessage →
+    # publishMessage: presentation вместо rich-text тела).
+    record = message[:record]
+    rendered = attachment ? ChatLayout.attachments_for([record.id.not_nil!])[record.id.not_nil!]? : nil
+    broadcast(room, record, creator, rendered)
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    message[:record]
+    record
   end
 
-  def self.broadcast(room : Room, message : Message, author : User) : Nil
+  def self.broadcast(room : Room, message : Message, author : User,
+                     attachment : ChatLayout::Attachment? = nil) : Nil
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
-      io << ChatLayout.message_dom(message, room, author)
+      io << ChatLayout.message_dom(message, room, author, attachment)
       io << %(</template></turbo-stream>\n)
     end
     Campfire.broadcast(
       Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
       turbo_frame)
+  end
+
+  # storeUpload + attachMessage (storage.js/routes.js): файл на диск в
+  # <root>/<key[0,2]>/<key[2,2]>/<key> (тот же путь, из которого файлы
+  # отдаёт ActiveStorageController), blob-строка (md5-checksum в base64,
+  # key = 28 hex) и attachment на Message + touch messages.updated_at.
+  private def self.store_attachment(conn, message_id : Int64,
+                                    upload : UploadedFile, now : Time) : Nil
+    key = Random::Secure.hex(14)
+    root = ENV["CAMPFIRE_STORAGE_ROOT"]? || "storage"
+    dir = File.join(root, key[0, 2], key[2, 2])
+    Dir.mkdir_p(dir)
+    File.write(File.join(dir, key), upload.bytes)
+
+    checksum = Base64.strict_encode(Digest::MD5.digest(upload.bytes))
+    filename = File.basename(upload.filename.presence || "file")
+    content_type = upload.content_type.presence || "application/octet-stream"
+    blob_id = conn.exec(
+      "INSERT INTO active_storage_blobs (key, filename, content_type, byte_size, checksum, metadata, service_name, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+      key, filename, content_type, upload.bytes.size.to_i64, checksum,
+      "{}", "local", now).last_insert_id
+    conn.exec(
+      "INSERT INTO active_storage_attachments (name, record_type, record_id, blob_id, created_at) VALUES ('attachment', 'Message', $1, $2, $3)",
+      message_id, blob_id, now)
+    conn.exec("UPDATE messages SET updated_at = $1 WHERE id = $2", now, message_id)
   end
 
   # Room#receive: unread для участников, отключённых дольше 60 секунд,

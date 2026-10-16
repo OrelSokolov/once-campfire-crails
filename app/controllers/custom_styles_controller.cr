@@ -10,8 +10,9 @@ class CustomStylesController < ApplicationController
     user = current_user.not_nil!
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
-      io << ChatLayout.head("Custom CSS", user, nil, chat: false)
-      io << %(<body>\n<main id="main-content">\n)
+      io << ChatLayout.page_open("custom-styles", "Custom CSS", user,
+        body_class: "custom-styles",
+        nav_html: ChatLayout.nav_back("/account/edit"))
       io << %(<section class="panel panel--wide txt-align-center flex flex-column">)
       io << %(<form action="/account/custom_styles" accept-charset="UTF-8" )
       io << %(method="post" class="flex flex-column gap">)
@@ -23,8 +24,10 @@ class CustomStylesController < ApplicationController
       io << %(spellcheck="false" rows="16">)
       io << HTML.escape(account.custom_styles.to_s) << %(</textarea></label>\n)
       io << %(<button class="btn btn--reversed center txt-large" type="submit">)
+      io << ChatLayout.icon("check.svg")
       io << %(<span class="for-screen-reader">Save changes</span></button>\n)
-      io << %(</form></section>\n</main>\n</body>\n</html>\n)
+      io << %(</form></section>\n)
+      io << ChatLayout.page_close
     end)
   end
 

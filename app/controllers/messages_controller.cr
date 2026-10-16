@@ -54,15 +54,30 @@ class MessagesController < ApplicationController
 
     body_html = message_body_param
     client_message_id = message_client_id_param || UUID.random.to_s
+    upload : MessageCreator::UploadedFile? = nil
+    if form = parse_multipart_form
+      if (item = form["message[attachment]"]?).is_a?(MessageCreator::UploadedFile)
+        upload = item
+      end
+      if (cmid = form["message[client_message_id]"]?).is_a?(String) && !cmid.empty?
+        client_message_id = cmid
+      end
+      if (text = form["message[body]"]?).is_a?(String) && !text.empty?
+        body_html = text
+      end
+    end
 
     # Вставка + ActionText-тело + FTS5-индекс + broadcast + unread +
     # джобы уведомлений (push/webhook) в очередь — persisted до ответа
     # (аудит validate_acks требует первые три с точным телом).
-    message = MessageCreator.create!(room, user, body_html, client_message_id)
+    # attachment: файл → blob + active_storage_attachments (storage.js).
+    message = MessageCreator.create!(room, user, body_html, client_message_id,
+      attachment: upload)
 
+    attachment = upload ? ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]? : nil
     turbo_frame = String.build do |io|
       io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
-      io << ChatLayout.message_dom(message, room, user)
+      io << ChatLayout.message_dom(message, room, user, attachment)
       io << %(</template></turbo-stream>\n)
     end
 
@@ -132,17 +147,64 @@ class MessagesController < ApplicationController
       io << %(<input type="hidden" name="_method" value="patch">\n)
       io << %(<div class="full-width input input--actor min-width fill-white">)
       io << %(<lexxy-editor rows="1" class="input lexxy-content" aria-multiline="true" aria-label="Edit message" autofocus="autofocus" )
+      io << %(permitted-attachment-types="application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed" )
+      io << %(data-action="lexxy:change-&gt;typing-notifications#start keydown-&gt;composer#submitByKeyboard:capture" )
       io << %(id="message_body" name="message[body]" value=") << HTML.escape(body) << %(">)
+      io << %(<lexxy-prompt trigger="@" name="mention" src="/autocompletable/users?room_id=#{room.id}" )
+      io << %(remote-filtering="true" empty-results="No matches"></lexxy-prompt>)
       io << %(</lexxy-editor>\n</div>\n)
+      io << %(<a data-form-target="cancel" hidden="hidden" href="/rooms/#{room.id}/messages/#{message.id}">)
+      io << %(Close editor and discard changes</a>\n)
       io << %(<div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half">)
       io << %(<button name="button" type="submit" class="btn btn--reversed">)
+      io << ChatLayout.icon("check.svg")
       io << %(<span class="for-screen-reader">Save changes</span></button>\n)
+      io << %(<button name="button" type="submit" class="btn btn--negative" form="delete_form_message_#{cid}" )
+      io << %(data-turbo-confirm="Are you sure you want to delete this message?">)
+      io << ChatLayout.icon("trash.svg")
+      io << %(<span class="for-screen-reader">Delete message</span></button>\n)
       io << %(</div>\n</form>\n</div>\n</div>\n)
       io << %(<div class="message__actions flex flex-wrap">)
-      io << %(<a class="message__action-btn message__edit-close-btn txt-small btn btn--borderless" href="/rooms/#{room.id}">)
+      io << %(<a class="message__action-btn message__edit-close-btn txt-small btn btn--borderless" href="/rooms/#{room.id}/messages/#{message.id}">)
+      io << ChatLayout.icon("remove.svg", 20, "colorize--black")
       io << %(<span class="for-screen-reader">Close editor and discard changes</span></a></div>\n)
+      io << %(<form id="delete_form_message_#{cid}" data-turbo-frame="edit_message_#{cid}" )
+      io << %(action="/rooms/#{room.id}/messages/#{message.id}" accept-charset="UTF-8" method="post">)
+      io << %(<input type="hidden" name="_method" value="delete"></form>\n)
       io << %(</div>\n</turbo-frame>\n)
     end)
+  end
+
+  # DELETE /rooms/:id/messages/:message_id — удаление сообщения
+  # (edit_message.eta: turbo-stream remove + инвалидация кэшей).
+  def destroy
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    room = Room.find?(params["id"].to_s.to_i64)
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    user = current_user.not_nil!
+    unless room && message && message.room_id == room.id
+      response.status = :not_found
+      return render(plain: "Message not found")
+    end
+    if message.creator_id != user.id
+      response.status = :forbidden
+      return render(plain: "Cannot delete this message")
+    end
+
+    mid = message.id.not_nil!
+    cid = message.client_message_id.to_s.presence || mid.to_s
+    ActiveRecord::Base.connection.exec(
+      "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
+    ActiveRecord::Base.connection.exec(
+      "DELETE FROM message_search_index WHERE rowid=?", mid)
+    message.destroy
+
+    stream = String.build do |io|
+      io << %(<turbo-stream action="remove" target="message_#{cid}"></turbo-stream>\n)
+    end
+    Campfire.broadcast(
+      Turbo::Streams::StreamName.stream_name_from([room, "messages"]), stream)
+    render(html: stream, content_type: "text/vnd.turbo-stream.html")
   end
 
   # PATCH /rooms/:id/messages/:message_id — обновление тела: rich text,
@@ -203,6 +265,46 @@ class MessagesController < ApplicationController
             end
     # loadgen шлёт form-encoded message[body] (HTML от trix) или plain text
     value.to_s
+  end
+
+  # multipart/form-data от file_uploader.js: файл идёт напрямую в POST
+  # сообщения (message[attachment] + message[client_message_id]), без
+  # ActiveStorage direct uploads. action_pack_cr парсит только json и
+  # form-urlencoded, поэтому multipart разбираем здесь: поля без
+  # filename — строки, с filename — UploadedFile (байты + content-type).
+  private def parse_multipart_form : Hash(String, String | MessageCreator::UploadedFile)?
+    content_type = request.headers["Content-Type"]?
+    return nil unless content_type.try(&.includes?("multipart/form-data"))
+    match = content_type.not_nil!.match(/boundary=([^";]+)/)
+    return nil unless match
+    boundary = match[1].strip('"')
+
+    raw = request.body.try(&.gets_to_end).to_s
+    return nil if raw.empty?
+    delimiter = "--" + boundary
+    start = raw.index(delimiter)
+    return nil unless start
+    rest = raw[(start + delimiter.size)..]
+
+    form = {} of String => String | MessageCreator::UploadedFile
+    rest.split("\r\n" + delimiter).each do |piece|
+      next if piece.starts_with?("--") # закрывающий --boundary--
+      piece = piece[2..] if piece.starts_with?("\r\n")
+      sep = piece.index("\r\n\r\n")
+      next unless sep
+      headers = piece[0...sep]
+      content = piece[(sep + 4)..]
+      name = headers[/name="([^"]*)"/, 1]?
+      next unless name
+      if (filename = headers[/filename="([^"]*)"/, 1]?) && !filename.empty?
+        ctype = headers[/content-type:\s*([^\r\n]+)/i, 1]?.try(&.strip) ||
+                "application/octet-stream"
+        form[name] = MessageCreator::UploadedFile.new(filename, ctype, content.to_slice)
+      else
+        form[name] = content
+      end
+    end
+    form
   end
 
   private def message_client_id_param : String?

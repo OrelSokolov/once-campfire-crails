@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Full parity cycle: record baselines on rails, then run crails and compare.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+bin/run --target rails "$@"
+bin/run --target crails --compare "$@"

@@ -18,25 +18,46 @@ class JoinsController < ApplicationController
     end
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
-      io << ChatLayout.head("Join #{account.name}", nil, nil, chat: false)
-      io << %(<body class="welcome">\n<main id="main-content">\n)
+      io << ChatLayout.page_open("join", "Join #{account.name}", nil,
+        body_class: "welcome",
+        nav_html: %(<div class="flex-item-justify-end"><a href="/session/new" class="btn flex-item-justify-end">) +
+          ChatLayout.icon("login-keys.svg") +
+          %(<span class="for-screen-reader">Sign in</span></a></div>))
       io << %(<form action="/join/) << HTML.escape(account.join_code.to_s)
       io << %(" accept-charset="UTF-8" method="post" class="center">)
-      io << %(<section class="flex flex-column gap center-block pad-block">\n)
+      io << %(<section class="nametag u-relative">)
+      io << %(<div class="flex justify-center align-center pad-block">)
+      io << %(<img src=") << ChatLayout.asset("lanyard.svg")
+      io << %(" class="nametag__lanyard" aria-hidden="true"></div>\n)
+      io << %(<div class="nametag__inner flex flex-column gap">)
       io << %(<fieldset class="flex flex-column center-block">)
-      io << %(<legend class="txt-large txt-align-center"><strong>)
-      io << HTML.escape(account.name.to_s) << %(</strong></legend></fieldset>\n)
+      io << %(<legend class="txt-align-center flex gap"><figure class="account-logo avatar">)
+      io << %(<img src=") << ChatLayout.asset("logos/app-icon.png")
+      io << %(" alt="Account logo" width="300" height="300"></figure>)
+      io << %(<strong class="txt-large">) << HTML.escape(account.name.to_s) << %(</strong></legend>)
+      io << %(<label class="align-center center avatar__form gap">)
+      io << %(<div class="btn avatar input--file txt-xx-large">)
+      io << %(<img src=") << ChatLayout.asset("default-avatar.svg")
+      io << %(" aria-hidden="true" alt="Avatar"></div></label></fieldset>\n)
+      io << %(<div class="flex align-center gap">)
       io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
       io << %(<input class="input" autocomplete="name" placeholder="Name" autofocus )
-      io << %(required data-1p-ignore="true" type="text" name="user[name]" id="user_name"></label>\n)
+      io << %(required data-1p-ignore="true" type="text" name="user[name]" id="user_name">)
+      io << ChatLayout.icon("person.svg", 24, "colorize--black") << %(</label></div>\n)
+      io << %(<div class="flex align-center gap">)
       io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
       io << %(<input class="input" autocomplete="username" placeholder="Email address" )
-      io << %(required type="email" name="user[email_address]" id="user_email_address"></label>\n)
+      io << %(required type="email" name="user[email_address]" id="user_email_address">)
+      io << ChatLayout.icon("email.svg", 24, "colorize--black") << %(</label></div>\n)
+      io << %(<div class="flex align-center gap">)
       io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
       io << %(<input class="input" autocomplete="new-password" placeholder="Password" )
-      io << %(required maxlength="72" type="password" name="user[password]" id="user_password"></label>\n)
-      io << %(<button class="btn btn--reversed center txt-large" type="submit">Save</button>\n)
-      io << %(</section></form>\n</main>\n</body>\n</html>\n)
+      io << %(required maxlength="72" type="password" name="user[password]" id="user_password">)
+      io << ChatLayout.icon("password.svg", 24, "colorize--black") << %(</label></div>\n)
+      io << %(<button class="btn btn--reversed center txt-large" type="submit">)
+      io << ChatLayout.icon("check.svg") << %(<span class="for-screen-reader">Save</span></button>\n)
+      io << %(</section></form>\n)
+      io << ChatLayout.page_close
     end)
   end
 

@@ -15,5 +15,8 @@ end
 class Rooms::Open < Room
 end
 
+class Rooms::Closed < Room
+end
+
 class Rooms::Direct < Room
 end
