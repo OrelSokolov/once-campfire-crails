@@ -32,6 +32,18 @@ end
 
 CRails.application.initialize!
 
+# Dev-заметка про кластер: в многопоточной сборке (дефолт Crystal 1.21)
+# Process.fork не компилируется, поэтому форк-кластер недоступен, пока
+# приложение не собрано с -Dwithout_mt. Предупреждаем один раз при старте
+# сервера, а не падаем/молчим.
+{% unless flag?(:without_mt) %}
+  if {"", "serve"}.includes?(ARGV[0]? || "") && CRails.env.development?
+    STDERR.puts "\e[1;33mCluster mode is off:\e[0m \e[33mmultithreaded build cannot fork " \
+                "(compile with \e[1m-Dwithout_mt\e[0m\e[33m and set CRAILS_TRANSPORT=serverx " \
+                "for the fork/SO_REUSEPORT cluster) — running a single process\e[0m"
+  end
+{% end %}
+
 # Обёртка приложения в HTTP::Handler (роутер + cable — внутри chain)
 # для транспорта ServerX.
 class ServerXAppHandler

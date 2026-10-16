@@ -1,0 +1,17 @@
+# Ported 1:1 from ~/once-campfire (Rails). type: :integer matches the
+# integer FK columns the Rails sqlite3 database declares.
+class CreateSessions < ActiveRecord::Migration
+  def change
+    create_table :sessions do |t|
+      t.references :user, null: false, foreign_key: true, index: true, type: :integer
+      t.string :token, null: false
+      t.string :ip_address
+      t.string :user_agent
+      t.datetime :last_active_at, null: false
+
+      t.timestamps
+    end
+
+    add_index :sessions, :token, unique: true
+  end
+end

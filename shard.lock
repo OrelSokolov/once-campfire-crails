@@ -18,7 +18,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.4
+    version: 0.1.5
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
@@ -54,7 +54,7 @@ shards:
 
   railties_cr:
     git: https://github.com/orelsokolov/railties.cr.git
-    version: 0.1.6
+    version: 0.1.8
 
   redis:
     git: https://github.com/jgaskins/redis.git
@@ -66,7 +66,7 @@ shards:
 
   serverx:
     git: https://github.com/orelsokolov/serverx.cr.git
-    version: 0.2.1
+    version: 0.2.3
 
   sqlite3:
     git: https://github.com/crystal-lang/crystal-sqlite3.git

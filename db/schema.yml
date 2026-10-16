@@ -5,21 +5,25 @@ accounts:
     type: int4
     nullable: "NO"
     default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: join_code
+    type: varchar
+    nullable: "NO"
+    default:
   - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: updated_at
     type: timestamp
     nullable: "NO"
     default:
   - name: custom_styles
     type: text
     nullable: "YES"
-    default:
-  - name: join_code
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: name
-    type: varchar
-    nullable: "NO"
     default:
   - name: settings
     type: jsonb
@@ -29,25 +33,21 @@ accounts:
     type: int4
     nullable: "NO"
     default: "0"
-  - name: updated_at
-    type: timestamp
-    nullable: "NO"
-    default:
 action_text_rich_texts:
   columns:
   - name: id
     type: int4
     nullable: "NO"
     default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
   - name: body
     type: text
     nullable: "YES"
     default:
-  - name: created_at
-    type: timestamp
-    nullable: "NO"
-    default:
-  - name: name
+  - name: record_type
     type: varchar
     nullable: "NO"
     default:
@@ -55,8 +55,8 @@ action_text_rich_texts:
     type: int8
     nullable: "NO"
     default:
-  - name: record_type
-    type: varchar
+  - name: created_at
+    type: timestamp
     nullable: "NO"
     default:
   - name: updated_at
@@ -69,6 +69,18 @@ active_storage_attachments:
     type: int4
     nullable: "NO"
     default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: record_type
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: record_id
+    type: int8
+    nullable: "NO"
+    default:
   - name: blob_id
     type: int8
     nullable: "NO"
@@ -77,22 +89,30 @@ active_storage_attachments:
     type: timestamp
     nullable: "NO"
     default:
-  - name: name
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: record_id
-    type: int8
-    nullable: "NO"
-    default:
-  - name: record_type
-    type: varchar
-    nullable: "NO"
-    default:
 active_storage_blobs:
   columns:
   - name: id
     type: int4
+    nullable: "NO"
+    default:
+  - name: key
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: filename
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: content_type
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: metadata
+    type: text
+    nullable: "YES"
+    default:
+  - name: service_name
+    type: varchar
     nullable: "NO"
     default:
   - name: byte_size
@@ -103,28 +123,8 @@ active_storage_blobs:
     type: varchar
     nullable: "YES"
     default:
-  - name: content_type
-    type: varchar
-    nullable: "YES"
-    default:
   - name: created_at
     type: timestamp
-    nullable: "NO"
-    default:
-  - name: filename
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: key
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: metadata
-    type: text
-    nullable: "YES"
-    default:
-  - name: service_name
-    type: varchar
     nullable: "NO"
     default:
 active_storage_variant_records:
@@ -141,49 +141,35 @@ active_storage_variant_records:
     type: varchar
     nullable: "NO"
     default:
-ar_internal_metadata:
-  columns:
-  - name: key
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: value
-    type: varchar
-    nullable: "YES"
-    default:
-  - name: created_at
-    type: timestamp
-    nullable: "NO"
-    default:
-  - name: updated_at
-    type: timestamp
-    nullable: "NO"
-    default:
 bans:
   columns:
   - name: id
     type: int4
     nullable: "NO"
     default:
-  - name: created_at
-    type: timestamp
+  - name: user_id
+    type: int4
     nullable: "NO"
     default:
   - name: ip_address
     type: varchar
     nullable: "NO"
     default:
-  - name: updated_at
+  - name: created_at
     type: timestamp
     nullable: "NO"
     default:
-  - name: user_id
-    type: int4
+  - name: updated_at
+    type: timestamp
     nullable: "NO"
     default:
 boosts:
   columns:
   - name: id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: message_id
     type: int4
     nullable: "NO"
     default:
@@ -199,10 +185,6 @@ boosts:
     type: timestamp
     nullable: "NO"
     default:
-  - name: message_id
-    type: int4
-    nullable: "NO"
-    default:
   - name: updated_at
     type: timestamp
     nullable: "NO"
@@ -213,37 +195,37 @@ memberships:
     type: int4
     nullable: "NO"
     default:
-  - name: connected_at
-    type: timestamp
-    nullable: "YES"
-    default:
-  - name: connections
+  - name: room_id
     type: int4
     nullable: "NO"
-    default: "0"
+    default:
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
   - name: created_at
     type: timestamp
     nullable: "NO"
     default:
-  - name: involvement
-    type: varchar
-    nullable: "YES"
-    default: '''mentions'''
-  - name: room_id
-    type: int4
+  - name: updated_at
+    type: timestamp
     nullable: "NO"
     default:
   - name: unread_at
     type: timestamp
     nullable: "YES"
     default:
-  - name: updated_at
-    type: timestamp
-    nullable: "NO"
-    default:
-  - name: user_id
+  - name: involvement
+    type: varchar
+    nullable: "YES"
+    default: '''mentions'''
+  - name: connections
     type: int4
     nullable: "NO"
+    default: "0"
+  - name: connected_at
+    type: timestamp
+    nullable: "YES"
     default:
 messages:
   columns:
@@ -251,24 +233,24 @@ messages:
     type: int4
     nullable: "NO"
     default:
-  - name: client_message_id
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: created_at
-    type: timestamp
+  - name: room_id
+    type: int4
     nullable: "NO"
     default:
   - name: creator_id
     type: int4
     nullable: "NO"
     default:
-  - name: room_id
-    type: int4
+  - name: created_at
+    type: timestamp
     nullable: "NO"
     default:
   - name: updated_at
     type: timestamp
+    nullable: "NO"
+    default:
+  - name: client_message_id
+    type: varchar
     nullable: "NO"
     default:
 push_subscriptions:
@@ -277,12 +259,8 @@ push_subscriptions:
     type: int4
     nullable: "NO"
     default:
-  - name: auth_key
-    type: varchar
-    nullable: "YES"
-    default:
-  - name: created_at
-    type: timestamp
+  - name: user_id
+    type: int4
     nullable: "NO"
     default:
   - name: endpoint
@@ -293,6 +271,14 @@ push_subscriptions:
     type: varchar
     nullable: "YES"
     default:
+  - name: auth_key
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
   - name: updated_at
     type: timestamp
     nullable: "NO"
@@ -301,34 +287,30 @@ push_subscriptions:
     type: varchar
     nullable: "YES"
     default:
-  - name: user_id
-    type: int4
-    nullable: "NO"
-    default:
 rooms:
   columns:
   - name: id
     type: int4
     nullable: "NO"
     default:
+  - name: name
+    type: varchar
+    nullable: "YES"
+    default:
   - name: created_at
     type: timestamp
     nullable: "NO"
     default:
-  - name: creator_id
-    type: int8
+  - name: updated_at
+    type: timestamp
     nullable: "NO"
-    default:
-  - name: name
-    type: varchar
-    nullable: "YES"
     default:
   - name: type
     type: varchar
     nullable: "NO"
     default:
-  - name: updated_at
-    type: timestamp
+  - name: creator_id
+    type: int8
     nullable: "NO"
     default:
 schema_migrations:
@@ -343,20 +325,20 @@ searches:
     type: int4
     nullable: "NO"
     default:
-  - name: created_at
-    type: timestamp
+  - name: user_id
+    type: int4
     nullable: "NO"
     default:
   - name: query
     type: varchar
     nullable: "NO"
     default:
-  - name: updated_at
+  - name: created_at
     type: timestamp
     nullable: "NO"
     default:
-  - name: user_id
-    type: int4
+  - name: updated_at
+    type: timestamp
     nullable: "NO"
     default:
 sessions:
@@ -365,11 +347,19 @@ sessions:
     type: int4
     nullable: "NO"
     default:
-  - name: created_at
-    type: timestamp
+  - name: user_id
+    type: int4
+    nullable: "NO"
+    default:
+  - name: token
+    type: varchar
     nullable: "NO"
     default:
   - name: ip_address
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: user_agent
     type: varchar
     nullable: "YES"
     default:
@@ -377,20 +367,12 @@ sessions:
     type: timestamp
     nullable: "NO"
     default:
-  - name: token
-    type: varchar
+  - name: created_at
+    type: timestamp
     nullable: "NO"
     default:
   - name: updated_at
     type: timestamp
-    nullable: "NO"
-    default:
-  - name: user_agent
-    type: varchar
-    nullable: "YES"
-    default:
-  - name: user_id
-    type: int4
     nullable: "NO"
     default:
 users:
@@ -398,6 +380,30 @@ users:
   - name: id
     type: int4
     nullable: "NO"
+    default:
+  - name: name
+    type: varchar
+    nullable: "NO"
+    default:
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: role
+    type: int4
+    nullable: "NO"
+    default: "0"
+  - name: email_address
+    type: varchar
+    nullable: "YES"
+    default:
+  - name: password_digest
+    type: varchar
+    nullable: "YES"
     default:
   - name: bio
     type: text
@@ -407,53 +413,29 @@ users:
     type: varchar
     nullable: "YES"
     default:
-  - name: created_at
-    type: timestamp
-    nullable: "NO"
-    default:
-  - name: email_address
-    type: varchar
-    nullable: "YES"
-    default:
-  - name: name
-    type: varchar
-    nullable: "NO"
-    default:
-  - name: password_digest
-    type: varchar
-    nullable: "YES"
-    default:
-  - name: role
-    type: int4
-    nullable: "NO"
-    default: "0"
   - name: status
     type: int4
     nullable: "NO"
     default: "0"
-  - name: updated_at
-    type: timestamp
-    nullable: "NO"
-    default:
 webhooks:
   columns:
   - name: id
     type: int4
     nullable: "NO"
     default:
-  - name: created_at
-    type: timestamp
-    nullable: "NO"
-    default:
-  - name: updated_at
-    type: timestamp
+  - name: user_id
+    type: int4
     nullable: "NO"
     default:
   - name: url
     type: varchar
     nullable: "YES"
     default:
-  - name: user_id
-    type: int4
+  - name: created_at
+    type: timestamp
+    nullable: "NO"
+    default:
+  - name: updated_at
+    type: timestamp
     nullable: "NO"
     default:
