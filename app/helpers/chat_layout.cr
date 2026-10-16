@@ -83,7 +83,9 @@ module ChatLayout
       io << %(<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">\n)
       io << %(<meta name="apple-mobile-web-app-capable" content="yes">\n)
       if u = user
-        io << %(<meta name="current-user-id" content="#{u.id}">\n)
+        # current_user_meta_tags: safe_join без разделителя — обе меты в
+        # одной строке.
+        io << %(<meta name="current-user-id" content="#{u.id}">)
         io << %(<meta name="current-user-name" content=") << HTML.escape(u.name.to_s) << %(">\n)
       end
       io << %(<meta name="action-cable-url" content="/cable">\n)
@@ -468,7 +470,7 @@ module ChatLayout
   def self.presentation_dom(mid : Int64, body_html : String,
                             lexxy_wrapper : Bool = true) : String
     inner = lexxy_wrapper ? %(<div class="lexxy-content">\n) + body_html +
-      (body_html.ends_with?("\n") ? "" : "\n") + %(</div>\n) : body_html
+      (body_html.ends_with?("\n") ? "" : "\n") + %(</div>\n) : body_html + "\n"
     %(<div id="presentation_message_#{mid}" dir="auto" data-reply-target="body" data-messages-target="body">\n) +
       inner + %(</div>\n)
   end
@@ -480,6 +482,10 @@ module ChatLayout
   # MessagesHelper#message_presentation.
   def self.text_presentation(body : String?) : String
     auto_link(render_embeds(body.to_s)
+      # Живой редактор lexxy кладёт в сериализацию кода data-highlight-
+      # language, когда hljs уже загружен (race на моменте постинга);
+      # в базлайне атрибута нет — срезаем для детерминированного паритета.
+      .gsub(/ data-highlight-language="[^"]*"/, "")
       .gsub(%q{<figure class="lexxy-content__table-wrapper">}, "")
       .gsub("</figure>", ""))
   end
@@ -583,7 +589,7 @@ module ChatLayout
     String.build do |io|
       io << %(<span class="mention">)
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
-      io << %(" class="btn avatar" href="/users/#{uid}">)
+      io << %(" class="btn avatar" href="/users/#{uid}" target="_top">)
       io << %(<img src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a> )
       io << HTML.escape(user.name.to_s) << %(</span>)
     end
@@ -599,9 +605,15 @@ module ChatLayout
     rails = envelope["_rails"]?
     data = rails.try &.["data"]?
     if !data && (message = rails.try &.["message"]?)
-      # legacy: message = strict_b64(json-значение) — сам gid в кавычках.
+      # legacy: message = strict_b64(json-значение) — сам gid в кавычках
+      # ИЛИ strict_b64(Marshal.dump(gid)) — Marshal-обёртка (\x04\bI"…)
+      # вокруг ASCII-gid; полный парсер Marshal не нужен, вынимаем gid
+      # из байтов напрямую (сид Verification генерирует именно Marshal).
       inner = decode_base64_lenient(message.to_s)
       data = inner.try &.gsub(/\A"|"$/, "")
+      if data && !data.starts_with?("gid:") && (gid = data[/gid:\/\/[\w:\/.+?=&;-]+/]?)
+        data = gid
+      end
     end
     return nil unless data
     gid = data.to_s
@@ -855,8 +867,10 @@ module ChatLayout
     token = storage_verifier.generate(a.blob_id, purpose: "blob_id")
     ext = File.extname(a.filename).lchop('.')
     format = ext.empty? ? "png" : ext
+    # Rails подписывает сами преобразования (объект, не строка):
+    # {"_rails":{"data":{"format":..,"resize_to_limit":[..]},"pur":"variation"}}
     variation = storage_verifier.generate(
-      %({"format":"#{format}","resize_to_limit":[1200,800]}), purpose: "variation")
+      ActiveSupport::RawJSON.new(%({"format":"#{format}","resize_to_limit":[1200,800]})), purpose: "variation")
     "/rails/active_storage/representations/redirect/#{token}/#{variation}/#{URI.encode_path_segment(a.filename)}"
   end
 
@@ -986,7 +1000,6 @@ module ChatLayout
         io << %(data-web-share-title-value=") << HTML.escape(attachment.filename)
         io << %(" title="Share" aria-label="Share" hidden="">\n)
         io << icon("share.svg", 20, "colorize--black") << "\n</button>\n"
-        io << %(</button>)
       else
         io << %(<button class="btn message__action-btn center full-width" data-action="reply#reply" )
         io << %(title="Reply" aria-label="Reply">\n)
@@ -1125,35 +1138,56 @@ module ChatLayout
     page_url = base_url.empty? ? "/rooms/#{room.id}/messages" : "#{base_url}/rooms/#{room.id}/messages"
     String.build do |io|
       io << %(<div id="message-area" class="message-area" contents="true" data-controller="messages presence drop-target" )
-      io << %(data-action="turbo:before-stream-render@document-&gt;messages#beforeStreamRender keydown.up@document-&gt;messages#editMyLastMessage visibilitychange@document-&gt;presence#visibilityChanged" )
+      io << %(data-action="turbo:before-stream-render@document-&gt;messages#beforeStreamRender keydown.up@document-&gt;messages#editMyLastMessage dragenter-&gt;drop-target#dragenter dragover-&gt;drop-target#dragover drop-&gt;drop-target#drop visibilitychange@document-&gt;presence#visibilityChanged" )
       io << %(data-messages-first-of-day-class="message--first-of-day" data-messages-formatted-class="message--formatted" )
       io << %(data-messages-me-class="message--me" data-messages-mentioned-class="message--mentioned" )
       io << %(data-messages-threaded-class="message--threaded" data-messages-page-url-value="#{HTML.escape(page_url)}">\n)
+      # messages/_template.html.erb — атрибуты div на отдельных строках,
+      # разметка построчно (включая rails-баг «</div class="position-
+      # relative">» — закрывающий тег с классом, воспроизводим буквально).
       io << %(<script type="text/template" data-messages-target="template">\n)
-      io << %(<div class="message message--me $messageClasses$" id="message_$clientMessageId$" )
-      io << %(data-format-message-target="message" data-pending-message="true" )
-      io << %(data-client-message-id="$clientMessageId$" data-user-id="#{user.id}" )
-      io << %(data-message-timestamp="$messageTimestamp$" data-messages-target="message">\n)
+      io << %(<div class="message message--me $messageClasses$"\n)
+      io << %(id="message_$clientMessageId$"\n)
+      io << %(data-format-message-target="message"\n)
+      io << %(data-pending-message="true"\n)
+      io << %(data-client-message-id="$clientMessageId$"\n)
+      io << %(data-user-id="#{user.id}"\n)
+      io << %(data-message-timestamp="$messageTimestamp$"\n)
+      io << %(data-messages-target="message">\n)
       io << %(<div class="message__day-separator"><time class="message__timestamp" datetime="$messageDatetime$" data-local-time-target="date"></time></div>\n)
-      io << %(<figure class="avatar message__avatar"><a title=") << HTML.escape(user.name.to_s)
+      io << %(<figure class="avatar message__avatar">\n)
+      io << %(<a title=") << HTML.escape(user.name.to_s)
       io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{user.id}">)
-      io << %(<img aria-hidden="true" src="/users/#{user.id}/avatar" width="48" height="48"></a></figure>\n)
-      io << %(<div class="message__body"><div class="message__body-content"><div class="message__meta">)
-      io << %(<h3 class="message__heading"><span class="message__author"><strong>)
-      io << HTML.escape(user.name.to_s) << %(</strong></span>)
-      io << %(<span class="message__permalink"><time class="message__timestamp" datetime="$messageDatetime$" data-local-time-target="time"></time></span>)
+      io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(user.id.not_nil!, user.updated_at)}" width="48" height="48"/></a>\n)
+      io << %(</figure>\n)
+      io << %(<div class="message__body">\n)
+      io << %(<div class="message__body-content">\n)
+      io << %(<div class="message__meta">\n)
+      io << %(<h3 class="message__heading">\n)
+      io << %(<span class="message__author"><strong>) << HTML.escape(user.name.to_s) << %(</strong></span>\n)
+      io << %(<span class="message__permalink"><time class="message__timestamp" datetime="$messageDatetime$" data-local-time-target="time"></time></span>\n)
       io << %(</h3>\n)
-      io << %(<div class="message__actions"><div class="position-relative">)
-      io << %(<span class="btn message__action-btn message__options-btn">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("menu-dots-horizontal.svg")}" width="20" height="20">)
-      io << %(<span class="for-screen-reader">Message options</span></span>)
-      io << %(</div></div>\n)
+      io << %(<div class="message__actions">\n)
+      io << %(<div class="position-relative">\n)
+      io << %(<span class="btn message__action-btn message__options-btn">\n)
+      io << %(<img aria-hidden="true" class="colorize--black" src="#{asset("menu-dots-horizontal.svg")}"/>\n)
+      io << %(<span class="for-screen-reader">Message options</span>\n)
+      io << %(</span>\n)
+      io << %(</div class="position-relative">\n)
       io << %(</div>\n)
-      io << %($body$\n</div></div></div>\n)
+      io << %(</div>\n)
+      io << %($body$\n)
+      io << %(</div>\n)
+      io << %(</div>\n)
+      io << %(</div>\n)
       io << %(</script>\n)
-      io << %(<div id="messages_room_#{room.id}" class="messages" data-controller="maintain-scroll refresh-room" )
+      # messages_helper.rb:28 — refresh_room_loaded_at_value: epoch обновления
+      # комнаты; id — dom_id комнаты (rooms_open_<id>), URL — абсолютный.
+      refresh_url = base_url.empty? ? "/rooms/#{room.id}/refresh" : "#{base_url}/rooms/#{room.id}/refresh"
+      io << %(<div id="messages_#{room.dom_id}" class="messages" data-controller="maintain-scroll refresh-room" )
       io << %(data-action="turbo:before-stream-render@document-&gt;maintain-scroll#beforeStreamRender visibilitychange@document-&gt;refresh-room#visibilityChanged online@window-&gt;refresh-room#online" )
-      io << %(data-messages-target="messages" data-refresh-room-url-value="/rooms/#{room.id}/refresh">\n)
+      io << %(data-messages-target="messages" data-refresh-room-loaded-at-value="#{(room.updated_at || Time.utc).to_unix}" )
+      io << %(data-refresh-room-url-value="#{HTML.escape(refresh_url)}">\n)
       io << messages_html
       io << %(</div>\n)
       io << %(<turbo-cable-stream-source channel="RoomMessagesChannel" signed-stream-name="#{signed_name}"></turbo-cable-stream-source>\n)

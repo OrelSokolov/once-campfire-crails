@@ -15,6 +15,12 @@ class Room < ActiveRecord::Base
     Base64.urlsafe_encode(gid, padding: false)
   end
 
+  # dom_id референса: Rooms::Open → rooms_open_<id> (model_name.param_key).
+  def dom_id : String
+    sti = type.to_s.split("::")[-1].underscore
+    "rooms_#{sti}_#{id.not_nil!}"
+  end
+
   # Visible rooms for a user, involvement-filtered (sidebar listing).
   def self.visible_for(user : User)
     Room.where(

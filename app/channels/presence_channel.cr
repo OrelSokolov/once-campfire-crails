@@ -44,10 +44,14 @@ class PresenceChannel < ApplicationCable::Channel
   end
 
   private def mark_present(room_id : Int64) : Nil
+    # Membership#present → connect (Connectable): connections растёт при
+    # живой подписке в TTL (60с), иначе 1; подписка чистит unread_at.
     conn = ActiveRecord::Base.connection
     conn.exec(
-      "UPDATE memberships SET connected_at = ?, connections = connections + 1 WHERE room_id = ? AND user_id = ?",
-      Time.utc, room_id, current_user_id)
+      "UPDATE memberships SET connected_at = ?, unread_at = NULL, " \
+      "connections = CASE WHEN connected_at >= ? THEN connections + 1 ELSE 1 END " \
+      "WHERE room_id = ? AND user_id = ?",
+      Time.utc, Time.utc - 60.seconds, room_id, current_user_id)
   end
 
   private def mark_absent(room_id : Int64) : Nil

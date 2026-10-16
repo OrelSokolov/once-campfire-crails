@@ -93,7 +93,7 @@ class MessagesController < ApplicationController
 
     attachment = upload ? ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]? : nil
     turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
+      io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
       io << ChatLayout.message_dom(message, room, user, attachment, base_url: origin)
       io << %(</template></turbo-stream>\n)
     end
@@ -187,7 +187,7 @@ class MessagesController < ApplicationController
       base_url: origin)
 
     turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
+      io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
       io << ChatLayout.message_dom(message, room, bot, base_url: origin)
       io << %(</template></turbo-stream>\n)
     end

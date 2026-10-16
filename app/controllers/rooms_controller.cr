@@ -47,7 +47,7 @@ class RoomsController < ApplicationController
         ua: request.headers["User-Agent"]?.to_s, origin: origin)
       io << ChatLayout.message_area(room, messages_html, user, base_url: origin)
       # Композер — content_for :footer референса (rooms/show/_composer).
-      io << ChatLayout.page_close(ChatERB.new(room: room).composer.to_s,
+      io << ChatLayout.page_close(ChatERB.new(room: room, origin: origin).composer.to_s,
         ChatLayout.chat_sidebar_frame)
     end
     page = Campfire::PageCache::Page.new(html)

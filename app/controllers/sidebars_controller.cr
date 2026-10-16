@@ -76,19 +76,28 @@ class SidebarsController < ApplicationController
     table
   end
 
-  # Активные не-боты без direct-комнаты с viewer'ом (порядок id).
+  # find_direct_placeholder_users: активные (status=0, включая ботов) не
+  # из direct-комнат viewer'а и не сам viewer, порядок created_at, лимит
+  # 20 минус число исключённых (DIRECT_PLACEHOLDERS).
   private def direct_placeholder_ids(user : User, direct_room_ids) : Array(Int64)
     in_list = direct_room_ids.empty? ? "NULL" : direct_room_ids.map { "?" }.join(", ")
-    ids = ActiveRecord::Base.connection.query_all(
+    args = [user.id.not_nil!] + direct_room_ids.map { |i| i.as(ActiveRecord::Value) }
+    excluded = ActiveRecord::Base.connection.query_all(
+      %(SELECT DISTINCT mm.user_id FROM memberships mm
+        JOIN rooms r ON r.id = mm.room_id
+        WHERE r.name IS NULL AND mm.room_id IN (#{in_list})),
+      args: direct_room_ids.map { |i| i.as(ActiveRecord::Value) },
+      as: {Int64})
+    limit = {20 - excluded.size, 0}.max
+    return [] of Int64 if limit == 0
+    ActiveRecord::Base.connection.query_all(
       %(SELECT u.id FROM users u
-        WHERE u.status = 0 AND u.role != 2 AND u.id != ?
+        WHERE u.status = 0 AND u.id != ?
           AND u.id NOT IN (
             SELECT mm.user_id FROM memberships mm
             JOIN rooms r ON r.id = mm.room_id
             WHERE r.name IS NULL AND mm.room_id IN (#{in_list})
-          ) ORDER BY u.id),
-      args: [user.id.not_nil!] + direct_room_ids.map { |i| i.as(ActiveRecord::Value) },
-      as: {Int64})
-    ids
+          ) ORDER BY u.created_at LIMIT #{limit}),
+      args: args, as: {Int64})
   end
 end

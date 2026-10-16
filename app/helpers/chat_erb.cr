@@ -56,6 +56,17 @@ class ChatERB
     @origin.empty? ? "/" : "#{@origin}/"
   end
 
+  # rich_text_area (ActionText): абсолютные route-URL —
+  # rails_direct_uploads_url и blob-redirect-шаблон.
+  def direct_uploads_url : String
+    @origin.empty? ? "/rails/active_storage/direct_uploads" : "#{@origin}/rails/active_storage/direct_uploads"
+  end
+
+  def blob_url_template : String
+    base = @origin.empty? ? "" : @origin
+    "#{base}/rails/active_storage/blobs/redirect/:signed_id/:filename"
+  end
+
   def involvement : String
     @involvement
   end
