@@ -33,6 +33,12 @@ accounts:
     type: int4
     nullable: "NO"
     default: "0"
+  indexes:
+  - name: index_accounts_on_singleton_guard
+    columns:
+    - singleton_guard
+    unique: true
+    where:
 action_text_rich_texts:
   columns:
   - name: id
@@ -63,6 +69,14 @@ action_text_rich_texts:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_action_text_rich_texts_uniqueness
+    columns:
+    - record_type
+    - record_id
+    - name
+    unique: true
+    where:
 active_storage_attachments:
   columns:
   - name: id
@@ -89,6 +103,20 @@ active_storage_attachments:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_active_storage_attachments_uniqueness
+    columns:
+    - record_type
+    - record_id
+    - name
+    - blob_id
+    unique: true
+    where:
+  - name: index_active_storage_attachments_on_blob_id
+    columns:
+    - blob_id
+    unique: false
+    where:
 active_storage_blobs:
   columns:
   - name: id
@@ -127,6 +155,12 @@ active_storage_blobs:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_active_storage_blobs_on_key
+    columns:
+    - key
+    unique: true
+    where:
 active_storage_variant_records:
   columns:
   - name: id
@@ -141,6 +175,13 @@ active_storage_variant_records:
     type: varchar
     nullable: "NO"
     default:
+  indexes:
+  - name: index_active_storage_variant_records_uniqueness
+    columns:
+    - blob_id
+    - variation_digest
+    unique: true
+    where:
 bans:
   columns:
   - name: id
@@ -163,6 +204,17 @@ bans:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_bans_on_ip_address
+    columns:
+    - ip_address
+    unique: false
+    where:
+  - name: index_bans_on_user_id
+    columns:
+    - user_id
+    unique: false
+    where:
 boosts:
   columns:
   - name: id
@@ -189,6 +241,17 @@ boosts:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_boosts_on_message_id
+    columns:
+    - message_id
+    unique: false
+    where:
+  - name: index_boosts_on_booster_id
+    columns:
+    - booster_id
+    unique: false
+    where:
 memberships:
   columns:
   - name: id
@@ -227,6 +290,29 @@ memberships:
     type: timestamp
     nullable: "YES"
     default:
+  indexes:
+  - name: index_memberships_on_user_id
+    columns:
+    - user_id
+    unique: false
+    where:
+  - name: index_memberships_on_room_id
+    columns:
+    - room_id
+    unique: false
+    where:
+  - name: index_memberships_on_room_id_and_user_id
+    columns:
+    - room_id
+    - user_id
+    unique: true
+    where:
+  - name: index_memberships_on_room_id_and_created_at
+    columns:
+    - room_id
+    - created_at
+    unique: false
+    where:
 messages:
   columns:
   - name: id
@@ -253,6 +339,17 @@ messages:
     type: varchar
     nullable: "NO"
     default:
+  indexes:
+  - name: index_messages_on_room_id
+    columns:
+    - room_id
+    unique: false
+    where:
+  - name: index_messages_on_creator_id
+    columns:
+    - creator_id
+    unique: false
+    where:
 push_subscriptions:
   columns:
   - name: id
@@ -287,6 +384,19 @@ push_subscriptions:
     type: varchar
     nullable: "YES"
     default:
+  indexes:
+  - name: index_push_subscriptions_on_user_id
+    columns:
+    - user_id
+    unique: false
+    where:
+  - name: idx_on_endpoint_p256dh_key_auth_key_7553014576
+    columns:
+    - endpoint
+    - p256dh_key
+    - auth_key
+    unique: false
+    where:
 rooms:
   columns:
   - name: id
@@ -341,6 +451,12 @@ searches:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_searches_on_user_id
+    columns:
+    - user_id
+    unique: false
+    where:
 sessions:
   columns:
   - name: id
@@ -375,6 +491,17 @@ sessions:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_sessions_on_token
+    columns:
+    - token
+    unique: true
+    where:
+  - name: index_sessions_on_user_id
+    columns:
+    - user_id
+    unique: false
+    where:
 users:
   columns:
   - name: id
@@ -417,6 +544,17 @@ users:
     type: int4
     nullable: "NO"
     default: "0"
+  indexes:
+  - name: index_users_on_bot_token
+    columns:
+    - bot_token
+    unique: true
+    where:
+  - name: index_users_on_email_address
+    columns:
+    - email_address
+    unique: true
+    where:
 webhooks:
   columns:
   - name: id
@@ -439,3 +577,9 @@ webhooks:
     type: timestamp
     nullable: "NO"
     default:
+  indexes:
+  - name: index_webhooks_on_user_id
+    columns:
+    - user_id
+    unique: false
+    where:

@@ -4,8 +4,9 @@
 # верификатором с salt "ActiveStorage" (purpose blob_id/variation),
 # авторизация как authorizedBlob (membership комнаты сообщения),
 # servingAttributes (inline для картинок, attachment для остального).
-# Representation-путь отдаёт оригинальный файл: ресайз-варианты не
-# портированы (нет vips/sharp) — сид-картинки и так в разрешении ≤1200.
+# Representation переменчивого типа (картинка) — ленивый вариант через
+# Variation шарда (image_processing, vips) с кешем variants/<key>/…;
+# ошибка обработки/чужой тип — отдаётся оригинальный файл.
 class ActiveStorageController < ApplicationController
   # content-types, которые Rails отдаёт как octet-stream/attachment.
   BINARY_TYPES = {
@@ -34,29 +35,77 @@ class ActiveStorageController < ApplicationController
     blob_record = find_authorized_blob(params["token"].to_s, user)
     return render(plain: "not found", status: 404) unless blob_record
 
+    variation_json : String? = nil
     if representation
-      variation = storage_verifier.verified_any(params["variation"].to_s,
-        purpose: "variation")
-      return render(plain: "not found", status: 404) unless variation
+      unless (verified = storage_verifier.verified_any(params["variation"].to_s, purpose: "variation"))
+        return render(plain: "not found", status: 404)
+      end
+      variation_json = verified.to_s
     end
 
     key = blob_record.key.to_s
-    path = File.join(storage_root, key[0, 2], key[2, 2], key)
+    path = disk_path(key)
+    ctype = blob_record.content_type.to_s
+    if variation_json && (repr = representation_variant(blob_record, variation_json))
+      path, ctype = repr
+    end
     return render(plain: "file missing", status: 404) unless File.exists?(path)
 
-    content_type, disposition = serving_attributes(
-      blob_record.content_type.to_s, params["disposition"]?.to_s)
+    content_type, disposition = serving_attributes(ctype, params["disposition"]?.to_s)
     response.headers["Content-Disposition"] =
       %(#{disposition}; filename="#{blob_record.filename.to_s.gsub('"', "")}")
     response.headers["Cache-Control"] = "private, max-age=300"
     render(html: File.read(path), content_type: content_type)
   end
 
-  # Верификатор с salt "ActiveStorage" (sha1, как rails.js sign по
-  # умолчанию; urlsafe — токены в path).
+  # Путь файла на Disk-сервисе (раскладка CampfireDiskService из
+  # config/application.cr — фан-аут гема).
+  private def disk_path(key : String) : String
+    service = ActiveStorage.service
+    raise "active storage service is not disk-backed" unless service.is_a?(ActiveStorage::DiskService)
+    service.path_for(key)
+  end
+
+  # Ленивая обработка варианта (RepresentationsController#edit гема):
+  # transformations из подписанного variation-токена → Variation шарда
+  # → transform через image_processing; результат кешируется на диске
+  # под variants/<blob.key>/<variation.key> (как Variant#processed).
+  # nil — тип не variable или обработка упала: отдаём оригинал.
+  private def representation_variant(blob : ActiveStorageBlob,
+                                     variation_json : String) : {String, String}?
+    return nil unless ActiveStorage::Blob::VARIABLE_CONTENT_TYPES.includes?(
+      blob.content_type.to_s)
+    transformations = {} of String => ActiveStorage::Variation::Value
+    JSON.parse(variation_json).as_h.each do |name, value|
+      transformations[name] = case raw = value.raw
+        when String then raw
+        when Array  then raw.map { |e| e.as_i.to_i32 }
+        when Int64  then raw.to_i32
+        else
+          return nil
+      end
+    end
+    variation = ActiveStorage::Variation.new(transformations)
+    variant_key = "variants/#{blob.key}/#{variation.key}"
+    service = ActiveStorage.service
+    return nil unless service.is_a?(ActiveStorage::DiskService)
+    unless service.exist?(variant_key)
+      source = service.download(blob.key.to_s)
+      ext = File.extname(blob.filename.to_s).lchop('.')
+      bytes = variation.transform(source, ext.empty? ? "png" : ext)
+      service.upload(variant_key, bytes, content_type: variation.content_type)
+    end
+    {service.path_for(variant_key), variation.content_type}
+  rescue ex : Exception
+    # vips/mini_magick не осилил файл — оригинал (как до подключения
+    # шарда).
+    nil
+  end
+
+  # Верификатор с salt "ActiveStorage" (sha1, strict_b64 с паддингом —
+  # общий с ChatLayout.storage_verifier).
   private def storage_verifier
-    CRails.application.message_verifier("ActiveStorage",
-      digest: :sha1, url_safe: true)
+    ChatLayout.storage_verifier
   end
 
   private def find_authorized_blob(token : String, user : User) : ActiveStorageBlob?
@@ -105,9 +154,5 @@ class ActiveStorageController < ApplicationController
     return {"application/octet-stream", "attachment"} if BINARY_TYPES.includes?(type)
     inline = INLINE_TYPES.includes?(type) && disposition != "attachment"
     {type.presence || "application/octet-stream", inline ? "inline" : "attachment"}
-  end
-
-  private def storage_root : String
-    ENV["CAMPFIRE_STORAGE_ROOT"]? || "storage"
   end
 end

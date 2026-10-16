@@ -1,3 +1,4 @@
+# NOTICE: This lockfile contains some overrides from shard.override.yml
 version: 2.0
 shards:
   action_cable_cr:
@@ -20,6 +21,10 @@ shards:
     git: https://github.com/orelsokolov/active_record.cr.git
     version: 0.1.6
 
+  active_storage_cr:
+    git: https://github.com/orelsokolov/active_storage.cr.git
+    version: 0.1.0+git.commit.3b75b1dbbc159a2ae20bac5c5f702395c7e2d008
+
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
     version: 0.1.3
@@ -40,6 +45,10 @@ shards:
     git: https://github.com/orelsokolov/icr.cr.git
     version: 1.3.0
 
+  image_processing_cr: # Overridden
+    git: https://github.com/orelsokolov/image_processing.cr.git
+    version: 1.14.0+git.commit.0199202fdb12aa1b9cfcbcf8454db64c522f7163
+
   importmap_cr:
     git: https://github.com/orelsokolov/importmap.cr.git
     version: 0.1.0
@@ -47,6 +56,10 @@ shards:
   jbuilder_cr:
     git: https://github.com/orelsokolov/jbuilder.cr.git
     version: 0.1.0+git.commit.620efd6861a1590550f845be103bffccdef18642
+
+  marcel_cr: # Overridden
+    git: https://github.com/orelsokolov/marcel.cr.git
+    version: 2.1.0+git.commit.7c359ea6b31ade6847b971b4ee487ed51ae5c3bb
 
   pg:
     git: https://github.com/will/crystal-pg.git

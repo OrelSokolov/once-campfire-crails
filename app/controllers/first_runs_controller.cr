@@ -10,7 +10,7 @@ class FirstRunsController < ApplicationController
       return redirect_to "/"
     end
     render(html: String.build do |io|
-      io << ChatLayout.page_open("first-run", "Set up Campfire", nil, body_class: "welcome")
+      io << ChatLayout.page_open("first-run", "Set up Campfire", nil, body_class: "signup")
       io << %(<form class="center max-width" action="/first_run" accept-charset="UTF-8" method="post">)
       io << %(<section class="nametag u-relative">)
       io << %(<div class="flex justify-center align-center pad-block">)

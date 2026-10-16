@@ -35,3 +35,6 @@ db/*.sqlite3-wal
 benchmarks/
 
 once-campfire/
+
+# Локальный override шардов (dev): теги не запушены
+/shard.override.yml

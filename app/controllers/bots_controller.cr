@@ -48,7 +48,6 @@ class BotsController < ApplicationController
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
       io << ChatLayout.page_open("bots", "Chat bots", current_user.not_nil!,
-        body_class: "bots",
         nav_html: ChatLayout.nav_back("/account/edit"))
       io << %(<section class="panel panel--wide txt-align-center flex flex-column position-relative" )
       io << %(style="view-transition-name: chat-bots"><div class="flex align-center gap">)
@@ -140,7 +139,7 @@ class BotsController < ApplicationController
   # поля с иконками bot/web, save с check, delete/key-панель.
   private def bot_form(io, bot : User?) : Nil
     io << ChatLayout.page_open("bot-form", bot ? "Edit chat bot" : "New chat bot",
-      current_user.not_nil!, body_class: "bot-form",
+      current_user.not_nil!,
       nav_html: ChatLayout.nav_back("/account/bots"))
     io << %(<section class="panel">)
     action = bot ? "/account/bots/#{bot.id.not_nil!}" : "/account/bots"

@@ -87,28 +87,33 @@ module MessageCreator
       turbo_frame)
   end
 
-  # storeUpload + attachMessage (storage.js/routes.js): файл на диск в
-  # <root>/<key[0,2]>/<key[2,2]>/<key> (тот же путь, из которого файлы
-  # отдаёт ActiveStorageController), blob-строка (md5-checksum в base64,
-  # key = 28 hex) и attachment на Message + touch messages.updated_at.
+  # storeUpload + attachMessage (storage.js/routes.js): файл через
+  # Disk-сервис шарда (Blob.create_and_upload!: файл в
+  # <root>/<key[0,2]>/<key[2,2]>/<key>, md5-checksum в base64, key —
+  # 24 символа [A-Za-z0-9] как в геме), blob-строка + attachment на
+  # Message + touch messages.updated_at.
   private def self.store_attachment(conn, message_id : Int64,
                                     upload : UploadedFile, now : Time) : Nil
-    key = Random::Secure.hex(14)
-    root = ENV["CAMPFIRE_STORAGE_ROOT"]? || "storage"
-    dir = File.join(root, key[0, 2], key[2, 2])
-    Dir.mkdir_p(dir)
-    File.write(File.join(dir, key), upload.bytes)
-
-    checksum = Base64.strict_encode(Digest::MD5.digest(upload.bytes))
     filename = File.basename(upload.filename.presence || "file")
     content_type = upload.content_type.presence || "application/octet-stream"
-    blob_id = conn.exec(
-      "INSERT INTO active_storage_blobs (key, filename, content_type, byte_size, checksum, metadata, service_name, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
-      key, filename, content_type, upload.bytes.size.to_i64, checksum,
-      "{}", "local", now).last_insert_id
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: String.new(upload.bytes), filename: filename, content_type: content_type)
+    # Интерим до порта Analyzer (см. ~/myshards/active_storage.cr/
+    # ANALYZER_REMAINING): width/height картинки в metadata блоба тем же
+    # форматом, что пишет Rails (`{"width":W,"height":H,"analyzed":true}`),
+    # откуда их берёт preview_dimensions рендера. Заменить на
+    # blob.analyze!, когда анализатор появится в шарде.
+    if content_type.starts_with?("image/")
+      if dims = ImageDimensions.of(upload.bytes)
+        conn.exec(
+          "UPDATE active_storage_blobs SET metadata = $1 WHERE id = $2",
+          %({"width":#{dims[0]},"height":#{dims[1]},"analyzed":true}),
+          blob.id.not_nil!)
+      end
+    end
     conn.exec(
       "INSERT INTO active_storage_attachments (name, record_type, record_id, blob_id, created_at) VALUES ('attachment', 'Message', $1, $2, $3)",
-      message_id, blob_id, now)
+      message_id, blob.id.not_nil!, now)
     conn.exec("UPDATE messages SET updated_at = $1 WHERE id = $2", now, message_id)
   end
 

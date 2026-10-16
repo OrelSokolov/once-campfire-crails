@@ -11,7 +11,6 @@ class CustomStylesController < ApplicationController
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
       io << ChatLayout.page_open("custom-styles", "Custom CSS", user,
-        body_class: "custom-styles",
         nav_html: ChatLayout.nav_back("/account/edit"))
       io << %(<section class="panel panel--wide txt-align-center flex flex-column">)
       io << %(<form action="/account/custom_styles" accept-charset="UTF-8" )

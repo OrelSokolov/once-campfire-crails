@@ -43,10 +43,12 @@ class RoomsController < ApplicationController
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     html = String.build do |io|
       io << ChatLayout.head(room.name.to_s, user, room.id, chat: true)
-      io << ChatLayout.body_open(room, user)
+      io << ChatLayout.body_open(room, user,
+        ua: request.headers["User-Agent"]?.to_s, origin: origin)
       io << ChatLayout.message_area(room, messages_html, user, base_url: origin)
-      io << ChatLayout.composer(room)
-      io << ChatLayout.body_close(chat: true)
+      # Композер — content_for :footer референса (rooms/show/_composer).
+      io << ChatLayout.page_close(ChatERB.new(room: room).composer.to_s,
+        ChatLayout.chat_sidebar_frame)
     end
     page = Campfire::PageCache::Page.new(html)
     # Кэшируем только если БД не менялась за время рендера и ответ чист
@@ -69,9 +71,49 @@ class RoomsController < ApplicationController
     render(plain: "", status: 200)
   end
 
+  # GET /rooms/:id/involvement — содержимое turbo-frame колокольчика
+  # (rooms/involvements/show.html.erb: button_to PUT со следующим
+  # состоянием вовлечённости).
+  def involvement
+    room = Room.find?(params["id"].to_s.to_i64)
+    user = current_user
+    unless room && user
+      response.status = :not_found
+      return render(plain: "Room not found")
+    end
+    membership = Membership.where(
+      "room_id = ? AND user_id = ?", room.id.not_nil!, user.id.not_nil!).take
+    return render(plain: "Room not found", status: :not_found) unless membership
+    involvement = membership.involvement.to_s.presence || "mentions"
+    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    render(html: ChatERB.new(room: room, involvement: involvement,
+      origin: origin).involvement_show.to_s)
+  end
+
+  # PUT /rooms/:id/involvement — смена вовлечённости (цикл
+  # RoomsHelper#next_involvement_for), редирект на show фрейма.
+  def update_involvement
+    room = Room.find?(params["id"].to_s.to_i64)
+    user = current_user
+    unless room && user
+      response.status = :not_found
+      return render(plain: "Room not found")
+    end
+    membership = Membership.where(
+      "room_id = ? AND user_id = ?", room.id.not_nil!, user.id.not_nil!).take
+    return render(plain: "Room not found", status: :not_found) unless membership
+    value = params["involvement"].to_s
+    if %w[mentions everything nothing invisible].includes?(value)
+      membership.update({"involvement" => value})
+    end
+    redirect_to "/rooms/#{room.id}/involvement"
+  end
+
   # GET /rooms/:kind/new — форма новой комнаты (room_form.eta: имя,
   # список доступа с аватарами/свитчами, фильтр, save с иконкой,
-  # delete-панель; directs — direct_new/direct_edit).
+  # delete-панель; directs — direct_new/direct_edit). Роуты вида
+  # /rooms/{opens,closeds,directs}/new даёт resources в routes.cr;
+  # kind приходит из defaults или сегмента :kind.
   def new
     user = current_user.not_nil!
     kind = params["kind"].to_s
@@ -80,10 +122,10 @@ class RoomsController < ApplicationController
     render(html: String.build { |io| room_form(io, nil, kind, user) })
   end
 
-  # GET /rooms/:room_id/edit — настройки комнаты (ссылка "Settings for
-  # this room"): opens/closeds — та же форма с текущим именем,
-  # _method=patch; directs — отдельная страница (directs/edit.html.erb:
-  # аватары участников + кнопка Delete Ping).
+  # GET /rooms/{opens,closeds}/:room_id/edit и /rooms/directs/:room_id/edit —
+  # настройки комнаты (ссылка "Settings for this room"): opens/closeds — та
+  # же форма с текущим именем, _method=patch; directs — отдельная страница
+  # (directs/edit.html.erb: аватары участников + кнопка Delete Ping).
   def edit
     user = current_user.not_nil!
     room = Room.find?(params["room_id"].to_s.to_i64)
@@ -97,7 +139,7 @@ class RoomsController < ApplicationController
     end
   end
 
-  # POST /rooms/:kind — создание (registerRoomForms): opens дают
+  # POST /rooms/{opens,closeds} — создание (registerRoomForms): opens дают
   # membership всем активным юзерам; closeds — выбранным user_ids[];
   # broadcast prepend ссылки в shared_rooms стрима "rooms"; redirect
   # на /rooms/<id>.
@@ -130,7 +172,7 @@ class RoomsController < ApplicationController
     redirect_to "/rooms/#{room.id}"
   end
 
-  # PATCH /rooms/:room_id/edit — переименование + sync memberships по
+  # PATCH /rooms/{opens,closeds}/:room_id — переименование + sync memberships по
   # user_ids[] (closeds), broadcast prepend с тем же id — Turbo
   # дедуплицирует и перемещает ссылку.
   def update

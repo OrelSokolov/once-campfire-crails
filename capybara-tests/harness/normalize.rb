@@ -27,6 +27,11 @@ module Parity
       # mixed alnum; keep short/numeric tokens (message_id, message_body,
       # message_933434505) intact.
       out.gsub!(%r{(lexxy-link-url-)[a-z0-9]+}) { Regexp.last_match(1) + "__RAND__" }
+      # Per-run client ids of messages posted during the run (each target's
+      # composer generates its own random id at POST time) — can never match
+      # across targets. Seeded messages carry fixed ids equal on both sides,
+      # so masking them too changes nothing.
+      out.gsub!(%r{(data-client-message-id=")[a-z0-9-]{8,}(")}) { Regexp.last_match(1) + "__CID__" + Regexp.last_match(2) }
       out.gsub!(%r{((?:edit_|boosting_|new_boost_|boosts_)?message_)([a-z0-9]+(?:-[a-z0-9]+)*)}) do
         prefix, token = Regexp.last_match(1), Regexp.last_match(2)
         token.length >= 6 && token.match?(/[a-z]/) ? prefix + "__CID__" : Regexp.last_match(0)

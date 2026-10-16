@@ -19,7 +19,7 @@ class JoinsController < ApplicationController
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     render(html: String.build do |io|
       io << ChatLayout.page_open("join", "Join #{account.name}", nil,
-        body_class: "welcome",
+        body_class: "signup",
         nav_html: %(<div class="flex-item-justify-end"><a href="/session/new" class="btn flex-item-justify-end">) +
           ChatLayout.icon("login-keys.svg") +
           %(<span class="for-screen-reader">Sign in</span></a></div>))

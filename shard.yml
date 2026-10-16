@@ -11,6 +11,9 @@ dependencies:
   active_record_cr:
     github: OrelSokolov/active_record.cr
     version: ~> 0.1.6
+  active_storage_cr:
+    github: OrelSokolov/active_storage.cr
+    branch: master # TODO: запушить тег v0.1.1 (Iteration 8: transformers) и вернуться на version: ~>
   active_support_cr:
     github: OrelSokolov/active_support.cr
     version: ~> 0.1.2

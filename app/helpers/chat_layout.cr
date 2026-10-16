@@ -100,7 +100,7 @@ module ChatLayout
       io << STYLESHEETS << "\n"
       # custom_styles_tag — до importmap (layouts/application.html.erb:30-32)
       if account && (styles = account.custom_styles.to_s) != ""
-        io << "<style>\n" << styles << "\n</style>\n"
+        io << %(<style data-turbo-track="reload">) << styles << %(</style>\n)
       end
       io << IMPORTMAP << "\n"
       if chat && room_id
@@ -116,15 +116,17 @@ module ChatLayout
   # комнаты (btn--reversed room--current), кнопка настроек с иконкой
   # menu-dots-horizontal, колокольчик вовлечённости. Direct-комнаты
   # (name NULL): room_display_name — имена остальных участников.
-  def self.body_open(room : Room? = nil, viewer : User? = nil) : String
+  def self.body_open(room : Room? = nil, viewer : User? = nil,
+                     ua : String = "", origin : String = "") : String
     String.build do |io|
-      io << %(<body class="sidebar" data-controller="local-time lightbox">\n)
+      cls = viewer && viewer.role == 1 ? "sidebar admin" : "sidebar"
+      io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
       io << %(<a href="#main-content" class="skip-navigation btn">Skip to main content</a>\n)
       io << %(<nav id="nav">\n)
       if r = room
         noun = "room"
-        io << %(<span class="btn btn--reversed btn--faux room--current">)
-        io << %(<h1 class="room__contents txt-medium overflow-ellipsis">)
+        io << %(<span class="btn btn--reversed btn--faux room--current">\n)
+        io << %(<h1 class="room__contents txt-medium overflow-ellipsis">\n)
         if r.name.nil?
           noun = "Ping"
           members = User.where(
@@ -132,43 +134,47 @@ module ChatLayout
             .order("id").to_a
             .reject { |m| viewer && m.id == viewer.id }
           names = members.map(&.name.to_s)
-          io << %(<span class="for-screen-reader">Ping with </span>)
-          io << HTML.escape(sentence(names))
+          io << %(<span class="for-screen-reader">Ping with</span>\n)
+          io << HTML.escape(sentence(names)) << "\n"
         else
-          io << HTML.escape(r.name.to_s)
+          io << HTML.escape(r.name.to_s) << "\n"
         end
-        io << %(</h1></span>\n)
-        io << %(<a class="btn" style="view-transition-name: edit-room-#{r.id}" )
-        io << %(data-room-id="#{r.id}" href="/rooms/#{r.id}/edit">)
-        io << %(<img aria-hidden="true" src="#{asset("menu-dots-horizontal.svg")}" width="20" height="20">)
-        io << %(<span class="for-screen-reader">Settings for this #{noun}</span></a>\n)
-        io << involvement_bell(r, viewer)
+        io << %(</h1>\n</span>\n)
+        io << %(<a class="btn" data-room-id="#{r.id}" href="#{room_edit_path(r)}" )
+        io << %(style="view-transition-name: edit-room-#{r.id}">\n)
+        io << %(<img aria-hidden="true" height="20" src="#{asset("menu-dots-horizontal.svg")}" width="20">\n)
+        io << %(<span class="for-screen-reader">Settings for this #{noun}</span>\n</a>\n)
+        io << involvement_bell(r, viewer, ua: ua, origin: origin)
       end
       io << "</nav>\n"
       io << %(<main id="main-content">\n)
     end
   end
 
-  # Колокольчик вовлечённости (rooms/involvements/_bell.html.erb +
-  # Rooms::InvolvementsHelper#button_to_change_involvement) — статическое
-  # состояние из memberships.involvement текущего юзера (роута
-  # room_involvement в приложении нет, клик не циклит состояния).
-  private def self.involvement_bell(room : Room, viewer : User?) : String
+  # edit_room_path(room) референса: STI-полиморфный сегмент роута
+  # (rooms/opens|directs|closeds). Порт пишет и короткий ('Open'), и
+  # полный ('Rooms::Open') type — сид полный, создание через порт — короткий.
+  def self.room_edit_path(room : Room) : String
+    seg = case room.type.to_s.split("::").last?.to_s
+          when "Direct" then "directs"
+          when "Closed" then "closeds"
+          else "opens"
+          end
+    "/rooms/#{seg}/#{room.id}/edit"
+  end
+
+  # Колокольчик вовлечённости — rooms/involvements/_bell.html.erb
+  # (ChatERB): turbo-frame /rooms/N/involvement + notifications-контроллер
+  # + pwa-диалоги инструкций (UA-зависимые партиалы).
+  private def self.involvement_bell(room : Room, viewer : User?,
+                                    ua : String = "", origin : String = "") : String
     return "" unless viewer
     membership = Membership.where(
       "room_id = ? AND user_id = ?", room.id.not_nil!, viewer.id.not_nil!).take
     return "" unless membership
     involvement = membership.involvement.to_s.presence || "mentions"
-    human = INVOLVEMENT_LABELS[involvement]? || involvement
-    rid = room.id.not_nil!
-    String.build do |io|
-      io << %(<span>\n<span class="button_to_change_notifying">\n)
-      io << %(<turbo-frame id="involvement_room_#{rid}">)
-      io << %(<button class="btn #{involvement}" role="checkbox" aria-checked="true" tabindex="0">)
-      io << %(<img src="#{asset("notification-bell-#{involvement}.svg")}" aria-hidden="true" width="20" height="20">)
-      io << %(<span class="for-screen-reader" id="involvement_label_room_#{rid}">) << human << %(</span>)
-      io << %(</button>\n</turbo-frame>\n</span>\n</span>\n)
-    end
+    ChatERB.new(room: room, involvement: involvement, origin: origin,
+      ua: ua).bell.to_s
   end
 
   INVOLVEMENT_LABELS = {
@@ -205,12 +211,14 @@ module ChatLayout
       %(<span class="for-screen-reader">Go Back</span></a></div>)
   end
 
-  # head + <body class=screen(+admin)> + nav + main — layout_start для
-  # form/account/profile/bots/... экранов.
+  # head + <body class=body_class(+admin)> + nav + main — layout_start для
+  # form/account/profile/bots/... экранов. @body_class референса задают
+  # только отдельные страницы (rooms/show: sidebar, searches: sidebar
+  # searches, signup-экраны: signup) — остальных классов нет.
   def self.page_open(screen : String, title : String, user : User?,
                      body_class : String? = nil, nav_html : String = "",
                      head_extra : String = "") : String
-    cls = (body_class || screen).to_s
+    cls = body_class.to_s
     cls += " admin" if user && user.role == 1
     String.build do |io|
       io << head(title, user, nil, chat: false, head_extra: head_extra)
@@ -221,17 +229,10 @@ module ChatLayout
     end
   end
 
-  # footer(+composer/version) + aside + app-logo — layout_end.eta.
+  # footer(+composer/version) + aside + app-logo —
+  # layouts/_body_close.html.erb (ChatERB).
   def self.page_close(footer_html : String = "", sidebar_html : String = "") : String
-    String.build do |io|
-      io << %(<footer id="footer">) << footer_html << %(</footer></main>\n)
-      io << %(<aside id="sidebar" data-controller="toggle-class" data-toggle-class-toggle-class="open">)
-      io << sidebar_html << "</aside>\n"
-      io << lightbox_dialog
-      io << %(<a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">\n)
-      io << %(<img alt="Campfire logo" src="#{asset("campfire-icon.png")}" width="256" height="216">\n</a>\n)
-      io << %(</body>\n</html>\n)
-    end
+    ChatERB.new(footer: footer_html, sidebar: sidebar_html).body_close.to_s
   end
 
   # Кнопка-иконка QR (transfer_link.eta/invite.eta: lightbox + qr-code.svg).
@@ -356,24 +357,12 @@ module ChatLayout
     end
   end
 
-  # footer + sidebar (turbo-frame user_sidebar) + app-logo.
-  def self.body_close(chat : Bool) : String
-    String.build do |io|
-      io << %(<footer id="footer">)
-      io << %(<div class="txt-align-center center margin-block-double txt-subtle">Campfire&trade;</div>)
-      io << "</footer></main>\n"
-      io << %(<aside id="sidebar" data-controller="toggle-class" data-toggle-class-toggle-class="open">)
-      if chat
-        io << %(<turbo-frame id="user_sidebar" src="/users/me/sidebar" data-turbo-permanent="true" target="_top" )
-        io << %(data-controller="rooms-list read-rooms turbo-frame" data-rooms-list-unread-class="unread" )
-        io << %(data-action="presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload"></turbo-frame>)
-      end
-      io << "</aside>\n"
-      io << lightbox_dialog
-      io << %(<a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">\n)
-      io << %(<img alt="Campfire logo" src="#{asset("campfire-icon.png")}" width="256" height="216">\n</a>\n)
-      io << "</body>\n</html>\n"
-    end
+  # footer + sidebar (turbo-frame user_sidebar) + app-logo —
+  # layouts/_body_close.html.erb (было body_close/chat-ветка).
+  def self.chat_sidebar_frame : String
+    %(<turbo-frame id="user_sidebar" src="/users/me/sidebar" data-turbo-permanent="true" target="_top" ) +
+      %(data-controller="rooms-list read-rooms turbo-frame" data-rooms-list-unread-class="unread" ) +
+      %(data-action="presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload"></turbo-frame>)
   end
 
   # Быстрые реакции (EmojiHelper::REACTIONS референса) — форма на каждую.
@@ -486,9 +475,13 @@ module ChatLayout
 
   # Текстовая presentation сообщения: рендер action-text-attachment
   # (OG-embed из content-атрибута, mention по sgid) + autolink URL/email
-  # (rails_autolink). См. MessagesHelper#message_presentation.
+  # (rails_autolink) + снятие figure-обёртки таблиц (в DOM референса
+  # таблицы идут без lexxy-content__table-wrapper). См.
+  # MessagesHelper#message_presentation.
   def self.text_presentation(body : String?) : String
-    auto_link(render_embeds(body.to_s))
+    auto_link(render_embeds(body.to_s)
+      .gsub(%q{<figure class="lexxy-content__table-wrapper">}, "")
+      .gsub("</figure>", ""))
   end
 
   # <action-text-attachment> → итоговая разметка:
@@ -596,13 +589,20 @@ module ChatLayout
     end
   end
 
-  # sgid → User: конверт _rails (data — gid-URL, возможно base64, у
-  # attachable-sgid с query «?expires_in»).
+  # sgid → User: конверт _rails. attachable-sgid бывает в двух формах
+  # (AS MessageVerifier): новая — {"data": <gid|b64>}, legacy (сид) —
+  # {"message": <strict_b64 полезной нагрузки>} с exp/pur рядом.
   private def self.mention_user(sgid : String) : User?
     sep = sgid.rindex("--") || return nil
     json = decode_base64_lenient(sgid[0...sep]) || return nil
     envelope = JSON.parse(json)
-    data = envelope["_rails"]?.try &.["data"]?
+    rails = envelope["_rails"]?
+    data = rails.try &.["data"]?
+    if !data && (message = rails.try &.["message"]?)
+      # legacy: message = strict_b64(json-значение) — сам gid в кавычках.
+      inner = decode_base64_lenient(message.to_s)
+      data = inner.try &.gsub(/\A"|"$/, "")
+    end
     return nil unless data
     gid = data.to_s
     gid = decode_base64_lenient(gid) || return nil unless gid.starts_with?("gid:")
@@ -793,6 +793,11 @@ module ChatLayout
     property filename : String
     property content_type : String
     property key : String
+    # width/height из metadata блоба (ImageAnalyzer Rails): Int64 как в
+    # JSON-числе, Float64 — если metadata хранит float; nil — картинки
+    # без анализа (metadata "{}") и все не-картинки.
+    property width : Int64 | Float64 | Nil = nil
+    property height : Int64 | Float64 | Nil = nil
 
     def initialize(@blob_id, @filename, @content_type, @key)
     end
@@ -812,18 +817,30 @@ module ChatLayout
     return table if message_ids.empty?
     placeholders = message_ids.map { "?" }.join(", ")
     rows = ActiveRecord::Base.connection.query_all(
-      %(SELECT a.record_id, b.id, b.filename, b.content_type, b.key
+      %(SELECT a.record_id, b.id, b.filename, b.content_type, b.key, b.metadata
         FROM active_storage_attachments a
         JOIN active_storage_blobs b ON b.id = a.blob_id
         WHERE a.record_type = 'Message' AND a.record_id IN (#{placeholders})),
-      args: message_ids, as: {Int64, Int64, String, String, String})
-    rows.each { |(mid, bid, filename, ct, key)| table[mid] = Attachment.new(bid, filename, ct, key) }
+      args: message_ids, as: {Int64, Int64, String, String, String, String?})
+    rows.each do |(mid, bid, filename, ct, key, metadata)|
+      attachment = Attachment.new(bid, filename, ct, key)
+      if meta = metadata.presence
+        json = JSON.parse(meta)
+        attachment.width = json["width"]?.try(&.as_i64?) || json["width"]?.try(&.as_f?)
+        attachment.height = json["height"]?.try(&.as_i64?) || json["height"]?.try(&.as_f?)
+      end
+      table[mid] = attachment
+    end
     table
   end
 
   def self.storage_verifier
+    # ActiveStorage.verifier референса: MessageVerifier SHA1, strict_b64
+    # с паддингом ('…fQ==--<sha40>'); urlsafe-nopad здесь расходится с
+    # Rails-подписью blob_id (avatar/sgid — другие верификаторы, их не
+    # трогаем).
     CRails.application.message_verifier("ActiveStorage",
-      digest: :sha1, url_safe: true)
+      digest: :sha1, url_safe: false)
   end
 
   # /rails/active_storage/blobs/redirect/<signed blob_id>/<filename>
@@ -849,13 +866,75 @@ module ChatLayout
     url = blob_url(a)
     if a.image?
       repr = representation_url(a)
-      %(<a href="#{url}" data-lightbox-target="image" data-action="lightbox#open" ) +
-        %(data-lightbox-url-value="#{url}?disposition=attachment">) +
-        %(<img class="message__attachment" src="#{repr}" alt="#{HTML.escape(a.filename)}" loading="lazy"></a>)
+      img = if (dims = preview_dimensions(a))
+              %(<img width="#{number(dims[0])}" height="#{number(dims[1])}" ) +
+                %(class="message__attachment" loading="lazy" src="#{repr}" />)
+            else
+              %(<img class="message__attachment" loading="lazy" src="#{repr}" />)
+            end
+      content = %(<a class="flex" data-lightbox-target="image" data-action="lightbox#open" ) +
+        %(data-lightbox-url-value="#{url}?disposition=attachment" href="#{url}">) +
+        img + %(</a>)
+      inline_media_dimension_constraints(a, content)
     elsif a.video?
-      %(<video src="#{url}" poster="#{representation_url(a)}" controls class="message__attachment"></video>)
+      content = %(<video src="#{url}" poster="#{representation_url(a)}" ) +
+        %(controls="controls" preload="none" width="100%" height="100%" ) +
+        %(class="message__attachment"></video>)
+      inline_media_dimension_constraints(a, content)
     else
       %(<a href="#{url}?disposition=attachment">#{HTML.escape(a.filename)}</a>)
+    end
+  end
+
+  # Message::THUMBNAIL_MAX_WIDTH/HEIGHT (attachment.rb референса).
+  THUMBNAIL_MAX_WIDTH  = 1200.0
+  THUMBNAIL_MAX_HEIGHT = 800.0
+
+  # preview_dimensions: исходные размеры из metadata, уменьшенные до
+  # лимита превью (масштаб — min по двум осям). Целые остаются целыми
+  # (Rails делит Integer/2 без дробной части), уменьшенные — float.
+  private def self.preview_dimensions(a : Attachment) : {Int64 | Float64, Int64 | Float64}?
+    w = a.width
+    h = a.height
+    return nil unless w && h
+    wf = w.to_f
+    hf = h.to_f
+    return nil unless wf > 0 && hf > 0
+    if wf <= THUMBNAIL_MAX_WIDTH && hf <= THUMBNAIL_MAX_HEIGHT
+      {w, h}
+    else
+      scale = {THUMBNAIL_MAX_WIDTH / wf, THUMBNAIL_MAX_HEIGHT / hf}.min
+      {wf * scale, hf * scale}
+    end
+  end
+
+  # inline_media_dimension_constraints: блок media в div-обёртке с
+  # половинной шириной и aspect-ratio; без metadata — обёртка без
+  # ограничений (картинка рисуется натуральным размером, поэтому
+  # обёртка обязательна и там).
+  private def self.inline_media_dimension_constraints(a : Attachment, content : String) : String
+    if (dims = preview_dimensions(a))
+      w, h = dims
+      %(<div class="max-inline-size center flex overflow-clip" ) +
+        %(style="width: #{half(w)}px; aspect-ratio: #{(w.to_f / h.to_f).to_s};">) +
+        content + %(</div>)
+    else
+      %(<div class="max-inline-size center overflow-clip">) + content + %(</div>)
+    end
+  end
+
+  # Число как в Ruby: Integer — to_s, Float — to_s (кратчайшая
+  # round-trip форма с ".0" у целых).
+  private def self.number(v : Int64 | Float64) : String
+    v.to_s
+  end
+
+  # width / 2 из inline_media_dimension_constraints: для Integer —
+  # целочисленное деление, для Float — float.
+  private def self.half(v : Int64 | Float64) : String
+    case v
+    in Int64   then (v // 2).to_s
+    in Float64 then (v / 2).to_s
     end
   end
 
@@ -1035,55 +1114,6 @@ module ChatLayout
     String.build { |io| messages_to(io, messages, epoch, room, base_url) }
   end
 
-  # composer.eta / rooms/show/_composer.html.erb — форма отправки
-  # сообщения (lexxy-editor). Иконки: search (контекст-кнопка),
-  # messages-outlined (хинт слева от поля), attachment, text-options,
-  # arrow-up (send).
-  def self.composer(room : Room) : String
-    String.build do |io|
-      io << %(<div class="composer flex align-end gap position-relative" data-controller="typing-notifications" )
-      io << %(data-typing-notifications-active-class="typing-indicator--active">\n)
-      io << %(<a class="btn flex-item-no-shrink margin-block-end composer__context-btn" style="view-transition-name: input-switcher" href="/searches">)
-      io << %(<img aria-hidden="true" src="#{asset("search.svg")}" width="20" height="20">)
-      io << %(<span class="for-screen-reader">Search</span></a>\n)
-      io << %(<turbo-frame id="composer-frame">\n)
-      io << %(<form id="composer" class="margin-block flex-item-grow contain" data-controller="composer drop-target" )
-      io << %(data-action="dragenter-&gt;drop-target#dragenter dragover-&gt;drop-target#dragover drop-&gt;drop-target#drop )
-      io << %(typing-notifications#stop paste-&gt;composer#pasteFiles turbo:submit-end-&gt;composer#submitEnd" )
-      io << %(data-composer-messages-outlet="#message-area" data-composer-toolbar-class="composer--rich-text" )
-      io << %(data-composer-room-id-value="#{room.id}" )
-      io << %(action="/rooms/#{room.id}/messages" accept-charset="UTF-8" method="post">\n)
-      io << %(<fieldset data-composer-target="fields" contents>\n<div class="flex flex-column">\n)
-      io << %(<div class="composer__filelist flex flex--align-center gap flex-wrap" data-composer-target="fileList"></div>\n)
-      io << %(<div class="flex composer__input input input--actor fill-white min-width" style="--input-border-radius: 1.3rem">\n)
-      io << %(<div class="flex align-end gap full-width">\n)
-      io << %(<img aria-hidden="true" class="composer__input-hint colorize--black" style="view-transition-name: input-btn;" )
-      io << %(src="#{asset("messages-outlined.svg")}" width="22" height="22">\n)
-      io << %(<div class="flex flex-column flex-item-grow min-width gap">\n)
-      io << %(<lexxy-editor rows="1" class="input lexxy-content" style="order: -1" aria-multiline="true" aria-label="Write a message" )
-      io << %(permitted-attachment-types="application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed" )
-      io << %(data-action="lexxy:change-&gt;typing-notifications#start keydown-&gt;composer#submitByKeyboard:capture lexxy:change-&gt;composer#saveDraft" )
-      io << %(data-composer-target="text" id="message_body" name="message[body]">)
-      io << %(<lexxy-prompt trigger="@" name="mention" src="/autocompletable/users?room_id=#{room.id}" remote-filtering="true" empty-results="No matches"></lexxy-prompt>)
-      io << %(</lexxy-editor>\n</div>\n)
-      io << %(<label class="btn btn--borderless txt-small flex-item-no-shrink composer__attachment-btn input--file">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("attachment.svg")}" width="22" height="22">)
-      io << %(<input type="file" data-action="composer#filePicked" multiple>)
-      io << %(<span class="for-screen-reader">Attach a file</span></label>\n)
-      io << %(<button class="btn btn--borderless txt-small flex-item-no-shrink composer__rich-text-btn" type="button" data-action="composer#toggleToolbar">)
-      io << %(<img class="colorize--black" aria-hidden="true" src="#{asset("text-options.svg")}" width="20" height="20">)
-      io << %(<span class="for-screen-reader">Rich text</span></button>\n)
-      io << %(<button name="send" type="submit" data-action="composer#submit" class="btn btn--reversed flex-item-no-shrink txt-small">)
-      io << %(<img aria-hidden="true" src="#{asset("arrow-up.svg")}" width="20" height="20">)
-      io << %(<span class="for-screen-reader">Send Message</span></button>\n)
-      io << %(</div>\n</div>\n</div>\n</fieldset>\n)
-      io << %(<div class="typing-indicator gap txt-small align-center flex-inline" data-typing-notifications-target="indicator">)
-      io << %(<div class="typing-indicator__author spinner" data-typing-notifications-target="author"></div></div>\n)
-      io << %(<input data-composer-target="clientid" type="hidden" name="message[client_message_id]" id="message_client_message_id">\n)
-      io << %(</form>\n</turbo-frame>\n</div>\n)
-    end
-  end
-
   # message-area целиком (optimistic-шаблон + .messages + стрим-источник
   # + composer) — room.eta + optimistic.eta. Optimistic-template нужен
   # messages-контроллеру как target "template".
@@ -1127,7 +1157,8 @@ module ChatLayout
       io << messages_html
       io << %(</div>\n)
       io << %(<turbo-cable-stream-source channel="RoomMessagesChannel" signed-stream-name="#{signed_name}"></turbo-cable-stream-source>\n)
-      io << %(<button class="message-area__return-to-latest btn" data-action="messages#returnToLatest" data-messages-target="latest" hidden="hidden">)
+      io << %(<button class="message-area__return-to-latest btn" data-action="messages#returnToLatest" data-messages-target="latest" hidden>)
+      io << icon("arrow-down.svg", 20)
       io << %(<span class="for-screen-reader">Jump to newest message</span></button>\n)
       io << %(</div>\n)
     end
