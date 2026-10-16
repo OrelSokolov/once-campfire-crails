@@ -1,0 +1,111 @@
+bad-resume bp armed (python-filtered)
+exec:args entry bp armed (python-filtered)
+raise-log bp armed
+close-log bps armed on PLT from start
+open-arm bp armed
+wal-entry bp armed (libsqlite3 base 0x7ffff7e0f000)
+=====PY_BAD_EXEC_ENTRY rsp=0x7fffe8df5210 retaddr=0x7fffe8df52c0 rsi=0x1=====
+--- runtime holders of entry value 0x5555557b9af0:
+--- fiber-stack holders of entry value:
+--- ro-region holders of entry value:
+--- ucontext probe: r8=0x7bd388fe971e3a91 r9=0xf7a711fd2e
+--- shm-region holders of entry value:
+  (2 shm regions scanned)
+--- last sqlite3_close calls before corruption:
+  (none logged)
+--- last __crystal_raise calls (3 total):
+  raise via __crystal_raise <- raise_without_backtrace <- raise <- raise <- unexpected_char
+  raise via __crystal_raise <- raise_without_backtrace <- raise <- raise <- unexpected_char
+  raise via __crystal_raise <- raise_without_backtrace <- raise <- raise <- unexpected_char
+  [rdi]=0x7ffff7085920
+  [rdi+0x78]=0x12   <-- xShmBarrier slot
+  [rax]=0x7fffef3febb0
+  [rax+0x78]=0x0   <-- xShmBarrier slot
+  sqlite3_file @ rdi:
+    +0x00: 0x00007ffff7085920
+    +0x08: 0x00007fffef3dbc60
+    +0x10: 0x00007ffff5546270
+    +0x18: 0x00007fffef3c7ac0
+    +0x20: 0x00007fffef3dc7d0
+    +0x28: 0x00007fffed9d9e40
+    +0x30: 0x00007fffef3f3310
+    +0x38: 0x00007fffef3a0700
+    +0x40: 0x00007ffff55f5d80
+    +0x48: 0x00007fffe8f7a5a0
+    +0x50: 0x00007fffef3feb00
+    +0x58: 0x00007fffed9223c0
+    +0x60: 0x00007ffff703e9c0
+    +0x68: 0x00007ffff70ba0e0
+    +0x70: 0x0000000000000001
+    +0x78: 0x0000000000000012
+    +0x80: 0x00007ffff5539330
+    +0x88: 0x0000000000000001
+    +0x90: 0x0000000000000079
+    +0x98: 0x00007ffff54b0280
+    +0xa0: 0x00007ffff7079930
+    +0xa8: 0x0000000000000001
+    +0xb0: 0x0000000000000019
+    +0xb8: 0x0000000000000001
+    +0xc0: 0x0000000000000001
+    +0xc8: 0x0000000000000001
+    +0xd0: 0x0000000000000001
+    +0xd8: 0x0000000000000001
+    +0xe0: 0x0000000000000001
+    +0xe8: 0x0000000000000001
+    +0xf0: 0x0000000000000001
+    +0xf8: 0x0000000000000001
+  --- holders of pFile 0x555555a93f48:
+  --- holders of pMethods 0x7ffff7085920:
+    at 0x555555a93f48 ( rw-p)
+    at 0x7fffed9870d0 ( rw-p)
+    at 0x7fffed9907d0 ( rw-p)
+qwords rsp-0x100..rsp+0x80:
+  0x7fffe8df5110: 0x0000000000000001
+  0x7fffe8df5118: 0x0000000000000001
+  0x7fffe8df5120: 0x00007ffff703daf0
+  0x7fffe8df5128: 0x00007fffe8df5170
+  0x7fffe8df5130: 0x00007ffff707d750
+  0x7fffe8df5138: 0x0000555555695af1 <MAINBIN text+0x141af1>
+  0x7fffe8df5140: 0x0000000000000000
+  0x7fffe8df5148: 0x00007fffef3c7b40
+  0x7fffe8df5150: 0x00007fffe8df5168
+  0x7fffe8df5158: 0x00005555557162df <MAINBIN text+0x1c22df>
+  0x7fffe8df5160: 0x00007ffff7070080
+  0x7fffe8df5168: 0x000000003ce411b2
+  0x7fffe8df5170: 0x0000000000000000
+  0x7fffe8df5178: 0x00007ffff709d870
+  0x7fffe8df5180: 0x00007ffff5530c4c
+  0x7fffe8df5188: 0x00007ffff703daf0
+  0x7fffe8df5190: 0x00007ffff707d780
+  0x7fffe8df5198: 0x00007ffff70700c0
+  0x7fffe8df51a0: 0x0000000000000002
+  0x7fffe8df51a8: 0x0000000000000003
+  0x7fffe8df51b0: 0x0000000000000029
+  0x7fffe8df51b8: 0x0000555555716581 <MAINBIN text+0x1c2581>
+  0x7fffe8df51c0: 0x0000000001ee7000
+  0x7fffe8df51c8: 0x00005555558a95cb <MAINBIN text+0x3555cb>
+  0x7fffe8df51d0: 0x0000000000000008
+  0x7fffe8df51d8: 0x00007fffef3febb0
+  0x7fffe8df51e0: 0x0000000000000000
+  0x7fffe8df51e8: 0x00007ffff5530c40
+  0x7fffe8df51f0: 0x00007fffef3febb0
+  0x7fffe8df51f8: 0x00007fffed9d9f00
+  0x7fffe8df5200: 0x0000000000000029
+  0x7fffe8df5208: 0x00005555557b9ae5 <MAINBIN text+0x265ae5>
+  0x7fffe8df5210: 0x00007fffe8df52c0
+  0x7fffe8df5218: 0x00007ffff7f2915d <libsqlite3>
+  0x7fffe8df5220: 0x00007fffed9d9f00
+  0x7fffe8df5228: 0x00007fffef3dbf00
+  0x7fffe8df5230: 0x0000000000000001
+  0x7fffe8df5238: 0x00007ffff5530c8c
+  0x7fffe8df5240: 0x00007ffff707d4b0
+  0x7fffe8df5248: 0x00007fff00000000
+  0x7fffe8df5250: 0x00007fffef3dbfa0
+  0x7fffe8df5258: 0x00007fffef3febb0
+  0x7fffe8df5260: 0x00007fffe8f7a6e0
+  0x7fffe8df5268: 0x8eb9238100000000
+  0x7fffe8df5270: 0x0000000000000000
+  0x7fffe8df5278: 0x0000000000000000
+  0x7fffe8df5280: 0x0000000000000000
+  0x7fffe8df5288: 0x0000000000000000
+=====PY run finished=====
