@@ -16,6 +16,13 @@ class BoostsController < ApplicationController
 
   # jbuilder-вьюха bots-API (bot_create)
   @boost : Boost?
+
+  # ERB-вьюхи index/new (implicit render: app/views/boosts/*.html.erb —
+  # контроллер готовит данные, разметка в шаблонах, как в референсе)
+  @message : Message?
+  @mid : Int64?
+  @user : User?
+  @boosts : Array(ChatLayout::BoostEntry) = [] of ChatLayout::BoostEntry
   # set_message: Current.user.reachable_messages.find(params[:message_id])
   # — сообщение из комнаты, доступной текущему юзеру (membership).
   private def find_reachable_message : Message?
@@ -27,18 +34,14 @@ class BoostsController < ApplicationController
     member ? message : nil
   end
 
-  # GET /messages/:message_id/boosts — index.html.erb + boosts partial.
+  # GET /messages/:message_id/boosts — index.html.erb (boosts partial).
   def index
     message = find_reachable_message
     return head(:not_found) unless message
+    @message = message
     mid = message.id.not_nil!
-    boosts = ChatLayout.boosts_for([mid])[mid]? || [] of ChatLayout::BoostEntry
-
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << %(<span id="delete_boost_accessible_label" class="for-screen-reader">Press enter to delete this boost</span>\n)
-      io << ChatLayout.boosts_dom(mid, boosts)
-    end)
+    @mid = mid
+    @boosts = ChatLayout.boosts_for([mid])[mid]? || [] of ChatLayout::BoostEntry
   end
 
   # GET /messages/:message_id/boosts/new — new.html.erb: форма кастомного
@@ -46,36 +49,9 @@ class BoostsController < ApplicationController
   def new
     message = find_reachable_message
     return head(:not_found) unless message
-    mid = message.id.not_nil!
-    user = current_user.not_nil!
-
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << %(<turbo-frame id="new_boost_message_#{mid}">\n)
-      io << %(<div class="boost flex-inline postion--relative max-width fill-white" style="--column-gap: var(--inline-space-half)">\n)
-      io << %(<form class="boost__form flex align-center gap expanded" data-controller="form scroll-into-view" )
-      io << %(data-turbo-frame="boosting_message_#{mid}" data-action="keydown.esc-&gt;form#cancel" )
-      io << %(action="/messages/#{mid}/boosts" accept-charset="UTF-8" method="post">)
-      io << %(<label class="boost__form-label flex gap" style="--column-gap: 0.7ch;" role="button" tabindex="0" aria-label="Add a boost">\n)
-      io << %(<figure class="avatar boost__avatar flex-item-no-shrink">\n)
-      io << %(<a title=") << HTML.escape(ChatLayout.user_title(user.name, user.bio))
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{user.id}">)
-      io << %(<img aria-hidden="true" src="#{ChatLayout.fresh_user_avatar_path(user.id.not_nil!, user.updated_at)}" width="48" height="48">)
-      io << %(<span class="for-screen-reader">) << HTML.escape(user.name.to_s) << %(</span></a>\n)
-      io << %(</figure>\n)
-      io << %(<input autofocus="autofocus" autocomplete="off" autocorrect="off" )
-      io << %(maxlength="16" required="required" pattern="\\S+.*" data-boost-form-target="input" )
-      io << %(class="input input--boost txt-small" size="16" type="text" name="boost[content]">\n)
-      io << %(</label>\n)
-      io << %(<button name="button" type="submit" class="btn btn--reversed">)
-      io << ChatLayout.icon("check.svg")
-      io << %(<span class="for-screen-reader">Submit</span></button>\n)
-      io << %(<a data-turbo-frame="boosts_message_#{mid}" data-form-target="cancel" class="btn btn--negative" )
-      io << %(href="/messages/#{mid}/boosts">)
-      io << ChatLayout.icon("minus.svg")
-      io << %(<span class="for-screen-reader">Cancel</span></a>\n)
-      io << %(</form>\n</div>\n</turbo-frame>\n)
-    end)
+    @message = message
+    @mid = message.id.not_nil!
+    @user = current_user.not_nil!
   end
 
   # POST /messages/:message_id/boosts — boost_params (boost[content]),
@@ -215,5 +191,20 @@ class BoostsController < ApplicationController
             else nested ? nested : nil
             end
     value.to_s
+  end
+
+  # ————— ERB-хелперы (app/views/boosts/*.html.erb) —————
+  # SafeString: сырой HTML из ChatLayout без повторного экранирования
+  # в <%= %> (как делегаты ChatERB).
+
+  private def icon(name : String) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name))
+  end
+
+  # index.html.erb: boosts partial. Файл шаблона — без завершающего
+  # перевода строки после <%= boosts_dom %> (byte-parity с референсом:
+  # boosts_dom сам завершает вывод "\n").
+  private def boosts_dom : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.boosts_dom(@mid.not_nil!, @boosts))
   end
 end
