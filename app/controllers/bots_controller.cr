@@ -2,6 +2,8 @@
 # bot_form.eta/bots.eta): создание (role=2 + bot_token), список с
 # curl-командами, переименование. Только администратор.
 class BotsController < ApplicationController
+  include BotsHelpers
+
   before_action :require_admin
 
   # index.html.erb: боты + curl-команды по их комнатам.
@@ -107,29 +109,7 @@ class BotsController < ApplicationController
     redirect_to "/account/bots"
   end
 
-  # ————— ERB-хелперы (app/views/bots/*.html.erb) —————
-
-  # head + body + nav (назад на back_path) + main.
-  private def page_open(title : String, back_path : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open(title == "Chat bots" ? "bots" : "bot-form",
-      title, current_user.not_nil!, nav_html: ChatLayout.nav_back(back_path)))
-  end
-
-  private def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close)
-  end
-
-  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
-  end
-
-  private def copy_button(cmd : String, sr : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.copy_button(cmd, sr))
-  end
-
-  private def bot_avatar_src : String
-    ChatLayout.asset("default-bot-avatar.svg")
-  end
+  # ————— приватное контроллера (не для шаблонов) —————
 
   private def nested(key : String) : String
     nested = params["user"]?
@@ -155,12 +135,6 @@ class BotsController < ApplicationController
           "INSERT INTO webhooks (url, user_id, created_at, updated_at) VALUES (?, ?, ?, ?)",
           url, bot_id, now, now)
       end
-    end
-  end
-
-  private def require_admin : Nil
-    unless current_user.not_nil!.role == 1
-      render(plain: "forbidden", status: 403)
     end
   end
 end

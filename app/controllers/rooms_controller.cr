@@ -5,11 +5,19 @@
 # Whole-page response cache (Фаза 3): готовый HTML кэшируется per-worker,
 # инвалидация по DB-epoch (PRAGMA data_version); отдача с gzip + ETag/304.
 class RoomsController < ApplicationController
+  include RoomsHelpers
+
+  # Rails rooms/{opens,closeds}_controller.rb: before_action
+  # :ensure_permission_to_create_rooms, only: [:new, :create].
+  before_action :ensure_permission_to_create_rooms, only: [:new, :create]
+
   # new.html.erb / edit.html.erb + партиал _form.html.erb (room_form)
   # и direct-ветка edit. Данные формы готовит prepare_room_form.
   @room : Room?
   @kind : String = ""
   @user : User?
+  # Геттер для RoomsHelpers#page_open (модуль не видит @user).
+  getter user
   @selected : Set(Int64) = Set(Int64).new
   @is_open : Bool = false
   @can_administer : Bool = false
@@ -251,9 +259,20 @@ class RoomsController < ApplicationController
     redirect_to "/"
   end
 
+  # Rails rooms_controller.rb: ensure_permission_to_create_rooms — при
+  # включённом restrict_room_creation_to_administrators создание комнат
+  # (opens/closeds) доступно только администраторам; directs не ограничены.
+  private def ensure_permission_to_create_rooms : Nil
+    return if params["kind"].to_s == "directs"
+    account = Account.take
+    if account.try(&.restrict_room_creation_to_administrators?) &&
+       current_user.try(&.role) != 1
+      head(:forbidden)
+    end
+  end
+
   # user_ids[] из формы (формат action_pack: Scalar/Array/Parameters).
-  private def selected_user_ids : Array(Int64)
-    ids = [] of Int64
+  private def selected_user_ids : Array(Int64)    ids = [] of Int64
     add = ->(v : String) do
       if (parsed = v.to_i64?)
         ids << parsed
@@ -296,31 +315,6 @@ class RoomsController < ApplicationController
         (selected.includes?(a.id.not_nil!) ? 1 : 0)
       }
     @divider = selected.size
-  end
-
-  # ————— ERB-хелперы (rooms/{new,edit,_form}.html.erb) —————
-
-  # head + body + nav (назад на back_path) + main (screen "room-form").
-  private def page_open(title : String, back_path : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("room-form", title, @user.not_nil!,
-      nav_html: ChatLayout.nav_back(back_path)))
-  end
-
-  private def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close)
-  end
-
-  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
-  end
-
-  # Карточка участника direct-комнаты (avatar_link c lazy-загрузкой).
-  private def avatar_link(member : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.avatar_link(member, "lazy"))
-  end
-
-  private def everyone_src : String
-    ChatLayout.asset("everyone.svg")
   end
 
   # turbo-stream prepend ссылки комнаты в #shared_rooms (registerRoomForms:

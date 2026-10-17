@@ -4,7 +4,10 @@
 # Если видимых комнат нет — welcome/show.html.erb: пустой message-area
 # с иконкой и именем юзера для screen-reader (hi, Lonely Lou).
 class WelcomeController < ApplicationController
+  include WelcomeHelpers
+
   @user : User?
+  getter user
 
   def show
     user = current_user.not_nil!
@@ -27,18 +30,4 @@ class WelcomeController < ApplicationController
     Room.visible_for(user).order("id").first?
   end
 
-  # ————— ERB-хелперы (app/views/welcome/show.html.erb) —————
-
-  # «No rooms yet»: head для пустого message-area-экрана (chat: false).
-  private def head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("No rooms yet", @user.not_nil!, nil, chat: false))
-  end
-
-  private def messages_empty_src : String
-    ChatLayout.asset("messages-empty.svg")
-  end
-
-  private def campfire_icon_src : String
-    ChatLayout.asset("campfire-icon.png")
-  end
 end

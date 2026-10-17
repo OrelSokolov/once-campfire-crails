@@ -5,6 +5,8 @@ require "uuid"
 # POST /rooms/:id/messages — создание сообщения (контракт: turbo-stream
 # append; аудит: messages + action_text_rich_texts + FTS5 с телом).
 class MessagesController < ApplicationController
+  include MessagesHelpers
+
   skip_before_action :require_authentication, only: [:bot_create, :bot_index, :bot_show]
 
   # jbuilder-вьюхи bots-API (bot_index/bot_show)
@@ -253,6 +255,8 @@ class MessagesController < ApplicationController
   # фрейма после редиректа update (фрейм получает [complete]) и
   # подтягивает отрендеренное сообщение.
   # show.html.erb / edit.html.erb
+  # Геттеры — для ERB-хелперов MessagesHelpers (модуль не видит ивары).
+  getter room, message, mid, attachment
   @room : Room?
   @message : Message?
   @mid : Int64?
@@ -441,45 +445,5 @@ class MessagesController < ApplicationController
   # слов тела; теги вырезаем.
   private def plain_text(html : String) : String
     html.gsub(/<[^>]*>/, " ").gsub(/\s+/, " ").strip
-  end
-
-  # ————— ERB-хелперы (app/views/messages/{show,edit}.html.erb) —————
-
-  # show.html.erb: DOM сообщения (тот же message_dom, что в комнате).
-  private def message_dom : ERB::SafeString
-    message = @message.not_nil!
-    attachment = ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]?
-    ERB::SafeString.new(ChatLayout.message_dom(message, @room.not_nil!,
-      User.find?(message.creator_id.not_nil!), attachment, base_url: origin))
-  end
-
-  # edit.html.erb: presentation вложения (attachment-ветка).
-  private def attachment_html : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.attachment_presentation(@attachment.not_nil!))
-  end
-
-  # /rooms/:id/messages/:message_id для экшена.
-  private def message_path : String
-    "/rooms/#{@room.not_nil!.id}/messages/#{@mid}"
-  end
-
-  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
-  end
-
-  # messages.eta (референс): каждая запись — тот же DOM, что в комнате
-  # (message_dom: <div data-message-id=...> + turbo-frame + </turbo-frame>
-  # </div> closure); минимальный <article> не проходит route-contract-v1
-  # loadgen'а (<div ... data-message-id> + </turbo-frame></div>$).
-  # Список — через fragment-кэш (было User.find?/rich_text на каждое
-  # сообщение): хиты без SQL, авторы промахов — одним IN-запросом.
-  # Rails messages/index.html.erb (layout false): голая коллекция
-  # message-партиалов — без doctype/обёрток; JS-пагинатор вставляет
-  # ответ как фрагмент прямо в .messages.
-  private def messages_page_html(room : Room, messages : Array(Message),
-                                 epoch : String) : String
-    String.build do |io|
-      ChatLayout.messages_to(io, messages, epoch, room, origin)
-    end
   end
 end

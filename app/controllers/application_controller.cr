@@ -1,4 +1,6 @@
 abstract class ApplicationController < ActionController::Base
+  include ViewHelpers
+
   @db_epoch : String? = nil
   @identity_entry : Campfire::IdentityCache::Entry? = nil
   @identity_checked : Bool = false
@@ -42,6 +44,14 @@ abstract class ApplicationController < ActionController::Base
 
   def require_authentication : Nil
     redirect_to "/session/new" unless current_user
+  end
+
+  # Rails concerns/authorization.rb: ensure_can_administer — 403 для
+  # не-администраторов (role=1) на write-экшенах.
+  def require_admin : Nil
+    unless current_user.try(&.role) == 1
+      render(plain: "forbidden", status: 403)
+    end
   end
 
   # Rails authentication: start_new_session_for — создаёт сессию и

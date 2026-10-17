@@ -3,10 +3,12 @@
 # joins/show.html.erb), POST — createUser (role=0 + memberships во все
 # Rooms::Open, involvement "mentions") + сессия + redirect на "/".
 class JoinsController < ApplicationController
+  include JoinsHelpers
+
   skip_before_action :require_authentication
 
   # show.html.erb: аккаунт invite-ссылки (имя, join_code в action).
-  @account : Account?
+  getter account : Account?
 
   def show
     # Known-issue (PLAN.md): роутер декодирует path-сегменты через
@@ -65,37 +67,5 @@ class JoinsController < ApplicationController
     nested = params["user"]?
     return "" unless nested.is_a?(ActionController::Parameters)
     nested[key]?.to_s
-  end
-
-  # ————— ERB-хелперы (app/views/joins/show.html.erb) —————
-
-  # head + body.signup + nav (Sign in на /session/new) + main.
-  private def page_open : ERB::SafeString
-    account = @account.not_nil!
-    nav = %(<div class="flex-item-justify-end"><a href="/session/new" class="btn flex-item-justify-end">) +
-      ChatLayout.icon("login-keys.svg") +
-      %(<span class="for-screen-reader">Sign in</span></a></div>)
-    ERB::SafeString.new(ChatLayout.page_open("join", "Join #{account.name}", nil,
-      body_class: "signup", nav_html: nav))
-  end
-
-  private def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close)
-  end
-
-  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
-  end
-
-  private def lanyard_src : String
-    ChatLayout.asset("lanyard.svg")
-  end
-
-  private def app_logo_src : String
-    ChatLayout.asset("logos/app-icon.png")
-  end
-
-  private def default_avatar_src : String
-    ChatLayout.asset("default-avatar.svg")
   end
 end

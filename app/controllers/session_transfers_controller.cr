@@ -4,6 +4,8 @@
 # show.html.erb), PUT/PATCH проверяет signed_id (purpose
 # "user/transfer"), стартует сессию и редиректит на "/".
 class SessionTransfersController < ApplicationController
+  include SessionTransfersHelpers
+
   skip_before_action :require_authentication
 
   # show.html.erb: токен из пути (экранируется в action=).
@@ -22,11 +24,5 @@ class SessionTransfersController < ApplicationController
     cookies.signed.set("session_token", session.token.not_nil!,
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
     redirect_to "/"
-  end
-
-  # ————— ERB-хелперы (app/views/session_transfers/show.html.erb) —————
-
-  private def head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("Session transfer", nil, nil, chat: false))
   end
 end

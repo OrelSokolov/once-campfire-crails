@@ -12,17 +12,20 @@
 #   DELETE /messages/:message_id/boosts/:id    — destroy своего буста:
 #            broadcast remove boost_<id>
 class BoostsController < ApplicationController
+  include BoostsHelpers
+
   skip_before_action :require_authentication, only: :bot_create
 
   # jbuilder-вьюха bots-API (bot_create)
   @boost : Boost?
 
   # ERB-вьюхи index/new (implicit render: app/views/boosts/*.html.erb —
-  # контроллер готовит данные, разметка в шаблонах, как в референсе)
+  # контроллер готовит данные, разметка в шаблонах, как в референсе);
+  # boosts_dom (BoostsHelpers) читает mid/boosts — геттеры.
   @message : Message?
-  @mid : Int64?
   @user : User?
-  @boosts : Array(ChatLayout::BoostEntry) = [] of ChatLayout::BoostEntry
+  getter mid : Int64?
+  getter boosts : Array(ChatLayout::BoostEntry) = [] of ChatLayout::BoostEntry
   # set_message: Current.user.reachable_messages.find(params[:message_id])
   # — сообщение из комнаты, доступной текущему юзеру (membership).
   private def find_reachable_message : Message?
@@ -191,20 +194,5 @@ class BoostsController < ApplicationController
             else nested ? nested : nil
             end
     value.to_s
-  end
-
-  # ————— ERB-хелперы (app/views/boosts/*.html.erb) —————
-  # SafeString: сырой HTML из ChatLayout без повторного экранирования
-  # в <%= %> (как делегаты ChatERB).
-
-  private def icon(name : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.icon(name))
-  end
-
-  # index.html.erb: boosts partial. Файл шаблона — без завершающего
-  # перевода строки после <%= boosts_dom %> (byte-parity с референсом:
-  # boosts_dom сам завершает вывод "\n").
-  private def boosts_dom : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.boosts_dom(@mid.not_nil!, @boosts))
   end
 end
