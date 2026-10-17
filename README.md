@@ -1,3 +1,10 @@
+> [!NOTE]
+> The functionality works, but the code is not beautiful yet. A refactoring is
+> in progress: much of the codebase does not follow the style of the original
+> Ruby on Rails (naming, structure, framework conventions). We are striving to
+> get there — the refactoring is ongoing, although the functionality is already
+> working.
+
 <p align="center">
   <img src="crails-icon.svg" width="72" alt="CRails">
 </p>
