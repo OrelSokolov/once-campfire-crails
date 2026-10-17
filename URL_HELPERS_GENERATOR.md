@@ -1,0 +1,194 @@
+# URL_HELPERS_GENERATOR — план генератора именованных роут-хелперов
+
+Разворачивает `CRAILS_REMAINING.md` §1 (Named route helpers). Цель:
+в CRAILS появляется Rails-эквивалент `*_path` / `*_url`, проект
+перестаёт хардкодить пути строками (~сотня мест: 26 `redirect_to`,
+23 `action=`, ~21 рабочий `href=`, 34 интерполяции в ChatLayout).
+
+## Отправная точка (что уже есть)
+
+- `Route` хранит `name`, сегменты и `defaults`
+  (`lib/action_pack_cr/src/routes.cr:3-22`); `Drawer` композирует
+  имена по Rails-правилам (`compose_name`, `routes.cr:321`) —
+  `resources :rooms` даёт `room`, `new_room`, `edit_room`, вложенные
+  — `room_message` и т.д. Спеки имена проверяют
+  (`lib/action_pack_cr/spec/action_pack_spec.cr:76`).
+- Потребителей имён нет: рантайм-диспетчер матчит по паттерну, а
+  обратного направления (имя → URL) не существует.
+- Маршруты рисуются **в рантайме**: `config/routes.cr` подключается
+  ПОСЛЕ контроллеров (`src/app.cr:61`), `routes.draw` выполняется как
+  обычный код. compile-time макрос таблицу маршрутов не видит.
+
+## Ключевое решение: `method_missing`, не compile-time макрос
+
+Генерация методов на этапе компиляции потребовала бы парсить
+`config/routes.cr` из макроса — хрупко и дублирует DSL. Вместо этого —
+
+паттерн, уже принятый в экосистеме (`macro method_missing` в
+`action_view_cr/helpers/tag_helper.cr:107`, `jbuilder_cr.cr:260`):
+
+```crystal
+module CRails::Routes::UrlHelpers
+  macro method_missing(call)
+    def {{call.name}}(*args, **opts) : String
+      CRails.application.routes.generate_url({{call.name.stringify}}, args, opts)
+    end
+  end
+end
+```
+
+Вызов `room_path(room)` разворачивается в метод, который в рантайме
+резолвит имя по индексу маршрутов и собирает путь. Важное свойство:
+`method_missing` срабатывает только если явного метода нет —
+существующие самописные хелперы (`message_path` в
+`app/helpers/messages_helpers.cr:19`, `room_edit_path` в
+`app/helpers/chat_layout.cr:159` и т.д.) продолжают работать и
+тенят сгенерированные. Это даёт безопасную поэтапную миграцию без
+большого взрыва.
+
+Скорость: имя парсится один раз (кэш `name → разобранные сегменты`
+классовой переменной), построение пути — склейка строк. Для
+~160-170 вызовов на страницу — копейки.
+
+## Семантика ( Rails-parity, минимально необходимое )
+
+| Правило | Поведение |
+|---|---|
+| Позиционные аргументы | Подставляются в динамические сегменты (`:id`, `:message_id`) слева направо, с урл-кодированием (`URI.encode_www_form`). Префиксные сегменты `"@:message_id"` — значение кодируется, `@` сохраняется. |
+| Лишние позиционные | Остаток уходит в query-string, как в Rails. |
+| Завершающий `Hash`/`NamedTuple` | Query-параметры (`anchor:`, `v:` и т.п.), кодирование ключей и значений. |
+| Типы аргументов | `String | Int32 | Int64` напрямую; объекты с `to_param` (проверка `responds_to?` в рантайме) — Rails-семантика `room_path(room)`. |
+| `*_url` | `origin + *_path`. origin: (1) контекст запроса — `Host`-заголовок (у контроллера уже есть `origin`, `application_controller.cr:96`); (2) глобальный фолбэк `CRails.application.routes.default_url_origin` (для Jbuilder-партиалов и jobs, дефолт из `config.host/port`). |
+| Неизвестное имя / не хватает аргументов | `raise ArgumentError` — аналог `ActionController::UrlGenerationError`. |
+| Маршрут без имени | Хелпера нет (`method_missing` умирает с понятной ошибкой). |
+| Дубли имени в таблице | Последний выигрывает (в `config/routes.cr` дублей нет — проверить этапом 0). |
+
+## Этапы
+
+### 0. Аудит (без кода)
+
+- Дамп имён: `bin/crails routes` уже печатает таблицу
+  (`railties_cr.cr:611`) — снять список `name != nil` и сверить с
+  `bin/rails routes` эталона (`once-campfire/`); расхождения имен
+  из-за известных отклонений порта (один `RoomsController`, `scope
+  as: "rooms"` с видами `opens/closeds/directs`) зафиксировать
+  списком «хелперов, которых не будет».
+- Конфликты имён: сгенерированные имена vs существующие методы в
+  `app/helpers/` (`message_path`, `avatar_path`, `room_edit_path`,
+  `fresh_*`, `blob_url`…). Пока они тенят — это ок; на этапе 5
+  решить по каждому: удалить ручной / переименовать / оставить
+  (отклоняющиеся от Rails, вроде `room_edit_path` с выбором сегмента
+  opens/closeds — оставить навсегда).
+
+### 1. Шард `action_pack_cr` (локально, первым)
+
+Файлы:
+
+- `lib/action_pack_cr/src/routes.cr` — в `RouteSet`:
+  - `named_routes : Hash(String, Route)` — индекс, строится лениво
+    (первый запрос) или после `draw`;
+  - `path_for(name : String, args : Array, opts) : String` —
+    построение пути по правилам таблицы выше (сегменты `"@:param"`
+    разбираются тем же алгоритмом, что и матчинг `routes.cr:58-76`,
+    только в обратную сторону);
+  - `generate_url(name, args, opts)` — обёртка: режет суффикс
+    `_path`/`_url`, для `_url` добавляет origin.
+- Новый `lib/action_pack_cr/src/routes/url_helpers.cr` — модуль
+  `UrlHelpers` с `macro method_missing` (скетч выше) + мемо-кэш
+  разобранных сегментов по имени.
+- `lib/action_pack_cr/src/base.cr` — `include CRails::Routes::UrlHelpers`
+  в `ActionController::Base`: контроллеры получают хелперы, а с
+  ними и вьюхи (ERB рендерится в контексте инстанса контроллера,
+  комментарий `base.cr:571`).
+
+Спеки (`lib/action_pack_cr/spec/`): базовые (`root_path == "/"`,
+`room_path(1) == "/rooms/1"`, вложенный
+`room_message_path(1, 2) == "/rooms/1/messages/2"`), префиксный
+`room_at_message_path(1, 2) == "/rooms/1/@2"`, query
+(`room_path(1, v: 3)`), лишний позиционный → query, `to_param`,
+`_url` c origin, неизвестное имя → raise, неименованный маршрут не
+резолвится.
+
+Проверка сборки: `rake build:crails` (ловит проблемы до рантайма).
+
+### 2. Публикация шарда (процесс из AGENTS.md)
+
+После зелёных спеков: патч в `~/myshards/action_pack.cr`, bump
+version `vX.Y.Z`, publish; в проекте подтянуть опубликованную версию
+в `shard.yml`, протестировать снова, `rake build:crails`, коммит и
+пуш если всё зелёное.
+
+### 3. Подключение в приложении
+
+- Контроллеры/вьюхи — уже через `include` из `base.cr`.
+- Jbuilder-партиалы (контекст без контроллера, `src/app.cr:41-54`,
+  там уже есть `jb_origin`): `include CRails::Routes::UrlHelpers`
+  в `JbuilderTemplate`, origin — из `jb_origin`.
+- Jobs/модели вне запроса (аналог `message_pusher.rb:28` эталона):
+  `include` по мере надобности + глобальный
+  `CRails.application.routes.default_url_origin = ...` (сеттится из
+  ENV/конфига при старте в `src/app.cr`).
+
+### 4. Миграция строковых путей (механическая, батчами)
+
+Порядок — от простого к сложному, каждый батч = отдельный коммит +
+запуск тестов:
+
+1. `redirect_to` в контроллерах (26 мест / 15 файлов):
+   `redirect_to "/rooms/#{room.id}/involvement"` → `redirect_to
+   room_involvement_path(room.id)`.
+2. `action=` в ERB-формах (23 / 17), включая `_form.html.erb:1` с
+   конкатенацией.
+3. `href=` в рабочих вьюхах (~21, не трогая asset-ссылки
+   importmap/stylesheets).
+4. Интерполяции в `ChatLayout`/хелперах (34 места; здесь же —
+   самые хитрые, `chat_layout.cr:1138` с `base_url`, это `*_url`).
+
+Правило каждого батча — **байтовая сверка**: хелпер обязан давать
+те же байты, что заменяемая строка (сверка по коду + спека/скрипт
+сравнения для нетривиальных случаев вроде permalink `@`-сегмента).
+Сверяться с Rails-референсом по месту (`rooms_controller.rb:8` —
+`redirect_to room_url(...)`).
+
+Приёмка этапа: `capybara-tests/` (полный прогон) + parity-скрипты
+(`tmp/parity_report.py`) до/после — диффов быть не должно.
+
+### 5. Чистка
+
+- Удалить ручные хелперы, полностью совпадающие с сгенерированными
+  (`message_path` из `messages_helpers.cr` — если его сигнатуру
+  покрывает `room_message_path`; при несовпадении вызывающих мест —
+  переименовать/оставить по аудиту этапа 0).
+- Оставить навсегда: `room_edit_path` (STI-выбор сегмента — у
+  порта нет неймспейсных контроллеров), `fresh_*` (аналог `direct`,
+  вне объёма), `blob_url`/`representation_url` (ActiveStorage).
+- Обновить `CRAILS_REMAINING.md` §1 (закрыть пункт) и этот файл.
+
+## Вне объёма (отдельные пункты бэклога, не этот план)
+
+- Полиморфные пути (`redirect_to @user`, `polymorphic_path`) —
+  требует связи имя ↔ класс модели.
+- `direct`-хелперы Rails (`fresh_account_logo_path` в
+  `routes.rb:28` эталона) — ручные `fresh_*` покрывают.
+- `rails_blob_path(..., only_path: true)` — ActiveStorage, ручные
+  `blob_url`/`representation_url` покрывают.
+- Per-request `default_url_options` (Rails `set_current_request`)
+  — завязан на `Current` (`CRAILS_REMAINING.md` §2), глобального
+  `default_url_origin` на первое время достаточно.
+
+## Риски
+
+- **`method_missing` перехватывает любое `_path`/`_url`-имя** в
+  включивших классах → любая опечатка падает в рантайме, не при
+  компиляции. Парируется спеками на каждый хелпер из реестра имён
+  (этап 4, батчи) и понятным текстом ошибки (список близких имён).
+- Имена порта ≠ имена Rails из-за отклонений `config/routes.cr` —
+  фиксируется аудитом этапа 0, отклонения документируются.
+- `_url` из jobs без явного origin → обязательный фолбэк-конфиг на
+  этапе 3, иначе тихие `http://localhost` в прод-уведомлениях.
+
+---
+
+Актуальность: 2026-10-17, по коду `lib/action_pack_cr` (routes.cr
+366 строк), `config/routes.cr` (96 строк, ~45 маршрутов),
+`src/app.cr`, эталон `once-campfire/`.
