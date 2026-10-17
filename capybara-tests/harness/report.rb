@@ -18,13 +18,19 @@ module Parity
                  else
                    ""
                  end
+        # Severity for pixel ratios: <1% plain, >=1% yellow, >=5% red,
+        # >=10% inverted bold red (clearly bad).
+        pct = item[:ratio] ? item[:ratio] * 100 : nil
+        severity = pct ? Parity::Compare.px_severity(pct) : nil
+        detail_cls = severity && severity != :ok ? %( class="#{severity}") : ""
         diff_link = item[:kind] == "png" && !item[:pass] ? %(<a href="#{item[:rel].sub('.png', '.diff.png')}">diff</a>) : ""
         pair = %(<a href="../#{baseline}/#{item[:rel]}">#{baseline}</a> · <a href="../#{target}/#{item[:rel]}">#{target}</a>)
-        %(<tr class="#{status}"><td><code>#{item[:rel]}</code></td><td>#{item[:kind]}</td><td>#{status}</td><td>#{detail}</td><td>#{diff_link}</td><td>#{pair}</td></tr>)
+        %(<tr class="#{status}"><td><code>#{item[:rel]}</code></td><td>#{item[:kind]}</td><td>#{status}</td><td#{detail_cls}>#{detail}</td><td>#{diff_link}</td><td>#{pair}</td></tr>)
       end.join("\n")
       <<~HTML
         <!doctype html><html><head><meta charset="utf-8"><title>parity #{baseline} vs #{target}</title>
-        <style>body{font:14px -apple-system,system-ui,sans-serif;margin:2rem}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 10px;text-align:left}tr.fail td{background:#fdd}tr.pass td{background:#dfd}code{font-size:12px}</style>
+        <style>body{font:14px -apple-system,system-ui,sans-serif;margin:2rem}table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 10px;text-align:left}tr.fail td{background:#fdd}tr.pass td{background:#dfd}code{font-size:12px}
+tr td.warn{background:#ffd700}tr td.bad{background:#f30;color:#fff}tr td.worst{background:#900;color:#fff;font-weight:700}</style>
         </head><body>
         <h1>Browser parity: #{baseline} vs #{target}</h1>
         <p>png #{summary[:png_passed]}/#{summary[:png_total]} · html #{summary[:html_passed]}/#{summary[:html_total]} · missing #{summary[:missing]} · max ratio #{summary[:max_ratio]}</p>

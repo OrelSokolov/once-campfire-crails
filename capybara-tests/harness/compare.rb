@@ -68,9 +68,26 @@ module Parity
     end
 
     def ratio_detail(item)
-      return format("(%.3f%% px)", item[:ratio] * 100) if item[:ratio]
+      return px_detail(item[:ratio] * 100) if item[:ratio]
       return "(#{item[:diff_lines]} diff lines)" if item[:diff_lines]
       item[:error] ? "(#{item[:error]})" : ""
+    end
+
+    # Severity coloring for pixel-diff percentages: <1% white (default),
+    # >=1% yellow, >=5% red, >=10% bold inverted red (clearly bad).
+    def px_severity(pct)
+      return :worst if pct >= 10
+      return :bad if pct >= 5
+      return :warn if pct >= 1
+      :ok
+    end
+
+    ANSI = { ok: "\e[0m", warn: "\e[33m", bad: "\e[31m", worst: "\e[1;97;41m" }.freeze
+
+    def px_detail(pct)
+      text = format("(%.3f%% px)", pct)
+      return text unless $stdout.tty?
+      "#{ANSI.fetch(px_severity(pct))}#{text}\e[0m"
     end
 
     def compare_one(base_dir, target_dir, rel, out_dir, max_ratio)
