@@ -1,6 +1,15 @@
 # GET /searches?q=coffee — поиск по FTS5 (контракт: ID = MATCH с join по
-# membership/email из сида, максимум 100, вывод в порядке ID).
+# membership/email из сида, максимум 100, вывод в порядке ID). Разметка —
+# app/views/searches/show.html.erb (референс: searches/index.html.erb;
+# имя — по экшену порта, см. config/routes.cr).
 class SearchesController < ApplicationController
+  @user : User? = nil
+  @query : String = ""
+  @messages : Array(Message) = [] of Message
+  @recents : Array(String) = [] of String
+  @return_room : Int64 = 1_i64
+  @epoch : String = ""
+
   def show
     user = current_user.not_nil!
 
@@ -42,26 +51,14 @@ class SearchesController < ApplicationController
     # Список — через fragment-кэш (было Room.find?/User.find?/rich_text
     # на каждое сообщение, до 100 результатов): хиты без SQL, комнаты и
     # авторы промахов — по одному IN-запросу на сущность.
-    html = String.build do |io|
-      io << ChatLayout.page_open("search", "Search: #{query}", user,
-        body_class: "sidebar searches", nav_html: search_nav(query, messages.size, recents))
-      io << %(<div id="message-area" class="message-area">\n)
-      io << %(<div class="message-area--empty min-width center"><figure class="center pad">)
-      io << %(<img aria-hidden="true" class="colorize--black translucent" src=")
-      io << ChatLayout.asset("search.svg") << %("></figure></div>\n)
-      io << %(<div id="search-results" class="messages searches__results" data-controller="search-results" )
-      io << %(data-search-results-target="messages" data-search-results-me-class="message--me" )
-      io << %(data-search-results-threaded-class="message--threaded" )
-      io << %(data-search-results-mentioned-class="message--mentioned" )
-      io << %(data-search-results-formatted-class="message--formatted" data-query=") << HTML.escape(query) << %(">\n)
-      ChatLayout.messages_to(io, messages, epoch, nil, origin)
-      io << %(</div>\n)
-      io << %(</div>\n)
-      io << ChatLayout.page_close(search_composer(query, return_room),
-        %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">) + recent_searches_html(recents) + %(</div>))
-    end
+    @user = user
+    @query = query
+    @messages = messages
+    @recents = recents
+    @return_room = return_room
+    @epoch = epoch
 
-    page = Campfire::PageCache::Page.new(html)
+    page = Campfire::PageCache::Page.new(__render_view("show").to_s)
     # Кэшируем только если БД не менялась за время рендера и ответ чист
     # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
     if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
@@ -91,6 +88,30 @@ class SearchesController < ApplicationController
       "DELETE FROM searches WHERE user_id = ?", user.id.not_nil!)
     Campfire::PageCache.invalidate!
     redirect_to "/searches"
+  end
+
+  # ————— ERB-хелперы (app/views/searches/show.html.erb) —————
+
+  # head + body.sidebar.searches + nav с чипом запроса и recents.
+  private def page_open : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_open("search", "Search: #{@query}", @user.not_nil!,
+      body_class: "sidebar searches", nav_html: search_nav(@query, @messages.size, @recents)))
+  end
+
+  # footer(composer) + aside(recents) + app-logo (layouts/_body_close).
+  private def page_close : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_close(search_composer(@query, @return_room),
+      %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">) + recent_searches_html(@recents) + %(</div>)))
+  end
+
+  # Коллекция сообщений (fragment-кэш внутри messages_to).
+  private def messages_html : ERB::SafeString
+    ERB::SafeString.new(String.build { |io|
+      ChatLayout.messages_to(io, @messages, @epoch, nil, origin) })
+  end
+
+  private def search_icon_src : String
+    ChatLayout.asset("search.svg")
   end
 
   # search_nav.eta: чип запроса с количеством + recents.

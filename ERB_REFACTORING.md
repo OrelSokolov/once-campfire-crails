@@ -1,15 +1,15 @@
 # ERB_REFACTORING — вынос inline-HTML из контроллеров в ERB-вьюхи
 
-Статус: завершено (все 13 пунктов инвентаризации). Эталон подхода —
-коммит `a6d5508` (boosts: `app/views/boosts/{index,new}.html.erb` +
-implicit render).
+Статус: завершено (13 пунктов инвентаризации + 2 найденных при сверке:
+sessions, searches — оба закрыты). Эталон подхода — коммит `a6d5508`
+(boosts: `app/views/boosts/{index,new}.html.erb` + implicit render).
 
 ## Цель
 
 Убрать паттерн `render(html: String.build do |io| io << %(...) ... end)` из
 контроллеров: разметка живёт в `app/views/**.html.erb`, компилируется на
 этапе сборки, контроллер готовит данные. Структура — как в Rails-референсе
-(`once-campfire/app/views/...`). Готово: все 13 контроллеров вынесены,
+(`once-campfire/app/views/...`). Готово: все 15 контроллеров вынесены,
 inline `render(html: String.build ...)` в контроллерах больше нет
 (turbo-stream-ответы create/update/destroy — не вьюхи, остались как
 были; rooms#show/sidebars и пр. — на ChatERB/ChatLayout, не трогались).
@@ -95,10 +95,19 @@ inline `render(html: String.build ...)` в контроллерах больше
 | 11 | `messages_controller` | ~55 | `show` (full-page обёртка), `edit` (форма) | `messages/{show,edit}` | ✅ |
 | 12 | `bots_controller` | ~202 | `bot_form` + index/edit | `accounts/bots/_form`, `index`, `edit` | ✅ |
 | 13 | `rooms_controller` | ~293 | `room_form` (opens/closeds new+edit), `direct_edit` | `rooms/{opens,closeds}/_form`, `rooms/directs/{new,edit}` | ✅ |
+| 14 | `sessions_controller` | ~75 | `render_login`: страница логина (+flash-401) | `sessions/new` | ✅ |
+| 15 | `searches_controller` | ~27 | `show`: страница поиска (под PageCache) | `searches/index` (порт: `show`) | ✅ |
+
+Сверка при закрытии 14–15 вскрыла ошибки прежней инвентаризации:
+`sessions` ошибочно числился в «уже на ERB» (был String.build-билдером),
+`searches` отсутствовал в таблице. Оба закрыты.
 
 Уже на ERB/ChatERB (не трогать): `boosts`, `rooms#show`, `sidebars`,
-`involvements`, `sessions`, `searches`, `active_storage`, `avatars`,
-`logos`, `qr_codes`, `pwa`, `up`.
+`involvements`, `active_storage`, `avatars`, `logos`, `qr_codes`, `pwa`.
+`up` — inline-heredoc-порт эндпоинта `rails/health#show` (встроенный
+engine-эндпоинт Rails, в референсе вьюхи нет) — inline by design.
+`messages#index` — fragment-коллекция (в референсе `layout false`) под
+PageCache — не страница, не трогался.
 
 ## Заметки по конкретным пунктам
 
@@ -169,6 +178,30 @@ inline `render(html: String.build ...)` в контроллерах больше
   на 1–12.
 - **11 (messages#show)**: полный HTML-документ вокруг `message_dom` —
   обёртка `<!doctype>` остаётся в шаблоне (как `sidebars#show`).
+- **14 (sessions)**: `new` — implicit render, create-неудача рендерит тот
+  же шаблон через `render(html: __render_view("new").to_s,
+  status: :unauthorized)` — jbuilder-ного `render(template:)`
+  для ERB нет, но сгенерированный `__render_view` публичен. Flash-блок и
+  value-атрибут email — SafeString-хелперы (`flash_html`, `email_value`),
+  `panel shake` — строковый `panel_modifier`. Гочча переносов строк: в
+  String.build-билдерах `\n` живёт ВНУТРИ чанков (`</label>\n</div>\n`,
+  `Go</span>\n</button>`, `</footer>\n</main>`, `height="216">\n</a>` —
+  6 мест) — при переносе в шаблон их легко слипить в одну строку; ловится
+  только побайтовой сверкой. Верификация: new 200, POST-401 ×2 (с email →
+  value-атрибут, без), unauth — тела+заголовки побайтово.
+- **15 (searches)**: page-cache ПОВЕРХ шаблона: `__render_view("show").to_s`
+  скармливается `PageCache::Page.new` как раньше был String.build — ETag
+  (SHA1 тела) до/после совпал, что и доказывает идентичность кэшируемых
+  байтов. search_nav/search_composer/recent_searches остались String-
+  билдерами (прецедент account_nav/user_nav). Файл — `show.html.erb` по
+  экшену порта (в референсе `index.html.erb`; роут `get "/searches", to:
+  "searches#show"`). Тривиальная гочча сравнения: тело содержит origin
+  (пермалинки `/rooms/N/@M` с base_url) — «до»/«после» сравнивать только
+  на одном порту. Верификация: пустой q, выдача q=coffee (132 КБ), фраза
+  в кавычках (экранирование data-query → `&quot;`), no-match, unauth 302,
+  304 по If-None-Match — всё побайтово. FTS-синтаксис-ошибки (`q=a<b`,
+  апостроф) — честный 500 в обеих версиях, трейс в теле содержит номера
+  строк контроллера — не сравнивать.
 
 ## Артефакты верификации (tmp/, не коммитить)
 

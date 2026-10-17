@@ -1,0 +1,48 @@
+<%= login_head %><body class="" data-controller="local-time lightbox">
+<a href="#main-content" class="skip-navigation btn">Skip to main content</a>
+<nav id="nav">
+</nav>
+<%= flash_html %><main id="main-content">
+<section class="txt-align-center">
+<div class="panel<%= panel_modifier %>">
+<figure class="account-logo avatar center margin-block-end txt-xx-large"><img src="<%= logo_src %>" alt="Account logo" width="300" height="300"></figure>
+<form class="flex flex-column gap" action="<%= origin %>/session" accept-charset="UTF-8" method="post">
+<fieldset class="flex flex-column gap center-block upad">
+<legend class="txt-large txt-align-center"><strong><%= @account_name %></strong></legend>
+<div class="flex align-center gap">
+<%= translation_button("email_address") %>
+<label class="flex align-center gap input input--actor txt-large">
+<input class="input" type="email" name="email_address" id="email_address" required="required" autofocus="autofocus" autocomplete="username" placeholder="Enter your email address"<%= email_value %>>
+<%= icon("email.svg", 24, "colorize--black") %>
+</label>
+</div>
+<div class="flex align-center gap">
+<%= translation_button("password") %>
+<label class="flex align-center gap input input--actor txt-large">
+<input class="input" type="password" name="password" id="password" required="required" autocomplete="current-password" placeholder="Enter your password" maxlength="72" size="72">
+<%= icon("password.svg", 24, "colorize--black") %>
+</label>
+</div>
+<button class="btn btn--reversed center txt-large" type="submit" name="log_in">
+<%= icon("arrow-right.svg", nil) %>
+<span class="for-screen-reader">Go</span>
+</button>      </fieldset>
+</form>  </div>
+<% if o = @owner %><div class="txt-align-center margin-block-double full-width">
+<a class="btn center" href="mailto:&quot;<%= o.name.to_s %>&quot; &lt;<%= o.email_address.to_s %>&gt;" title="Email <%= o.name.to_s %>">
+<%= icon("lifebuoy.svg", nil) %>
+<span><%= o.email_address.to_s %></span>
+</a>
+<div class="txt-align-center center margin-block txt-subtle">Campfire&trade; version <span class="version-badge"><%= version %></span></div>
+</div>
+<% end %></section>
+<footer id="footer">
+</footer>
+</main>
+<aside id="sidebar" data-controller="toggle-class" data-toggle-class-toggle-class="open">
+</aside>
+<%= lightbox_dialog %><a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">
+<img alt="Campfire logo" src="<%= campfire_icon_src %>" width="256" height="216">
+</a>
+</body>
+</html>

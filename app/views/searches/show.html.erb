@@ -1,0 +1,6 @@
+<%= page_open %><div id="message-area" class="message-area">
+<div class="message-area--empty min-width center"><figure class="center pad"><img aria-hidden="true" class="colorize--black translucent" src="<%= search_icon_src %>"></figure></div>
+<div id="search-results" class="messages searches__results" data-controller="search-results" data-search-results-target="messages" data-search-results-me-class="message--me" data-search-results-threaded-class="message--threaded" data-search-results-mentioned-class="message--mentioned" data-search-results-formatted-class="message--formatted" data-query="<%= @query %>">
+<%= messages_html %></div>
+</div>
+<%= page_close %>
