@@ -1,0 +1,5 @@
+<%= page_open(@user.not_nil!) %><section class="panel panel--wide txt-align-center flex flex-column"><form action="/account/custom_styles" accept-charset="UTF-8" method="post" class="flex flex-column gap"><input type="hidden" name="_method" value="patch"><h1 class="margin-none">Custom CSS</h1>
+<label class="flex align-start gap flex-item-grow"><textarea name="account[custom_styles]" id="account_custom_styles" class="input txt--small" placeholder="Add CSS styles…" autocomplete="off" spellcheck="false" rows="16"><%= @account.not_nil!.custom_styles.to_s %></textarea></label>
+<button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
+</form></section>
+<%= page_close %>

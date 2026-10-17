@@ -1,11 +1,30 @@
 # GET/PATCH /users/me/profile — профиль текущего пользователя
-# (референс: campfire-express routes.js /users/me/profile + profile.eta):
-# форма name/email/password/bio, список комнат участия и session
+# (референс: users/profiles/show.html.erb + profile.eta): форма
+# name/email/password/bio, список комнат участия и session
 # transfer-ссылка с QR (4 часа действия, purpose "user/transfer").
+# Разметка — app/views/profiles/show.html.erb (implicit render),
+# контроллер готовит данные.
 class ProfilesController < ApplicationController
+  # show.html.erb: user, пары комната-membership для списка участия,
+  # transfer-ссылка и QR-путь к ней.
+  @user : User?
+  @room_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
+  @transfer_url : String = ""
+  @qr_path : String = ""
+
   def show
     user = current_user.not_nil!
-    render(html: String.build { |io| page(io, user) })
+    @user = user
+    rooms = Room.where(
+      %(id IN (SELECT room_id FROM memberships WHERE user_id = ?)), user.id.not_nil!)
+      .to_a.index_by(&.id.not_nil!)
+    user.memberships.each do |membership|
+      if room = rooms[membership.room_id.not_nil!]?
+        @room_memberships << {room, membership}
+      end
+    end
+    @transfer_url = transfer_url_for(user)
+    @qr_path = "/qr_code/" + Base64.urlsafe_encode(@transfer_url, padding: false)
   end
 
   def update
@@ -23,94 +42,37 @@ class ProfilesController < ApplicationController
     redirect_to "/users/me/profile"
   end
 
-  # profile.eta: nav (back + logout), аватар-блок (camera), поля с
-  # иконками person/email/password/bio, save с check, список комнат с
-  # involvement-колокольчиками, transfer_link (QR/copy иконки).
-  private def page(io, user : User) : Nil
-    io << ChatLayout.page_open("profile", "Profile: #{user.name}", user,
-      nav_html: profile_nav)
-    io << %(<section class="panel flex flex-column gap" style="view-transition-name: avatar-#{user.id.not_nil!}">\n)
+  # ————— ERB-хелперы (app/views/profiles/show.html.erb) —————
+  # SafeString: сырой HTML из ChatLayout без повторного экранирования
+  # в <%= %> (как boosts).
 
-    # Аватар (загрузка файла не поддерживается — без runtime-ошибок)
-    io << %(<div class="align-center center avatar__form gap">\n)
-    io << %(<form class="txt-medium" enctype="multipart/form-data" action="/users/me/profile" method="post">)
-    io << %(<input type="hidden" name="_method" value="patch">)
-    io << %(<label class="btn input--file">) << ChatLayout.icon("camera.svg")
-    io << %(<input type="file" name="user[avatar]" id="file" class="input" accept="image/*">)
-    io << %(<span class="for-screen-reader">Upload avatar</span></label></form>\n)
-    io << %(<form enctype="multipart/form-data" action="/users/me/profile" method="post">)
-    io << %(<input type="hidden" name="_method" value="patch">)
-    io << %(<label class="btn avatar input--file txt-xx-large">)
-    io << %(<img src="/users/#{user.id.not_nil!}/avatar" aria-hidden="true" width="300" height="300">)
-    io << %(<input type="file" name="user[avatar]" id="file" class="input" accept="image/*">)
-    io << %(<span class="for-screen-reader">Avatar</span></label></form>\n)
-    io << %(</div>\n)
+  # head + body + nav профиля (back + logout) + main (ChatLayout.page_open).
+  private def page_open(user : User) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_open("profile", "Profile: #{user.name}", user,
+      nav_html: profile_nav))
+  end
 
-    io << %(<form action="/users/me/profile" accept-charset="UTF-8" method="post">)
-    io << %(<input type="hidden" name="_method" value="patch">)
-    io << %(<div class="flex flex-column gap">\n)
-    io << %(<div class="flex align-center gap"><label class="flex align-center gap flex-item-grow input input--actor">)
-    io << %(<input name="user[name]" id="user_name" value=") << HTML.escape(user.name.to_s)
-    io << %(" class="input txt-large" autocomplete="name" placeholder="Enter your name" autofocus required data-1p-ignore="true">)
-    io << ChatLayout.icon("person.svg", 24, "colorize--black") << %(</label></div>\n)
-    io << %(<div class="flex align-center gap"><label class="flex align-center gap flex-item-grow input input--actor">)
-    io << %(<input type="email" name="user[email_address]" id="user_email_address" value=") << HTML.escape(user.email_address.to_s)
-    io << %(" class="input txt-large" autocomplete="username" placeholder="Enter your email address">)
-    io << ChatLayout.icon("email.svg", 24, "colorize--black") << %(</label></div>\n)
-    io << %(<div class="flex align-center gap"><label class="flex align-center gap flex-item-grow input input--actor">)
-    io << %(<input type="password" name="user[password]" id="user_password" class="input txt-large" )
-    io << %(autocomplete="new-password" placeholder="Change password" maxlength="72">)
-    io << ChatLayout.icon("password.svg", 24, "colorize--black") << %(</label></div>\n)
-    io << %(<div class="flex align-start gap"><label class="flex align-center gap flex-item-grow input input--actor">)
-    io << %(<textarea name="user[bio]" id="user_bio" class="input txt-large" )
-    io << %(placeholder="A few words about yourself…" maxlength="200" rows="3">)
-    io << HTML.escape(user.bio.to_s) << %(</textarea>)
-    io << ChatLayout.icon("bio.svg", 24, "colorize--black") << %(</label></div>\n)
-    io << %(<button class="btn btn--reversed center txt-large" type="submit">)
-    io << ChatLayout.icon("check.svg") << %(<span class="for-screen-reader">Save changes</span></button>\n)
-    io << %(</div></form>\n)
+  private def page_close : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_close)
+  end
 
-    # Комнаты участия (эталон: menu с Memberships + DirectMemberships,
-    # involvement-колокольчик на каждую).
-    rooms = Room.where(
-      %(id IN (SELECT room_id FROM memberships WHERE user_id = ?)), user.id.not_nil!)
-      .to_a.index_by(&.id.not_nil!)
-    io << %(<div class="margin-block pad-inline pad-block fill-shade border-radius">)
-    io << %(<menu class="flex flex-column gap margin-none pad">\n)
-    user.memberships.each do |membership|
-      room = rooms[membership.room_id.not_nil!]?
-      next unless room
-      io << %(<li class="flex align-center gap margin-none min-width membership-item">)
-      io << %(<a href="/rooms/) << room.id.not_nil!.to_s << %(" class="overflow-ellipsis fill-shade txt-primary txt-undecorated"><strong>)
-      label = room.name.to_s.presence || "Direct message"
-      io << HTML.escape(label) << %(</strong></a><hr class="separator" aria-hidden="true">)
-      io << %(<span class="txt-small">) << involvement_chip(room, membership) << %(</span></li>\n)
-    end
-    io << %(</menu></div>\n)
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
+  end
 
-    # Session transfer (transfer_link.eta): laptop/transfer/mobile иконки,
-    # ссылка + QR + копирование.
-    transfer_url = transfer_url_for(user)
-    qr_path = "/qr_code/" + Base64.urlsafe_encode(transfer_url, padding: false)
-    io << %(<fieldset><legend class="gap">)
-    io << ChatLayout.icon("laptop.svg", 36, "colorize--black")
-    io << ChatLayout.icon("transfer.svg", 36, "colorize--black")
-    io << ChatLayout.icon("mobile-phone.svg", 36, "colorize--black")
-    io << %(</legend>)
-    io << %(<div class="flex flex-column gap">)
-    io << %(<label for="session_transfer_url" class="for-screen-reader">)
-    io << %(Use this link to login automatically on another device</label>\n)
-    io << %(<input type="text" class="input" value=") << HTML.escape(transfer_url)
-    io << %(" id="session_transfer_url" readonly>\n)
-    io << %(<div class="flex align-center center gap">)
-    io << %(<a href=") << HTML.escape(qr_path) << %(" class="btn" data-lightbox-target="image" )
-    io << %(data-action="lightbox#open" data-lightbox-url-value=") << HTML.escape(qr_path) << %(">)
-    io << %(<span class="for-screen-reader">Show auto-login QR code</span>)
-    io << ChatLayout.icon("qr-code.svg", 20, "colorize--black") << %(</a>\n)
-    io << ChatLayout.copy_button(transfer_url, "Copy auto-login link") << %(\n)
-    io << %(</div></div></fieldset>\n)
-    io << %(</section>\n)
-    io << ChatLayout.page_close
+  private def copy_button(url : String) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.copy_button(url, "Copy auto-login link"))
+  end
+
+  # involvement.eta (статически, без involvement-роута).
+  private def involvement_chip(room : Room, membership : Membership) : ERB::SafeString
+    involvement = membership.involvement.to_s.presence || "mentions"
+    human = ChatLayout::INVOLVEMENT_LABELS[involvement]? || involvement
+    ERB::SafeString.new(
+      %(<turbo-frame id="involvement_room_#{room.id.not_nil!}">) +
+      %(<button role="checkbox" aria-checked="true" tabindex="0" class="btn #{involvement}" type="button">) +
+      ChatLayout.icon("notification-bell-#{involvement}.svg") +
+      %(<span class="for-screen-reader">) + human + %(</span></button></turbo-frame>))
   end
 
   # profile_nav.eta: назад + logout (кнопка-иконка, форма на /session).
@@ -122,16 +84,6 @@ class ProfilesController < ApplicationController
       io << %(<button class="btn">) << ChatLayout.icon("logout.svg")
       io << %(<span class="for-screen-reader">Log out</span></button></form></div>)
     end
-  end
-
-  # involvement.eta (статически, без involvement-роута).
-  private def involvement_chip(room : Room, membership : Membership) : String
-    involvement = membership.involvement.to_s.presence || "mentions"
-    human = ChatLayout::INVOLVEMENT_LABELS[involvement]? || involvement
-    %(<turbo-frame id="involvement_room_#{room.id.not_nil!}">) +
-      %(<button role="checkbox" aria-checked="true" tabindex="0" class="btn #{involvement}" type="button">) +
-      ChatLayout.icon("notification-bell-#{involvement}.svg") +
-      %(<span class="for-screen-reader">) + human + %(</span></button></turbo-frame>)
   end
 
   # 4 часа действия, как в референсе (routes.js: 4 * 3600000).

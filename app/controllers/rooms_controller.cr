@@ -5,6 +5,30 @@
 # Whole-page response cache (Фаза 3): готовый HTML кэшируется per-worker,
 # инвалидация по DB-epoch (PRAGMA data_version); отдача с gzip + ETag/304.
 class RoomsController < ApplicationController
+  # new.html.erb / edit.html.erb + партиал _form.html.erb (room_form)
+  # и direct-ветка edit. Данные формы готовит prepare_room_form.
+  @room : Room?
+  @kind : String = ""
+  @user : User?
+  @selected : Set(Int64) = Set(Int64).new
+  @is_open : Bool = false
+  @can_administer : Bool = false
+  @users : Array(User) = [] of User
+  @divider : Int32 = 0
+  @direct : Bool = false
+  @direct_title : String = ""
+  @direct_members : Array(User) = [] of User
+
+  # HTML-партиал формы комнаты (room_form) — compile_partials:
+  # locals — типизированные аргументы скомпилированного метода.
+  compile_partials({
+    "rooms/_form" => {path: "app/views/rooms/_form.html.erb",
+                      locals: {"room" => Room?, "kind" => String,
+                               "user" => User, "selected" => Set(Int64),
+                               "is_open" => Bool, "can_administer" => Bool,
+                               "users" => Array(User), "divider" => Int32}},
+  })
+
   def show
     room = Room.find?(params["id"].to_s.to_i64)
     unless room
@@ -109,33 +133,39 @@ class RoomsController < ApplicationController
     redirect_to "/rooms/#{room.id}/involvement"
   end
 
-  # GET /rooms/:kind/new — форма новой комнаты (room_form.eta: имя,
-  # список доступа с аватарами/свитчами, фильтр, save с иконкой,
-  # delete-панель; directs — direct_new/direct_edit). Роуты вида
-  # /rooms/{opens,closeds,directs}/new даёт resources в routes.cr;
-  # kind приходит из defaults или сегмента :kind.
+  # GET /rooms/:kind/new — форма новой комнаты (rooms/new.html.erb +
+  # _form.html.erb: имя, список доступа с аватарами/свитчами, фильтр,
+  # save с иконкой, delete-панель). Роуты вида /rooms/{opens,closeds}/new
+  # даёт resources в routes.cr; kind приходит из defaults.
   def new
     user = current_user.not_nil!
     kind = params["kind"].to_s
     return head(:not_found) unless {"opens", "closeds", "directs"}.includes?(kind)
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build { |io| room_form(io, nil, kind, user) })
+    prepare_room_form(nil, kind, user)
   end
 
   # GET /rooms/{opens,closeds}/:room_id/edit и /rooms/directs/:room_id/edit —
   # настройки комнаты (ссылка "Settings for this room"): opens/closeds — та
   # же форма с текущим именем, _method=patch; directs — отдельная страница
-  # (directs/edit.html.erb: аватары участников + кнопка Delete Ping).
+  # (edit.html.erb: аватары участников + кнопка Delete Ping).
   def edit
     user = current_user.not_nil!
     room = Room.find?(params["room_id"].to_s.to_i64)
     return head(:not_found) unless room
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
+    @user = user
+    @room = room
     if room.type.to_s.ends_with?("Direct")
-      render(html: String.build { |io| direct_edit(io, room, user) })
+      @direct = true
+      members = User.where(
+        %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
+        room.id.not_nil!).order("id").to_a
+      uid = user.id.not_nil!
+      others = members.reject { |m| m.id == uid }.map(&.name.to_s)
+      @direct_title = ChatLayout.display_sentence(others, user.name.to_s)
+      @direct_members = members.size > 1 ? members.reject { |m| m.id == uid } : members
     else
       kind = (room.type.to_s.split("::").last? || "").downcase + "s"
-      render(html: String.build { |io| room_form(io, room, kind, user) })
+      prepare_room_form(room, kind, user)
     end
   end
 
@@ -244,151 +274,53 @@ class RoomsController < ApplicationController
     ids
   end
 
-  # rooms/directs/edit.html.erb: панель с карточками участников (аватар
-  # 10ch + имя) и кнопкой удаления Ping (button_to _method=delete).
-  # Заголовок — room_display_name: имена остальных участников через
-  # to_sentence, соль-комнате — имя самого юзера.
-  private def direct_edit(io, room : Room, user : User) : Nil
-    members = User.where(
-      %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
-      room.id.not_nil!).order("id").to_a
-    uid = user.id.not_nil!
-    others = members.reject { |m| m.id == uid }.map(&.name.to_s)
-    io << ChatLayout.page_open("room-form",
-      "Edit settings for #{ChatLayout.display_sentence(others, user.name.to_s)}", user,
-      nav_html: ChatLayout.nav_back("/rooms/#{room.id.not_nil!}"))
-    io << %(<div class="panel txt-align-center">\n)
-    io << %(<section class="directs--edit margin-block-end">\n)
-    shown = members.size > 1 ? members.reject { |m| m.id == uid } : members
-    shown.each do |member|
-      io << %(<div class="member flex flex-column gap fill-shade pad border-radius">\n)
-      io << %(<figure class="avatar center" style="--avatar-border-radius: 10ch; --avatar-size: 10ch;">\n)
-      io << ChatLayout.avatar_link(member, "lazy") << %(\n</figure>\n\n)
-      io << %(<strong>) << HTML.escape(member.name.to_s) << %(</strong>\n</div>\n)
-    end
-    io << %(</section>\n)
-    io << %(<form class="button_to" method="post" action="/rooms/) << room.id.not_nil! << %(">)
-    io << %(<input type="hidden" name="_method" value="delete">)
-    io << %(<button class="btn btn--negative center" aria-label="Delete Ping" )
-    io << %(data-turbo-confirm="Are you sure you want to delete this ping and all messages in it? This can’t be undone." )
-    io << %(type="submit">) << ChatLayout.icon("trash.svg") << %(Ping</button></form>\n)
-    io << %(</div>\n)
-    io << ChatLayout.page_close
-  end
-
-  # room_form.eta: панель с именем, списком доступа (аватары, свитчи,
-  # фильтр), save с иконкой check, delete-панель с trash.
-  private def room_form(io, room : Room?, kind : String, user : User) : Nil
+  # Данные _form.html.erb: выбранные участники, флаги админа/открытости,
+  # юзеры (выбранные первыми, потом по имени), позиция разделителя.
+  private def prepare_room_form(room : Room?, kind : String, user : User) : Nil
+    @room = room
+    @kind = kind
+    @user = user
     selected = if r = room
       Membership.where("room_id = ?", r.id.not_nil!)
         .map(&.user_id.not_nil!).to_set
     else
       Set(Int64).new.tap { |s| s << user.id.not_nil! }
     end
-    is_open = kind == "opens"
-    can_administer = room.nil? || user.role == 1 || room.creator_id == user.id
-    users = User.where("status = 0").to_a
+    @selected = selected
+    @is_open = kind == "opens"
+    @can_administer = room.nil? || user.role == 1 || room.creator_id == user.id
+    @users = User.where("status = 0").to_a
       .sort_by(&.name.to_s.downcase)
       .sort! { |a, b|
         (selected.includes?(b.id.not_nil!) ? 1 : 0) <=>
         (selected.includes?(a.id.not_nil!) ? 1 : 0)
       }
-    divider = selected.size
+    @divider = selected.size
+  end
 
-    io << ChatLayout.page_open("room-form", room ? "Edit room" : "New room", user,
-      nav_html: ChatLayout.nav_back(room ? "/rooms/#{room.id.not_nil!}" : "/"))
-    vt = room ? "edit-room-#{room.id.not_nil!}" : "new-room"
-    io << %(<section class="panel txt-align-center" style="view-transition-name: #{vt}">)
-    action = "/rooms/#{kind}#{room ? "/#{room.id.not_nil!}" : ""}"
-    io << %(<form method="post" action=") << action << %(" accept-charset="UTF-8">)
-    io << %(<input type="hidden" name="_method" value="patch">) if room
-    io << %(<div class="flex align-center gap">)
-    if can_administer
-      io << %(<label class="flex-item-grow txt-large"><input name="room[name]" id="room_name" )
-      io << %(class="input full-width" required autofocus placeholder="Name the room" )
-      io << %(data-turbo-permanent="true" data-action="keydown.enter->form#submit:prevent" )
-      io << %(type="text" value=") << HTML.escape(room.try(&.name).to_s) << %(">)
-      io << %(<span class="for-screen-reader">Name this room</span></label>)
-    else
-      io << %(<h1 class="flex-item-grow txt-x-large">) << HTML.escape(room.try(&.name).to_s) << %(</h1>)
-    end
-    io << %(</div>\n<hr class="margin-block borderless">\n)
-    io << %(<section class="room-access margin-block pad-inline fill-shade border-radius">)
-    io << %(<menu class="flex flex-column gap margin-none pad overflow-y constrain-height" )
-    io << %(data-controller="filter" data-filter-active-class="filter--active" )
-    io << %(data-filter-selected-class="selected">\n)
+  # ————— ERB-хелперы (rooms/{new,edit,_form}.html.erb) —————
 
-    # «Everyone»: открытость комнаты (opens ↔ closeds свитчем-ссылкой)
-    if can_administer || is_open
-      io << %(<li class="flex align-center gap margin-none">)
-      io << %(<figure class="avatar flex-item-no-shrink" style="--avatar-border-radius: 0; --avatar-size: 4ch">)
-      io << %(<img aria-hidden="true" class="colorize--black" style="background-color: transparent" )
-      io << %(src=") << ChatLayout.asset("everyone.svg") << %(">)
-      io << %(<span class="for-screen-reader">Everyone</span></figure>)
-      io << %(<div class="min-width"><div class="overflow-ellipsis fill-shade"><strong>Everyone</strong></div></div>)
-      io << %(<hr class="separator" aria-hidden="true">)
-      if can_administer
-        other = is_open ? "closeds" : "opens"
-        io << %(<a class="btn--faux flex-inline" tabindex="-1" data-turbo-action="replace" )
-        io << %(href="/rooms/) << other << (room ? "/#{room.id.not_nil!}/edit" : "/new") << %(">)
-        io << %(<label for="room_type" class="switch"><input type="checkbox" id="room_type" )
-        io << %(class="switch__input") << (is_open ? " checked" : "") << %(">)
-        io << %(<span class="switch__btn round"></span><span class="for-screen-reader">)
-        io << (is_open ? "Give only some access to this room" : "Give everyone access to this room")
-        io << %(</span></label></a>)
-      end
-      io << %(</li>\n<hr class="separator full-width" style="--border-style: solid">\n)
-    end
+  # head + body + nav (назад на back_path) + main (screen "room-form").
+  private def page_open(title : String, back_path : String) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_open("room-form", title, @user.not_nil!,
+      nav_html: ChatLayout.nav_back(back_path)))
+  end
 
-    io << %(<input type="search" id="search" autocorrect="off" autocomplete="off" )
-    io << %(data-1p-ignore="true" class="input input--transparent full-width" )
-    io << %(placeholder="Filter…" data-action="input->filter#filter">\n) if users.size > 20
+  private def page_close : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_close)
+  end
 
-    io << %(<div data-filter-target="list" contents>)
-    users.each_with_index do |member, i|
-      mid = member.id.not_nil!
-      if divider > 0 && i == divider
-        io << %(<hr class="separator full-width" style="--border-style: solid">)
-      end
-      io << %(<li class="flex align-center gap margin-none" data-value=")
-      io << HTML.escape(member.name.to_s.downcase) << %(">)
-      io << %(<figure class="avatar flex-item-no-shrink" style="--avatar-size: 4ch">)
-      io << %(<a title=") << HTML.escape(member.name.to_s)
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{mid}">)
-      io << %(<img aria-hidden="true" loading="lazy" src="/users/#{mid}/avatar" width="48" height="48"></a></figure>)
-      io << %(<div class="min-width"><div class="overflow-ellipsis fill-shade"><strong>)
-      io << HTML.escape(member.name.to_s) << %(</strong></div></div>)
-      io << %(<hr class="separator" aria-hidden="true">)
-      if can_administer
-        if is_open || (room.nil? && mid == user.id.not_nil!)
-          io << %(<input type="hidden" name="user_ids[]" value="#{mid}">) unless is_open
-          io << ChatLayout.icon("check.svg", 20, "colorize--black flex-item-no-shrink")
-        else
-          io << %(<label class="switch flex-item-no-shrink"><input type="checkbox" )
-          io << %(name="user_ids[]" value="#{mid}" class="switch__input")
-          io << %( checked) if selected.includes?(mid)
-          io << %(><span class="switch__btn round"></span><span class="for-screen-reader">Give )
-          io << HTML.escape(member.name.to_s) << %( access to this room</span></label>)
-        end
-      end
-      io << %(</li>\n)
-    end
-    io << %(</div></menu></section>\n)
-    if can_administer
-      io << %(<button name="button" type="submit" class="btn btn--reversed txt-large center">)
-      io << ChatLayout.icon("check.svg") << %(<span class="for-screen-reader">Save</span></button>\n)
-    end
-    io << %(</form></section>\n)
-    if room && can_administer
-      io << %(<section class="panel txt-align-center"><form class="button_to" method="post" )
-      io << %(action="/rooms/) << room.id.not_nil! << %("><input type="hidden" name="_method" value="delete">)
-      io << %(<button class="btn btn--negative max-width" aria-label="Delete )
-      io << HTML.escape(room.name.to_s)
-      io << %(" data-turbo-confirm="Are you sure you want to delete this room and all messages in it? This can’t be undone." )
-      io << %(type="submit">) << ChatLayout.icon("trash.svg")
-      io << %(<span class="overflow-ellipsis">) << HTML.escape(room.name.to_s) << %(</span></button></form></section>\n)
-    end
-    io << ChatLayout.page_close
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
+  end
+
+  # Карточка участника direct-комнаты (avatar_link c lazy-загрузкой).
+  private def avatar_link(member : User) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.avatar_link(member, "lazy"))
+  end
+
+  private def everyone_src : String
+    ChatLayout.asset("everyone.svg")
   end
 
   # turbo-stream prepend ссылки комнаты в #shared_rooms (registerRoomForms:

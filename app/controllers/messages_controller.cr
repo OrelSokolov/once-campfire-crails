@@ -248,11 +248,16 @@ class MessagesController < ApplicationController
     end
   end
 
-  # GET /rooms/:id/messages/:message_id — show.html.erb (render @message):
-  # страница с DOM сообщения. Turbo извлекает из ответа фрейм
-  # edit_message_<id> — это завершает навигацию фрейма после редиректа
-  # update (фрейм получает [complete]) и подтягивает отрендеренное
-  # сообщение.
+  # show.html.erb (render @message): страница с DOM сообщения. Turbo
+  # извлекает из ответа фрейм edit_message_<id> — это завершает навигацию
+  # фрейма после редиректа update (фрейм получает [complete]) и
+  # подтягивает отрендеренное сообщение.
+  # show.html.erb / edit.html.erb
+  @room : Room?
+  @message : Message?
+  @mid : Int64?
+  @attachment : ChatLayout::Attachment?
+
   def show
     room = Room.find?(params["id"].to_s.to_i64)
     message = Message.find?(params["message_id"].to_s.to_i64)
@@ -260,18 +265,8 @@ class MessagesController < ApplicationController
       response.status = :not_found
       return render(plain: "Message not found")
     end
-    message = message.not_nil!
-    room = room.not_nil!
-
-    attachment = ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]?
-    dom = ChatLayout.message_dom(message, room,
-      User.find?(message.creator_id.not_nil!), attachment, base_url: origin)
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << "<!doctype html>\n<html>\n<head><title>Campfire</title></head>\n<body>\n"
-      io << dom
-      io << "\n</body>\n</html>\n"
-    end)
+    @room = room
+    @message = message
   end
 
   # GET /rooms/:id/messages/:message_id/edit — форма редактирования в
@@ -291,60 +286,10 @@ class MessagesController < ApplicationController
       return render(plain: "Cannot edit this message")
     end
 
-    mid = message.id.not_nil!
-    attachment = ChatLayout.attachments_for([mid])[mid]?
-    room_path = "/rooms/#{room.id}/messages/#{mid}"
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << %(<turbo-frame id="edit_message_#{mid}">\n)
-      io << %(<div class="message__body position-relative" data-controller="scroll-into-view">\n)
-      io << %(<div class="message__body-content message__body-content--editing gap">\n)
-      if attachment
-        io << ChatLayout.attachment_presentation(attachment)
-        io << %(<div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half">)
-        io << %(<button name="button" type="submit" class="btn btn--negative center margin-block-end" )
-        io << %(form="delete_form_message_#{mid}" data-turbo-confirm="Are you sure you want to delete this message?">)
-        io << ChatLayout.icon("trash.svg")
-        io << %(<span class="for-screen-reader">Delete message</span></button>\n)
-        io << %(</div>\n)
-      else
-        io << %(<div class="composer--edit composer--rich-text">\n)
-        io << %(<form id="form_message_#{mid}" data-controller="form" )
-        io << %(data-action="lexxy:file-accept-&gt;form#preventAttachment keydown.esc-&gt;form#cancel keydown.ctrl+enter-&gt;form#submit:prevent keydown.meta+enter-&gt;form#submit:prevent" )
-        io << %(action="#{room_path}" accept-charset="UTF-8" method="post">)
-        io << %(<input type="hidden" name="_method" value="patch">\n)
-        io << %(<div class="full-width input input--actor min-width fill-white">)
-        io << %(<lexxy-editor rows="1" class="input lexxy-content" aria-multiline="true" aria-label="Edit message" autofocus="autofocus" )
-        io << %(permitted-attachment-types="application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed" )
-        io << %(data-action="lexxy:change-&gt;typing-notifications#start keydown-&gt;composer#submitByKeyboard:capture" )
-        io << %(data-direct-upload-url="#{origin}/rails/active_storage/direct_uploads" )
-        io << %(data-blob-url-template="#{origin}/rails/active_storage/blobs/redirect/:signed_id/:filename" )
-        io << %(id="message_body" name="message[body]" value=") << HTML.escape(message.body.to_s) << %(">)
-        io << %(<lexxy-prompt trigger="@" name="mention" src="/autocompletable/users?room_id=#{room.id}" )
-        io << %(remote-filtering="true" empty-results="No matches"></lexxy-prompt>)
-        io << %(</lexxy-editor>\n</div>\n)
-        io << %(<a data-form-target="cancel" hidden="hidden" href="#{room_path}">)
-        io << %(Close editor and discard changes</a>\n)
-        io << %(<div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half">)
-        io << %(<button name="button" type="submit" class="btn btn--reversed">)
-        io << ChatLayout.icon("check.svg")
-        io << %(<span class="for-screen-reader">Save changes</span></button>\n)
-        io << %(<button name="button" type="submit" class="btn btn--negative" form="delete_form_message_#{mid}" )
-        io << %(data-turbo-confirm="Are you sure you want to delete this message?">)
-        io << ChatLayout.icon("trash.svg")
-        io << %(<span class="for-screen-reader">Delete message</span></button>\n)
-        io << %(</div>\n</form>\n</div>\n)
-      end
-      io << %(</div>\n)
-      io << %(<div class="message__actions flex flex-wrap">)
-      io << %(<a class="message__action-btn message__edit-close-btn txt-small btn btn--borderless" href="#{room_path}">)
-      io << ChatLayout.icon("remove.svg", cls: "colorize--black")
-      io << %(<span class="for-screen-reader">Close editor and discard changes</span></a></div>\n)
-      io << %(<form id="delete_form_message_#{mid}" data-turbo-frame="edit_message_#{mid}" )
-      io << %(action="#{room_path}" accept-charset="UTF-8" method="post">)
-      io << %(<input type="hidden" name="_method" value="delete"></form>\n)
-      io << %(</div>\n</turbo-frame>\n)
-    end)
+    @room = room
+    @message = message
+    @mid = message.id.not_nil!
+    @attachment = ChatLayout.attachments_for([@mid.not_nil!])[@mid.not_nil!]?
   end
 
   # DELETE /rooms/:id/messages/:message_id — удаление сообщения
@@ -496,6 +441,30 @@ class MessagesController < ApplicationController
   # слов тела; теги вырезаем.
   private def plain_text(html : String) : String
     html.gsub(/<[^>]*>/, " ").gsub(/\s+/, " ").strip
+  end
+
+  # ————— ERB-хелперы (app/views/messages/{show,edit}.html.erb) —————
+
+  # show.html.erb: DOM сообщения (тот же message_dom, что в комнате).
+  private def message_dom : ERB::SafeString
+    message = @message.not_nil!
+    attachment = ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]?
+    ERB::SafeString.new(ChatLayout.message_dom(message, @room.not_nil!,
+      User.find?(message.creator_id.not_nil!), attachment, base_url: origin))
+  end
+
+  # edit.html.erb: presentation вложения (attachment-ветка).
+  private def attachment_html : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.attachment_presentation(@attachment.not_nil!))
+  end
+
+  # /rooms/:id/messages/:message_id для экшена.
+  private def message_path : String
+    "/rooms/#{@room.not_nil!.id}/messages/#{@mid}"
+  end
+
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 
   # messages.eta (референс): каждая запись — тот же DOM, что в комнате

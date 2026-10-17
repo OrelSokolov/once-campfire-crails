@@ -1,0 +1,17 @@
+<%= page_open(@user.not_nil!) %><section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
+<% if @user.not_nil!.role == 1 %><form class="flex flex-column gap" action="/account" accept-charset="UTF-8" method="post"><input type="hidden" name="_method" value="patch"><div class="flex align-center gap"><label class="flex align-center gap flex-item-grow"><input name="account[name]" value="<%= @account.not_nil!.name.to_s %>" id="account_name" class="input txt-large" autocomplete="off" placeholder="Name this account" autofocus></label>
+<button class="btn btn--reversed center" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
+</div></form>
+<div class="margin-block-start pad-block pad-inline-double fill-shade border-radius"><form class="flex align-center gap center" method="post" action="/account"><input type="hidden" name="_method" value="put"><div class="flex-item-grow flex align-center gap txt-align-start"><%= icon("crown.svg", 18, "colorize--black") %> Must be admin to create new rooms</div><input type="hidden" name="account[settings][restrict_room_creation_to_administrators]" value="<%= @restrict ? "false" : "true" %>"><label class="switch"><input type="checkbox" class="switch__input"<%= @restrict ? " checked" : "" %> data-action="change->form#submit"><span class="switch__btn round"></span><span class="for-screen-reader">Must be admin to create new rooms</span></label></form></div>
+<% else %><figure class="account-logo avatar txt-xx-large center"><img src="<%= app_logo_src %>" alt="Account logo" width="300" height="300"></figure>
+<h1 class="flex-item-grow txt-x-large"><%= @account.not_nil!.name.to_s %></h1>
+<% end %><div class="margin-block pad-inline pad-block-start fill-shade border-radius"><div class="flex flex-column align-center gap"><label class="flex flex-column gap full-width" style="--row-gap: 0.5em"><strong id="invite_label" class="invite-label">Share to invite more people</strong>
+<span class="flex align-center gap input input--actor fill-white"><%= icon("person-add.svg", 20, "colorize--black") %><input type="text" class="input" id="invite_url" value="<%= @join_url %>" aria-labelledby="invite_label" readonly></span></label>
+<div class="flex align-center gap"><a href="<%= @qr_path %>" class="btn" data-lightbox-target="image" data-action="lightbox#open" data-lightbox-url-value="<%= @qr_path %>"><span class="for-screen-reader">Show join link QR code</span><%= icon("qr-code.svg", 20, "colorize--black") %></a>
+<%= copy_button(@join_url) %>
+</div></div>
+<hr class="margin-block separator full-width" style="--border-style: solid"><menu class="flex flex-column gap margin-none pad">
+<% @users.each do |u| %><li class="flex align-center gap margin-none min-width"><figure class="avatar flex-item-no-shrink" style="--avatar-size: 4ch"><a title="<%= u.name.to_s %>" class="btn avatar" data-turbo-frame="_top" href="/users/<%= u.id %>"><img aria-hidden="true" loading="lazy" src="/users/<%= u.id %>/avatar" width="48" height="48"></a></figure><div class="min-width"><div class="overflow-ellipsis fill-shade"><strong><%= u.name.to_s %></strong></div></div><%= u.role == 1 ? icon("crown.svg", 16, "flex-item-no-shrink colorize--black") : "" %></li>
+<% end %></menu></div>
+</section>
+<%= page_close %>

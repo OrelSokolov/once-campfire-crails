@@ -2,32 +2,17 @@
 # routes.js + custom_styles.eta): textarea account[custom_styles],
 # PATCH → UPDATE accounts.custom_styles; layout инжектит <style>
 # (см. ChatLayout.head). Только администратор.
+# Разметка GET — app/views/custom_styles/edit.html.erb (implicit render).
 class CustomStylesController < ApplicationController
   before_action :require_admin
 
+  # edit.html.erb: аккаунт (текущий CSS в textarea) и viewer.
+  @account : Account?
+  @user : User?
+
   def edit
-    account = Account.take.not_nil!
-    user = current_user.not_nil!
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << ChatLayout.page_open("custom-styles", "Custom CSS", user,
-        nav_html: ChatLayout.nav_back("/account/edit"))
-      io << %(<section class="panel panel--wide txt-align-center flex flex-column">)
-      io << %(<form action="/account/custom_styles" accept-charset="UTF-8" )
-      io << %(method="post" class="flex flex-column gap">)
-      io << %(<input type="hidden" name="_method" value="patch">)
-      io << %(<h1 class="margin-none">Custom CSS</h1>\n)
-      io << %(<label class="flex align-start gap flex-item-grow">)
-      io << %(<textarea name="account[custom_styles]" id="account_custom_styles" )
-      io << %(class="input txt--small" placeholder="Add CSS styles…" autocomplete="off" )
-      io << %(spellcheck="false" rows="16">)
-      io << HTML.escape(account.custom_styles.to_s) << %(</textarea></label>\n)
-      io << %(<button class="btn btn--reversed center txt-large" type="submit">)
-      io << ChatLayout.icon("check.svg")
-      io << %(<span class="for-screen-reader">Save changes</span></button>\n)
-      io << %(</form></section>\n)
-      io << ChatLayout.page_close
-    end)
+    @account = Account.take.not_nil!
+    @user = current_user.not_nil!
   end
 
   def update
@@ -46,5 +31,21 @@ class CustomStylesController < ApplicationController
     unless current_user.not_nil!.role == 1
       render(plain: "forbidden", status: 403)
     end
+  end
+
+  # ————— ERB-хелперы (app/views/custom_styles/edit.html.erb) —————
+
+  # head + body + nav (только «назад» на /account/edit) + main.
+  private def page_open(user : User) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_open("custom-styles", "Custom CSS", user,
+      nav_html: ChatLayout.nav_back("/account/edit")))
+  end
+
+  private def page_close : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_close)
+  end
+
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 end

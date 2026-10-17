@@ -2,44 +2,13 @@
 # controller.rb + express routes.js): первый запуск создаёт аккаунт,
 # админ-пользователя, комнату "All Talk" (Rooms::Open) с membership и
 # сразу подписывает сессию. Если аккаунт уже есть — на "/".
+# Разметка GET — app/views/first_runs/show.html.erb (implicit render),
+# данных экшен не готовит.
 class FirstRunsController < ApplicationController
   skip_before_action :require_authentication
 
   def show
-    if Account.take
-      return redirect_to "/"
-    end
-    render(html: String.build do |io|
-      io << ChatLayout.page_open("first-run", "Set up Campfire", nil, body_class: "signup")
-      io << %(<form class="center max-width" action="/first_run" accept-charset="UTF-8" method="post">)
-      io << %(<section class="nametag u-relative">)
-      io << %(<div class="flex justify-center align-center pad-block">)
-      io << %(<img src=") << ChatLayout.asset("lanyard.svg")
-      io << %(" class="nametag__lanyard" aria-hidden="true"></div>\n)
-      io << %(<div class="nametag__inner flex flex-column gap">)
-      io << %(<fieldset class="flex flex-column center-block">)
-      io << %(<legend class="txt-large txt-align-center"><strong>Set up Campfire</strong></legend>)
-      io << %(<label class="align-center center avatar__form gap">)
-      io << %(<div class="btn avatar input--file txt-xx-large">)
-      io << %(<img src=") << ChatLayout.asset("default-avatar.svg")
-      io << %(" aria-hidden="true" alt="Add your avatar"></div></label></fieldset>\n)
-      io << %(<div class="flex align-center gap">)
-      io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-      io << %(<input class="input" autocomplete="name" placeholder="Name" autofocus required data-1p-ignore="true" type="text" name="user[name]" id="user_name">)
-      io << ChatLayout.icon("person.svg", 24, "colorize--black") << %(</label></div>\n)
-      io << %(<div class="flex align-center gap">)
-      io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-      io << %(<input class="input" autocomplete="username" placeholder="Email address" required type="email" name="user[email_address]" id="user_email_address">)
-      io << ChatLayout.icon("email.svg", 24, "colorize--black") << %(</label></div>\n)
-      io << %(<div class="flex align-center gap">)
-      io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-      io << %(<input class="input" autocomplete="new-password" placeholder="Password" required maxlength="72" type="password" name="user[password]" id="user_password">)
-      io << ChatLayout.icon("password.svg", 24, "colorize--black") << %(</label></div>\n)
-      io << %(<button class="btn btn--reversed center txt-large" type="submit">)
-      io << ChatLayout.icon("check.svg") << %(<span class="for-screen-reader">Save</span></button>\n)
-      io << %(</section></form>\n)
-      io << ChatLayout.page_close
-    end)
+    return redirect_to "/" if Account.take
   end
 
   def create
@@ -89,6 +58,30 @@ class FirstRunsController < ApplicationController
     cookies.signed.set("session_token", session.token.not_nil!,
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
     redirect_to "/"
+  end
+
+  # ————— ERB-хелперы (app/views/first_runs/show.html.erb) —————
+
+  # head + body.signup + пустой nav + main (без user).
+  private def page_open : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_open("first-run", "Set up Campfire", nil,
+      body_class: "signup"))
+  end
+
+  private def page_close : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_close)
+  end
+
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
+  end
+
+  private def lanyard_src : String
+    ChatLayout.asset("lanyard.svg")
+  end
+
+  private def default_avatar_src : String
+    ChatLayout.asset("default-avatar.svg")
   end
 
   private def nested_param(key : String) : String

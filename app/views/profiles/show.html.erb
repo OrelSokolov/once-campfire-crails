@@ -1,0 +1,22 @@
+<%= page_open(@user.not_nil!) %><section class="panel flex flex-column gap" style="view-transition-name: avatar-<%= @user.not_nil!.id %>">
+<div class="align-center center avatar__form gap">
+<form class="txt-medium" enctype="multipart/form-data" action="/users/me/profile" method="post"><input type="hidden" name="_method" value="patch"><label class="btn input--file"><%= icon("camera.svg") %><input type="file" name="user[avatar]" id="file" class="input" accept="image/*"><span class="for-screen-reader">Upload avatar</span></label></form>
+<form enctype="multipart/form-data" action="/users/me/profile" method="post"><input type="hidden" name="_method" value="patch"><label class="btn avatar input--file txt-xx-large"><img src="/users/<%= @user.not_nil!.id %>/avatar" aria-hidden="true" width="300" height="300"><input type="file" name="user[avatar]" id="file" class="input" accept="image/*"><span class="for-screen-reader">Avatar</span></label></form>
+</div>
+<form action="/users/me/profile" accept-charset="UTF-8" method="post"><input type="hidden" name="_method" value="patch"><div class="flex flex-column gap">
+<div class="flex align-center gap"><label class="flex align-center gap flex-item-grow input input--actor"><input name="user[name]" id="user_name" value="<%= @user.not_nil!.name.to_s %>" class="input txt-large" autocomplete="name" placeholder="Enter your name" autofocus required data-1p-ignore="true"><%= icon("person.svg", 24, "colorize--black") %></label></div>
+<div class="flex align-center gap"><label class="flex align-center gap flex-item-grow input input--actor"><input type="email" name="user[email_address]" id="user_email_address" value="<%= @user.not_nil!.email_address.to_s %>" class="input txt-large" autocomplete="username" placeholder="Enter your email address"><%= icon("email.svg", 24, "colorize--black") %></label></div>
+<div class="flex align-center gap"><label class="flex align-center gap flex-item-grow input input--actor"><input type="password" name="user[password]" id="user_password" class="input txt-large" autocomplete="new-password" placeholder="Change password" maxlength="72"><%= icon("password.svg", 24, "colorize--black") %></label></div>
+<div class="flex align-start gap"><label class="flex align-center gap flex-item-grow input input--actor"><textarea name="user[bio]" id="user_bio" class="input txt-large" placeholder="A few words about yourself…" maxlength="200" rows="3"><%= @user.not_nil!.bio.to_s %></textarea><%= icon("bio.svg", 24, "colorize--black") %></label></div>
+<button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
+</div></form>
+<div class="margin-block pad-inline pad-block fill-shade border-radius"><menu class="flex flex-column gap margin-none pad">
+<% @room_memberships.each do |room, membership| %><li class="flex align-center gap margin-none min-width membership-item"><a href="/rooms/<%= room.id %>" class="overflow-ellipsis fill-shade txt-primary txt-undecorated"><strong><%= room.name.to_s.presence || "Direct message" %></strong></a><hr class="separator" aria-hidden="true"><span class="txt-small"><%= involvement_chip(room, membership) %></span></li>
+<% end %></menu></div>
+<fieldset><legend class="gap"><%= icon("laptop.svg", 36, "colorize--black") %><%= icon("transfer.svg", 36, "colorize--black") %><%= icon("mobile-phone.svg", 36, "colorize--black") %></legend><div class="flex flex-column gap"><label for="session_transfer_url" class="for-screen-reader">Use this link to login automatically on another device</label>
+<input type="text" class="input" value="<%= @transfer_url %>" id="session_transfer_url" readonly>
+<div class="flex align-center center gap"><a href="<%= @qr_path %>" class="btn" data-lightbox-target="image" data-action="lightbox#open" data-lightbox-url-value="<%= @qr_path %>"><span class="for-screen-reader">Show auto-login QR code</span><%= icon("qr-code.svg", 20, "colorize--black") %></a>
+<%= copy_button(@transfer_url) %>
+</div></div></fieldset>
+</section>
+<%= page_close %>

@@ -1,9 +1,12 @@
 # /join/:code — регистрация по invite-ссылке (референс: routes.js
-# /join/:code + join.eta): GET — форма name/email/password, POST —
-# createUser (role=0 + memberships во все Rooms::Open, involvement
-# "mentions") + сессия + redirect на "/".
+# /join/:code + join.eta): GET — форма name/email/password (app/views/
+# joins/show.html.erb), POST — createUser (role=0 + memberships во все
+# Rooms::Open, involvement "mentions") + сессия + redirect на "/".
 class JoinsController < ApplicationController
   skip_before_action :require_authentication
+
+  # show.html.erb: аккаунт invite-ссылки (имя, join_code в action).
+  @account : Account?
 
   def show
     # Known-issue (PLAN.md): роутер декодирует path-сегменты через
@@ -16,49 +19,7 @@ class JoinsController < ApplicationController
     if current_user
       return redirect_to "/"
     end
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << ChatLayout.page_open("join", "Join #{account.name}", nil,
-        body_class: "signup",
-        nav_html: %(<div class="flex-item-justify-end"><a href="/session/new" class="btn flex-item-justify-end">) +
-          ChatLayout.icon("login-keys.svg") +
-          %(<span class="for-screen-reader">Sign in</span></a></div>))
-      io << %(<form action="/join/) << HTML.escape(account.join_code.to_s)
-      io << %(" accept-charset="UTF-8" method="post" class="center">)
-      io << %(<section class="nametag u-relative">)
-      io << %(<div class="flex justify-center align-center pad-block">)
-      io << %(<img src=") << ChatLayout.asset("lanyard.svg")
-      io << %(" class="nametag__lanyard" aria-hidden="true"></div>\n)
-      io << %(<div class="nametag__inner flex flex-column gap">)
-      io << %(<fieldset class="flex flex-column center-block">)
-      io << %(<legend class="txt-align-center flex gap"><figure class="account-logo avatar">)
-      io << %(<img src=") << ChatLayout.asset("logos/app-icon.png")
-      io << %(" alt="Account logo" width="300" height="300"></figure>)
-      io << %(<strong class="txt-large">) << HTML.escape(account.name.to_s) << %(</strong></legend>)
-      io << %(<label class="align-center center avatar__form gap">)
-      io << %(<div class="btn avatar input--file txt-xx-large">)
-      io << %(<img src=") << ChatLayout.asset("default-avatar.svg")
-      io << %(" aria-hidden="true" alt="Avatar"></div></label></fieldset>\n)
-      io << %(<div class="flex align-center gap">)
-      io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-      io << %(<input class="input" autocomplete="name" placeholder="Name" autofocus )
-      io << %(required data-1p-ignore="true" type="text" name="user[name]" id="user_name">)
-      io << ChatLayout.icon("person.svg", 24, "colorize--black") << %(</label></div>\n)
-      io << %(<div class="flex align-center gap">)
-      io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-      io << %(<input class="input" autocomplete="username" placeholder="Email address" )
-      io << %(required type="email" name="user[email_address]" id="user_email_address">)
-      io << ChatLayout.icon("email.svg", 24, "colorize--black") << %(</label></div>\n)
-      io << %(<div class="flex align-center gap">)
-      io << %(<label class="flex align-center gap flex-item-grow txt-large input input--actor">)
-      io << %(<input class="input" autocomplete="new-password" placeholder="Password" )
-      io << %(required maxlength="72" type="password" name="user[password]" id="user_password">)
-      io << ChatLayout.icon("password.svg", 24, "colorize--black") << %(</label></div>\n)
-      io << %(<button class="btn btn--reversed center txt-large" type="submit">)
-      io << ChatLayout.icon("check.svg") << %(<span class="for-screen-reader">Save</span></button>\n)
-      io << %(</section></form>\n)
-      io << ChatLayout.page_close
-    end)
+    @account = account
   end
 
   def create
@@ -104,5 +65,37 @@ class JoinsController < ApplicationController
     nested = params["user"]?
     return "" unless nested.is_a?(ActionController::Parameters)
     nested[key]?.to_s
+  end
+
+  # ————— ERB-хелперы (app/views/joins/show.html.erb) —————
+
+  # head + body.signup + nav (Sign in на /session/new) + main.
+  private def page_open : ERB::SafeString
+    account = @account.not_nil!
+    nav = %(<div class="flex-item-justify-end"><a href="/session/new" class="btn flex-item-justify-end">) +
+      ChatLayout.icon("login-keys.svg") +
+      %(<span class="for-screen-reader">Sign in</span></a></div>)
+    ERB::SafeString.new(ChatLayout.page_open("join", "Join #{account.name}", nil,
+      body_class: "signup", nav_html: nav))
+  end
+
+  private def page_close : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_close)
+  end
+
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
+  end
+
+  private def lanyard_src : String
+    ChatLayout.asset("lanyard.svg")
+  end
+
+  private def app_logo_src : String
+    ChatLayout.asset("logos/app-icon.png")
+  end
+
+  private def default_avatar_src : String
+    ChatLayout.asset("default-avatar.svg")
   end
 end

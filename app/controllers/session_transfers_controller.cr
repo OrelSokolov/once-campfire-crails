@@ -1,21 +1,16 @@
 # /session/transfers/:id — авто-логин по ссылке (референс:
 # campfire-express routes.js /session/transfers/:id + transfer.eta):
-# GET рендерит форму auto-submit, PUT/PATCH проверяет signed_id
-# (purpose "user/transfer"), стартует сессию и редиректит на "/".
+# GET рендерит форму auto-submit (app/views/session_transfers/
+# show.html.erb), PUT/PATCH проверяет signed_id (purpose
+# "user/transfer"), стартует сессию и редиректит на "/".
 class SessionTransfersController < ApplicationController
   skip_before_action :require_authentication
 
+  # show.html.erb: токен из пути (экранируется в action=).
+  @token : String = ""
+
   def show
-    token = params["id"].to_s
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << ChatLayout.head("Session transfer", nil, nil, chat: false)
-      io << %(<body>\n<main id="main-content">\n)
-      io << %(<form action="/session/transfers/) << HTML.escape(token)
-      io << %(" accept-charset="UTF-8" method="post" data-controller="auto-submit">)
-      io << %(<input type="hidden" name="_method" value="put"></form>\n)
-      io << %(</main>\n</body>\n</html>\n)
-    end)
+    @token = params["id"].to_s
   end
 
   def create
@@ -27,5 +22,11 @@ class SessionTransfersController < ApplicationController
     cookies.signed.set("session_token", session.token.not_nil!,
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
     redirect_to "/"
+  end
+
+  # ————— ERB-хелперы (app/views/session_transfers/show.html.erb) —————
+
+  private def head : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.head("Session transfer", nil, nil, chat: false))
   end
 end

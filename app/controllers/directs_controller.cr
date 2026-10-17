@@ -3,52 +3,14 @@
 # direct_rooms_control; create — найти существующую direct-комнату с
 # ровно этим набором участников или создать (membership "everything").
 class DirectsController < ApplicationController
+  # new.html.erb: viewer (для head-метаданных).
+  @user : User?
+
   # GET /rooms/directs/new — форма (подменяет direct_rooms_control в
-  # сайдбаре через data-turbo-frame="_self").
+  # сайдбаре через data-turbo-frame="_self"). Разметка — app/views/
+  # directs/new.html.erb (implicit render).
   def new
-    user = current_user.not_nil!
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: String.build do |io|
-      io << ChatLayout.head("New ping", user, nil, chat: false)
-      io << %(<body>\n)
-      io << %(<turbo-frame id="direct_rooms_control" target="_top">)
-      io << %(<div class="directs directs--new flex flex-column gap">)
-      io << %(<form class="flex gap flex-item-grow" data-controller="form" )
-      io << %(data-action="keydown.esc->form#cancel" action="/rooms/directs" )
-      io << %(accept-charset="UTF-8" method="post">)
-      io << %(<a class="btn flex-item-no-shrink" data-turbo-frame="user_sidebar" )
-      io << %(data-form-target="cancel" href="/users/me/sidebar">)
-      io << ChatLayout.icon("arrow-left.svg")
-      io << %(<span class="for-screen-reader">Cancel changes</span></a>\n)
-      io << %(<section class="autocomplete__container unpad input input--actor">)
-      io << %(<div class="autocomplete__input input flex flex-wrap position-relative flex-item-grow" )
-      io << %(data-controller="autocomplete" data-autocomplete-url-value="/autocompletable/users">)
-      io << %(<select name="user_ids[]" data-autocomplete-target="select" )
-      io << %(data-template-id="autocompletable-user" multiple hidden required></select>)
-      io << %(<template id="autocompletable-user">)
-      io << %(<div class="autocomplete__pill max-width" data-value="" tabindex="0">)
-      io << %(<img class="avatar flex-item-no-shrink" data-content="avatar" src="">)
-      io << %(<span class="autocomplete-field__selected-value-text overflow-ellipsis flex-item-grow" )
-      io << %(data-content="label"></span>)
-      io << %(<button type="button" data-action="autocomplete#remove:prevent" data-value="" )
-      io << %(tabindex="-1" class="btn btn--plain txt-small translucent flex-item-no-shrink">)
-      io << %(<img src="/assets/remove-circle-384c618c.svg" aria-hidden="true" class="colorize--black">)
-      io << %(<span class="for-screen-reader">Remove <span data-content="screenReaderLabel">)
-      io << %(</span></span></button></div></template>\n)
-      io << %(<input autocomplete="off" autocorrect="off" data-1p-ignore="true" )
-      io << %(class="autocomplete__input input flex flex-wrap position-relative" )
-      io << %(data-autocomplete-target="input" )
-      io << %(data-action="input->autocomplete#search keydown->autocomplete#didPressKey" )
-      io << %(type="text" name="rooms_direct[user_ids_input]" id="rooms_direct_user_ids_input">)
-      io << %(</div></section>\n)
-      io << %(<button name="button" type="submit" class="btn btn--reversed flex-item-no-shrink">)
-      io << ChatLayout.icon("check.svg")
-      io << %(<span class="for-screen-reader">Start Ping</span></button>)
-      io << %(</form>)
-      io << %(<span class="txt-small translucent pad-inline-half center">Type names to ping someone…</span>)
-      io << %(</div></turbo-frame>\n)
-      io << %(</body>\n</html>\n)
-    end)
+    @user = current_user.not_nil!
   end
 
   # POST /rooms/directs — существующая комната с тем же набором участников
@@ -73,6 +35,15 @@ class DirectsController < ApplicationController
       broadcast_direct_link(room)
     end
     redirect_to "/rooms/#{room.id}"
+  end
+
+  # GET /rooms/directs/new — head для формы (chat: false).
+  private def head : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.head("New ping", @user.not_nil!, nil, chat: false))
+  end
+
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 
   # Форма шлёт повторяющиеся user_ids[]: парсер кладёт их в
