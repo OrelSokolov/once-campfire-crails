@@ -221,7 +221,11 @@ module ChatLayout
                      body_class : String? = nil, nav_html : String = "",
                      head_extra : String = "") : String
     cls = body_class.to_s
-    cls += " admin" if user && user.role == 1
+    # body_classes референса: [body_class, admin].compact.join(" ") —
+    # без ведущего пробела, когда body_class пуст.
+    if user && user.role == 1
+      cls = cls.empty? ? "admin" : "#{cls} admin"
+    end
     String.build do |io|
       io << head(title, user, nil, chat: false, head_extra: head_extra)
       io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
@@ -251,7 +255,7 @@ module ChatLayout
       %(data-copy-to-clipboard-success-class="btn--success" ) +
       %(data-copy-to-clipboard-content-value="#{HTML.escape(content)}">) +
       %(<span class="for-screen-reader">#{HTML.escape(sr_label)}</span>) +
-      icon("copy-paste.svg", 20, "colorize--black flex-item-no-shrink") + %(</button>)
+      icon("copy-paste.svg", 20, "colorize--black") + %(</button>)
   end
 
   # translations_helper.rb: TRANSLATIONS — словари кнопки перевода
@@ -335,6 +339,70 @@ module ChatLayout
         io << %(<dd class="margin-none">) << HTML.escape(text) << "</dd>"
       end
       io << %(</dl></div></details>)
+    end
+  end
+
+  # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — блок
+  # «Welcome to Campfire» над сообщениями исходной комнаты (Room.original,
+  # пока сообщений в ней не больше PAGE_SIZE): логотип аккаунта, перевод
+  # invite_message, поле invite-ссылки с QR/копированием/sharing и
+  # регенерацией join-кода у администратора.
+  def self.system_welcome(user : User, origin : String) : String
+    account = Account.take
+    join_url = "#{origin}/join/#{account.try(&.join_code).to_s}"
+    qr_path = "/qr_code/" + Base64.urlsafe_encode(join_url, padding: false)
+    String.build do |io|
+      io << %(<div id="system_welcome" class="message message--formatted txt-align-center center">\n)
+      io << %(<div class="message__body center">\n)
+      io << %(<div class="message__body-content position-relative">\n)
+      # account_logo_tag style: "center margin-block-end txt-large"
+      io << %(<figure class="account-logo avatar center margin-block-end txt-large">)
+      io << %(<img alt="Account logo" src="#{fresh_account_logo_path(account)}" width="300" height="300"></figure>\n)
+      io << %(<div class="flex align-center gap">\n)
+      io << %(<div class="system-welcome--translation">\n)
+      io << translation_button("invite_message") << "\n"
+      io << %(</div>\n)
+      io << %(<p>\n<strong>Welcome to Campfire</strong><br>\n)
+      io << %(To invite people to chat, share the join link below.\n</p>\n)
+      io << %(</div>\n)
+      # accounts/_invite.html.erb (переносы строк — как в ERB-выводе Rails)
+      io << %(<div class="flex flex-column align-center gap">\n)
+      io << %(<label class="flex flex-column gap full-width" style="--row-gap: 0.5em">\n)
+      io << %(<strong id="invite_label" class="invite-label">Share to invite more people</strong>\n)
+      io << %(<span class="flex align-center gap input input--actor fill-white">\n)
+      io << icon("person-add.svg", 20, "colorize--black") << "\n"
+      io << %(<input type="text" class="input" id="invite_url" value="#{HTML.escape(join_url)}" aria-labelledby="invite_label" readonly>\n)
+      io << %(</span>\n)
+      io << %(</label>\n)
+      io << %(<div class="flex align-center gap">\n)
+      io << %(<a href="#{qr_path}" class="btn" data-lightbox-target="image" ) <<
+        %(data-action="lightbox#open" data-lightbox-url-value="#{qr_path}">\n)
+      io << %(<span class="for-screen-reader">Show join link QR code</span>\n)
+      io << icon("qr-code.svg", 20, "colorize--black") << "\n"
+      io << %(</a>\n)
+      # button_to_copy_to_clipboard
+      io << %(<button class="btn" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" ) <<
+        %(data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-content-value="#{HTML.escape(join_url)}">\n)
+      io << %(<span class="for-screen-reader">Copy join link</span>\n)
+      io << icon("copy-paste.svg", 20, "colorize--black") << "\n"
+      io << %(</button>\n)
+      io << %(<button class="btn" hidden data-controller="web-share" data-action="web-share#share" ) <<
+        %(data-web-share-url-value="#{HTML.escape(join_url)}" ) <<
+        %(data-web-share-text-value="Hit this link to join me in Campfire and start chatting." ) <<
+        %(data-web-share-title-value="Link to join Campfire">\n)
+      io << %(<span class="for-screen-reader">Share join link</span>\n)
+      io << icon("share.svg", 20, "colorize--black") << "\n"
+      io << %(</button>\n)
+      if user.role == 1
+        io << %(<form action="/account/join_code" class="button_to" method="post"><button class="btn btn--regenerate" type="submit">\n)
+        io << icon("refresh.svg", 20, "colorize--black") << "\n"
+        io << %(<span class="for-screen-reader">Regenerate join link</span>\n)
+        io << %(</button></form>  </div>\n)
+      else
+        io << %(</div>\n)
+      end
+      io << %(</div>\n)
+      io << %(</div>\n</div>\n</div>\n)
     end
   end
 
@@ -862,23 +930,36 @@ module ChatLayout
   end
 
   # /rails/active_storage/representations/redirect/<blob_id>/<variation>/<filename>
-  # (transforms как у express: format из расширения, 1200×800)
-  def self.representation_url(a : Attachment) : String
+  # (transforms как у express: 1200×800; format — расширение файла, у
+  # video-постера Rails всегда конвертит кадр в webp).
+  def self.representation_url(a : Attachment, format : String? = nil) : String
     token = storage_verifier.generate(a.blob_id, purpose: "blob_id")
-    ext = File.extname(a.filename).lchop('.')
-    format = ext.empty? ? "png" : ext
+    ext = format || File.extname(a.filename).lchop('.')
+    fmt = ext.empty? ? "png" : ext
     # Rails подписывает сами преобразования (объект, не строка):
     # {"_rails":{"data":{"format":..,"resize_to_limit":[..]},"pur":"variation"}}
     variation = storage_verifier.generate(
-      ActiveSupport::RawJSON.new(%({"format":"#{format}","resize_to_limit":[1200,800]})), purpose: "variation")
+      ActiveSupport::RawJSON.new(%({"format":"#{fmt}","resize_to_limit":[1200,800]})), purpose: "variation")
     "/rails/active_storage/representations/redirect/#{token}/#{variation}/#{URI.encode_path_segment(a.filename)}"
   end
 
-  # message_attachment_presentation (rendering.js): картинка — lightbox + img,
-  # видео — video, остальное — ссылка на скачивание.
+  # ActiveStorage web_image? (Blob#web_image?): только эти типы проходят
+  # через variant-превью в сообщениях; bmp/tiff/svg и не-картинки —
+  # render_link (file-chip), как в Messages::AttachmentPresentation.
+  WEB_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/gif",
+                     "image/webp"}
+
+  # Messages::AttachmentPresentation референса: видео — video с постером
+  # (кадр конвертится в webp), web-картинка — lightbox + img, остальное
+  # (txt, bmp, …) — file-chip c иконкой, download и share.
   def self.attachment_presentation(a : Attachment) : String
     url = blob_url(a)
-    if a.image?
+    if a.video?
+      content = %(<video src="#{url}" poster="#{representation_url(a, "webp")}" ) +
+        %(controls="controls" preload="none" width="100%" height="100%" ) +
+        %(class="message__attachment"></video>)
+      inline_media_dimension_constraints(a, content)
+    elsif WEB_IMAGE_TYPES.includes?(a.content_type)
       repr = representation_url(a)
       img = if (dims = preview_dimensions(a))
               %(<img width="#{number(dims[0])}" height="#{number(dims[1])}" ) +
@@ -890,13 +971,19 @@ module ChatLayout
         %(data-lightbox-url-value="#{url}?disposition=attachment" href="#{url}">) +
         img + %(</a>)
       inline_media_dimension_constraints(a, content)
-    elsif a.video?
-      content = %(<video src="#{url}" poster="#{representation_url(a)}" ) +
-        %(controls="controls" preload="none" width="100%" height="100%" ) +
-        %(class="message__attachment"></video>)
-      inline_media_dimension_constraints(a, content)
     else
-      %(<a href="#{url}?disposition=attachment">#{HTML.escape(a.filename)}</a>)
+      download_url = "#{url}?disposition=attachment"
+      name = HTML.escape(a.filename)
+      %(<div class="flex-inline align-center gap-half">) +
+        icon("common-file-text.svg", 22, "colorize--black") +
+        %(<span>) + name + %(</span>) +
+        %(<a class="btn message__action-btn hide-in-ios-pwa" href="#{download_url}" style="--width: auto;" target="_top">) +
+        icon("download.svg") +
+        %(<span class="for-screen-reader">Download ) + name + %(</span></a>) +
+        %(<button class="btn message__action-btn" data-action="web-share#share" data-controller="web-share" ) +
+        %(data-web-share-files-value="#{download_url}" hidden="" style="--width: auto;">) +
+        icon("share.svg") +
+        %(<span class="for-screen-reader">Share ) + name + %(</span></button></div>)
     end
   end
 

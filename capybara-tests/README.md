@@ -56,7 +56,7 @@ asdf-шимы не используются. `bin/run` сам чистит `GEM_
 | `harness/snap.rb`     | `settled_snap`: ожидание «network idle + turbo-frame complete + нет анимаций + двойной rAF», затем PNG и HTML. |
 | `harness/normalize.rb`| Нормализация HTML перед сравнением (см. ниже).                                                            |
 | `harness/compare.rb`  | Сравнение артефактов, `artifacts/compare/report.html` + `summary.json`.                                    |
-| `harness/report.rb`   | HTML-рендер отчёта.                                                                                       |
+| `harness/report.rb`   | HTML-рендер отчёта: 1:1-галерея PNG-пар (flex 50/50, провалы первыми, sticky-имя файла) + свёрнутая таблица. |
 | `bin/parity`          | Быстрый запуск одного теста с `PARITY_KEEP=1`.                                                            |
 
 ## Детерминизм
@@ -93,6 +93,9 @@ asdf-шимы не используются. `bin/run` сам чистит `GEM_
   (chunky_png) против `MAX_DIFF_RATIO` (0.002 = 0.2%).
 - **HTML**: `diff -u` по нормализованным файлам.
 - Отчёт: `artifacts/compare/report.html`, машинный итог — `summary.json`.
+  Отчёт — 1:1-галерея: каждая PNG-пара (rails | crails) в flex 50/50,
+  листается вниз, имя файла прилипает к верху; фильтр «все / провалы /
+  прошедшие»; внизу — свёрнутая таблица результатов.
   Артефакт, отсутствующий у таргета (тест упал до `snap`), помечается
   `missing` — это тоже парити-сигнал.
 

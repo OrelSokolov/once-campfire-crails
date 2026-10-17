@@ -35,6 +35,9 @@ CRails.application.routes.draw do
   get "/account/custom_styles", to: "accounts/custom_styles#edit"
   get "/account/logo", to: "accounts/logos#show"
   delete "/account/logo", to: "accounts/logos#destroy"
+  patch "/account/users/:user_id", to: "accounts/users#update"
+  delete "/account/users/:user_id", to: "accounts/users#destroy"
+  post "/account/join_code", to: "accounts/join_codes#create"
 
   get "/join/:code", to: "joins#show"
   post "/join/:code", to: "joins#create"

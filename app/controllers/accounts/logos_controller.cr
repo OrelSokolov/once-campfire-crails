@@ -5,7 +5,7 @@
 # запрашивает иконку без сессии. Варианты :small(192)/:large(512) не
 # портированы (нет vips, ср. ActiveStorageController) — отдаётся оригинал
 # вложения; без кастомного логотипа — стоковая logos/app-icon.png пребилда.
-class LogosController < ApplicationController
+class Accounts::LogosController < ApplicationController
   skip_before_action :require_authentication, only: [:show]
 
   def show

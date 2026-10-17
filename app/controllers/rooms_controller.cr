@@ -69,11 +69,22 @@ class RoomsController < ApplicationController
         .order("created_at DESC").limit(40).to_a.reverse
     end
 
-    messages_html = ChatLayout.messages_html(messages, epoch, room, origin)
+    messages_html = invitation_html(room, user) +
+                    ChatLayout.messages_html(messages, epoch, room, origin)
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
+    # rooms/show.html.erb: @page_title = room_display_name(@room) —
+    # direct-комнаты без имени: имена собеседников (to_sentence).
+    title = if (n = room.name)
+              n.to_s
+            else
+              others = User.where(
+                %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
+                room.id.not_nil!, user.id.not_nil!).order("id").map(&.name.to_s)
+              ChatLayout.display_sentence(others, user.name.to_s)
+            end
     html = String.build do |io|
-      io << ChatLayout.head(room.name.to_s, user, room.id, chat: true)
+      io << ChatLayout.head(title, user, room.id, chat: true)
       io << ChatLayout.body_open(room, user,
         ua: request.headers["User-Agent"]?.to_s, origin: origin)
       io << ChatLayout.message_area(room, messages_html, user, base_url: origin)
@@ -88,6 +99,17 @@ class RoomsController < ApplicationController
       PageCache.set(key, epoch, page)
     end
     send_page(page)
+  end
+
+  # rooms/show/_invitation.html.erb: блок «Welcome to Campfire» — только
+  # в исходной комнате (Room.original = первая по created_at) и пока она
+  # не пагинируется (Message::Pagination: paged? = offset(40).exists?).
+  private def invitation_html(room : Room, user : User) : String
+    original = Room.order("created_at").first?
+    return "" unless original && original.id == room.id
+    return "" if Message.where("room_id = ?", room.id.not_nil!)
+      .offset(40).exists?
+    ChatLayout.system_welcome(user, origin)
   end
 
   # GET /rooms/:id/refresh — опрос refresh-room-контроллера (видимость

@@ -13,12 +13,16 @@ class AccountsController < ApplicationController
 
   # edit.html.erb: аккаунт, viewer (ветка admin/non-admin), состояние
   # restrict-свитча, invite-ссылка + QR-путь, юзеры аккаунта.
+  # Юзеры — как Rails AccountsController#edit: visible_to (админ видит
+  # active+banned, остальные — active), ordered LOWER(name), администраторы
+  # первым блоком, затем member-роль (боты excluded).
   @account : Account?
   @user : User?
   @restrict : Bool = false
   @join_url : String = ""
   @qr_path : String = ""
-  @users : Array(User) = [] of User
+  @admins : Array(User) = [] of User
+  @members : Array(User) = [] of User
 
   def edit
     account = set_account
@@ -27,7 +31,13 @@ class AccountsController < ApplicationController
     @restrict = account.restrict_room_creation_to_administrators?
     @join_url = origin + "/join/" + account.join_code.to_s
     @qr_path = "/qr_code/" + Base64.urlsafe_encode(@join_url, padding: false)
-    @users = User.where("status = 0").order("id").to_a
+    status_scope = user.role == 1 ? "status IN (0, 2)" : "status = 0"
+    # Rails scope :ordered → ORDER BY LOWER(name): функцию в order() шарды
+    # не поддерживают (order_term квотит её как колонку) — сортируем в памяти.
+    @admins = User.where("#{status_scope} AND role = 1").to_a
+      .sort_by(&.name.to_s.downcase)
+    @members = User.where("#{status_scope} AND role = 0").to_a
+      .sort_by(&.name.to_s.downcase)
   end
 
   def update

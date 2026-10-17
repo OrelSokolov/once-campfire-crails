@@ -20,6 +20,63 @@ module AccountsHelpers
     ERB::SafeString.new(ChatLayout.copy_button(url, "Copy join link"))
   end
 
+  # translation_button (translations_helper): details/popup меню переводов
+  # для подписей формы аккаунта (account_name).
+  def translation_button(key : String) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.translation_button(key))
+  end
+
+  # fresh_account_logo_path (accounts/edit: превью 48px, не-админ ветка
+  # 300px, кнопка удаления) — /account/logo с cache-buster по updated_at.
+  def logo_src : String
+    ChatLayout.fresh_account_logo_path(@account)
+  end
+
+  # Строка юзера в списке accounts/edit (порт _users/_user.html.erb):
+  # аватар по токен-путю с title «имя — био», сепаратор, тумблер роли
+  # (crown-form PATCH /account/users/:id, disabled у себя), удаление
+  # (minus DELETE, turbo-confirm) и «My settings» для себя. banned —
+  # класс глухой строки; кнопки только у active-строк.
+  def account_user_row(u : User) : ERB::SafeString
+    viewer = @user.not_nil!
+    admin = viewer.role == 1
+    uid = u.id.not_nil!
+    name = HTML.escape(u.name.to_s)
+    banned = u.status == 2
+    html = String.build do |io|
+      io << %(<li class="flex align-center gap margin-none#{banned ? " banned" : " "}">\n)
+      io << %(<figure class="avatar flex-item-no-shrink" style="--avatar-size: 3.75ch;">\n)
+      io << ChatLayout.avatar_link(u, "lazy") << %(\n</figure>\n)
+      io << %(<div class="min-width">\n<div class="overflow-ellipsis fill-shade"><strong>) << name
+      io << %(</strong></div>\n</div>\n<hr class="separator" aria-hidden="true">\n)
+      if admin && !banned && u.status == 0
+        unless u.role == 2
+          administrator = u.role == 1
+          disabled = uid == viewer.id
+          dis = disabled ? %( disabled="disabled") : ""
+          io << %(<form accept-charset="UTF-8" action="/account/users/#{uid}" data-controller="form" method="post"><input type="hidden" name="_method" value="patch">\n)
+          io << %(<label class="btn txt-small flex-item-no-shrink" for="role_user_#{uid}">\n)
+          io << %(<span class="for-screen-reader">Role: ) << (administrator ? "Administrator" : "Member") << %(</span>\n)
+          io << ChatLayout.icon("crown.svg") << %(\n)
+          io << %(<input type="hidden" name="user[role]" value="member"#{dis}><input type="checkbox" name="user[role]" value="administrator" id="role_user_#{uid}" hidden="hidden" data-action="form#submit"#{administrator ? %( checked="checked") : ""}#{dis}>\n)
+          io << %(</label>\n</form>\n)
+        end
+        if uid != viewer.id
+          io << %(<form action="/account/users/#{uid}" class="button_to" method="post"><input type="hidden" name="_method" value="delete"><button class="btn txt-small flex-item-no-shrink btn--negative" data-turbo-confirm="Are you sure you want to permanently remove this person from the account? This can’t be undone." type="submit">\n)
+          io << ChatLayout.icon("minus.svg") << %(\n)
+          io << %(<span class="for-screen-reader">Delete ) << name << %(</span>\n</button></form>\n)
+        end
+      end
+      if uid == viewer.id
+        io << %(<a class="btn txt-small flex-item-no-shrink" href="/users/me/profile" target="_top">)
+        io << ChatLayout.icon("pencil.svg")
+        io << %(<span class="for-screen-reader">My settings</span></a>\n)
+      end
+      io << %(</li>\n)
+    end
+    ERB::SafeString.new(html)
+  end
+
   # account_nav.eta: назад + ссылки на ботов/кастомные стили (админ).
   def account_nav(user : User) : String
     String.build do |io|

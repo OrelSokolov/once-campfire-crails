@@ -35,18 +35,18 @@ class ActiveStorageController < ApplicationController
     blob_record = find_authorized_blob(params["token"].to_s, user)
     return render(plain: "not found", status: 404) unless blob_record
 
-    variation_json : String? = nil
+    variation : JSON::Any? = nil
     if representation
       unless (verified = storage_verifier.verified_any(params["variation"].to_s, purpose: "variation"))
         return render(plain: "not found", status: 404)
       end
-      variation_json = verified.to_s
+      variation = verified
     end
 
     key = blob_record.key.to_s
     path = disk_path(key)
     ctype = blob_record.content_type.to_s
-    if variation_json && (repr = representation_variant(blob_record, variation_json))
+    if variation && (repr = representation_variant(blob_record, variation.not_nil!))
       path, ctype = repr
     end
     return render(plain: "file missing", status: 404) unless File.exists?(path)
@@ -70,13 +70,14 @@ class ActiveStorageController < ApplicationController
   # transformations из подписанного variation-токена → Variation шарда
   # → transform через image_processing; результат кешируется на диске
   # под variants/<blob.key>/<variation.key> (как Variant#processed).
-  # nil — тип не variable или обработка упала: отдаём оригинал.
+  # Видео — не variable: это превью (AttachmentPresentation video_
+  # poster_url) — кадр извлекается ffmpeg (ActiveStorage::Preview::
+  # VideoPreviewer: -vf scale=640:-1 -frames:v 1, jpg) и прогоняется
+  # через ту же Variation (webp). nil — обработка упала: оригинал.
   private def representation_variant(blob : ActiveStorageBlob,
-                                     variation_json : String) : {String, String}?
-    return nil unless ActiveStorage::Blob::VARIABLE_CONTENT_TYPES.includes?(
-      blob.content_type.to_s)
+                                     variation : JSON::Any) : {String, String}?
     transformations = {} of String => ActiveStorage::Variation::Value
-    JSON.parse(variation_json).as_h.each do |name, value|
+    variation.as_h.each do |name, value|
       transformations[name] = case raw = value.raw
         when String then raw
         when Array  then raw.map { |e| e.as_i.to_i32 }
@@ -89,10 +90,25 @@ class ActiveStorageController < ApplicationController
     variant_key = "variants/#{blob.key}/#{variation.key}"
     service = ActiveStorage.service
     return nil unless service.is_a?(ActiveStorage::DiskService)
+
+    input_key, source_ext =
+      if blob.content_type.to_s.starts_with?("video/")
+        frame_key = "previews/#{blob.key}"
+        unless service.exist?(frame_key)
+          frame = extract_video_frame(service.path_for(blob.key.to_s))
+          return nil unless frame
+          service.upload(frame_key, frame, content_type: "image/jpeg")
+        end
+        {frame_key, "jpg"}
+      else
+        return nil unless ActiveStorage::Blob::VARIABLE_CONTENT_TYPES.includes?(
+          blob.content_type.to_s)
+        {blob.key.to_s, mimedefault_ext(blob)}
+      end
+
     unless service.exist?(variant_key)
-      source = service.download(blob.key.to_s)
-      ext = File.extname(blob.filename.to_s).lchop('.')
-      bytes = variation.transform(source, ext.empty? ? "png" : ext)
+      source = service.download(input_key)
+      bytes = variation.transform(source, source_ext)
       service.upload(variant_key, bytes, content_type: variation.content_type)
     end
     {service.path_for(variant_key), variation.content_type}
@@ -100,6 +116,26 @@ class ActiveStorageController < ApplicationController
     # vips/mini_magick не осилил файл — оригинал (как до подключения
     # шарда).
     nil
+  end
+
+  # VideoPreviewer#draw референса: первый кадр, 640 по ширине, image2.
+  private def extract_video_frame(source_path : String) : String?
+    frame_path = File.join(Dir.tempdir, "as_preview_#{Random::Secure.hex(8)}.jpg")
+    status = Process.run("ffmpeg", {"-y", "-i", source_path, "-vf", "scale=640:-1",
+      "-frames:v", "1", "-f", "image2", frame_path},
+      output: Process::Redirect::Close, error: Process::Redirect::Close)
+    return nil unless status.success? && File.exists?(frame_path)
+    bytes = File.read(frame_path)
+    File.delete(frame_path)
+    bytes
+  rescue ex : Exception
+    nil
+  end
+
+  # Расширение источника для transform (фолбок png, как в Variation).
+  private def mimedefault_ext(blob : ActiveStorageBlob) : String
+    ext = File.extname(blob.filename.to_s).lchop('.')
+    ext.empty? ? "png" : ext
   end
 
   # Верификатор с salt "ActiveStorage" (sha1, strict_b64 с паддингом —
