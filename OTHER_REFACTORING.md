@@ -13,9 +13,17 @@ broadcast_refresh_to(streamables, target:, targets:, content:, html:,
 partial:, attributes:)` — включая `attributes` (maintain_scroll) и
 подпись stream-имени через `stream_name_from` внутри.
 
-Ручные места (10): `boosts_controller` ×3 (create append, bot_create
+Ручные места (9): `boosts_controller` ×3 (create append, bot_create
 append, destroy remove), `messages_controller` ×4, `rooms_controller`,
-`directs_controller`, `message_creator`.
+`message_creator`. Сделано: `directs_controller` — `Membership` включает
+`Turbo::Broadcastable`, create зовёт `membership.broadcast_prepend_to
+[user, "rooms"], target: :direct_rooms, partial: "users/sidebars/rooms/
+direct"` (local `membership` Broadcastable подставляет сам); партиал —
+`app/views/users/sidebars/rooms/_direct.html.erb` (ChatERB,
+`compile_partials`), рендер по имени — через `Turbo.partial_renderer`
+(src/app.cr). Транспорт: broadcast turbo_cr идёт через `Turbo.cable`
+— это `CampfireCable` (config/cable.cr), доставляющий локально + в
+шину CableBus, так что замена эквивалентна `Campfire.broadcast`.
 
 До:
 ```crystal

@@ -47,6 +47,19 @@ require "../config/routes"
 require "../config/environments/development"
 require "../config/environments/production"
 
+# Turbo.render_partial — рендер broadcast_*_to(partial:) по имени
+# партиала (аналог ApplicationController.render(formats: [:html],
+# partial:) Rails): рантайм-рендера по пути файла в Crystal нет,
+# партиалы ChatERB скомпилированы на этапе сборки — диспетчер по имени.
+Turbo.partial_renderer = ->(partial : String, locals : Hash(String, Turbo::RenderVal)) do
+  case partial
+  when "users/sidebars/rooms/direct"
+    ChatERB.new.render(partial, {"membership" => locals["membership"].as(Membership)}).to_s
+  else
+    raise ArgumentError.new("Missing partial #{partial.inspect}")
+  end
+end
+
 if (url = ENV["DATABASE_URL"]?)
   ActiveRecord::Base.establish_connection(url)
 elsif File.exists?("config/database.yml")

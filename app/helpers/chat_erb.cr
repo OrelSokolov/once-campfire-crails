@@ -144,8 +144,12 @@ class ChatERB
   # нескольким — инициалы (3 первых слова по букве) через to_sentence
   # (two_words_connector: '+').
   def direct_label(d : SidebarDirect) : String
-    if d.members.size > 1
-      parts = d.members.map do |m|
+    direct_label(d.members)
+  end
+
+  def direct_label(members : Array(User)) : String
+    if members.size > 1
+      parts = members.map do |m|
         m.name.to_s.split(" ")[0, 3].map { |w| (w[0]? || "").upcase }.join
       end
       case parts.size
@@ -153,8 +157,34 @@ class ChatERB
       else        "#{parts[0..-2].join(", ")}, and #{parts[-1]}"
       end
     else
-      d.members.first.name.to_s.split(" ")[0]? || ""
+      members.first.name.to_s.split(" ")[0]? || ""
     end
+  end
+
+  # ————— users/sidebars/rooms/_direct (turbo-stream prepend create) —————
+  # Партиал рендерится из broadcast (directs#create), не из шаблона
+  # сайдбара (тот держит batch-запрос участников), поэтому данные
+  # считаются по membership — как в референсе (room.users.without(
+  # membership.user).presence || [membership.user]).
+
+  # room.users.without(membership.user).presence || [membership.user]
+  def direct_members(membership : Membership) : Array(User)
+    members = User.where(
+      %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
+      membership.room_id.not_nil!).to_a
+      .reject { |u| u.id == membership.user_id }
+    members.empty? ? [membership.user.not_nil!] : members
+  end
+
+  # Membership#unread? референса: unread_at.present?
+  def unread?(membership : Membership) : Bool
+    !membership.unread_at.nil?
+  end
+
+  # data-sorted-list-number сайдбара: epoch updated_at комнаты в мс.
+  def epoch_ms(room : Room) : Int64
+    t = room.updated_at.as(Time)
+    (t.to_unix * 1000) + (t.nanosecond // 1_000_000)
   end
 
   # dom_id(room, :list) референса: STI route_key (open/direct/closed).
@@ -179,6 +209,7 @@ class ChatERB
   # переключают общий @__erb_buf, вложенный вызов затёр бы буфер
   # родителя; партиалы честно подменяют его и восстанавливают.
   compile_partials({
+    "users/sidebars/rooms/direct" => {path: "app/views/users/sidebars/rooms/_direct.html.erb", locals: {"membership" => Membership}},
     "browser_settings"     => {path: "app/views/rooms/involvements/_browser_settings.html.erb", locals: {} of String => Nil},
     "system_settings"      => {path: "app/views/rooms/involvements/_system_settings.html.erb", locals: {} of String => Nil},
     "install_instructions" => {path: "app/views/rooms/involvements/_install_instructions.html.erb", locals: {} of String => Nil},

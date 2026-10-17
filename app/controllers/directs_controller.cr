@@ -82,25 +82,15 @@ class DirectsController < ApplicationController
         GROUP BY m.room_id HAVING COUNT(*) = #{ids.size} AND SUM(m.user_id IN (#{id_list})) = #{ids.size}))).take
   end
 
-  # turbo-stream prepend в #direct_rooms стримов участников
-  # (registerRoomForms: gid://campfire/User/<id> base64 + ":rooms").
+  # Как Rails broadcast_create_room: membership.broadcast_prepend_to
+  # membership.user, :rooms, target: :direct_rooms, partial:
+  # "users/sidebars/rooms/direct" — Broadcastable сам подставляет local
+  # membership; стрим gid://campfire/User/<id> base64 + ":rooms";
+  # партиал рендерит ChatERB (Turbo.partial_renderer).
   private def broadcast_direct_link(room : Room) : Nil
-    members = User.where(
-      %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), room.id.not_nil!)
-    link = String.build do |io|
-      io << %(<a class="direct" id="list_rooms_direct_#{room.id}" )
-      io << %(data-room-id="#{room.id}" href="/rooms/#{room.id}">)
-      io << %(<span class="direct__author flex align-center gap max-width min-width border-radius txt-small">)
-      io << %(<span class="txt-nowrap overflow-ellipsis"><span class="for-screen-reader">Ping with</span>)
-      io << %(</span></span></a>)
-    end
-    stream_html = %(<turbo-stream action="prepend" target="direct_rooms"><template>)
-    stream_html += link
-    stream_html += %(</template></turbo-stream>)
-    members.each do |member|
-      Campfire.broadcast(
-        Turbo::Streams::StreamName.stream_name_from([member, "rooms"]),
-        stream_html)
+    room.memberships.each do |membership|
+      membership.broadcast_prepend_to [membership.user.not_nil!, "rooms"],
+        target: :direct_rooms, partial: "users/sidebars/rooms/direct"
     end
   end
 end

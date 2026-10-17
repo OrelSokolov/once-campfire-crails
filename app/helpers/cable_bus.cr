@@ -151,11 +151,13 @@ module Campfire
       @@peers.delete(peer)
     end
 
-    # Клиент: кадр от хаба → локальная доставка кабелем.
+    # Клиент: кадр от хаба → локальная доставка кабелем. Напрямую в
+    # pubsub, НЕ через Server#broadcast (CampfireCable): тот ретранслирует
+    # в шину — кадр, пришедший по шине, эхом ушла бы пирам (петля).
     private def self.client_loop(sock : TCPSocket) : Nil
       while (frame = read_frame(sock))
         stream, payload = frame
-        Turbo.cable.broadcast(stream, payload)
+        Turbo.cable.pubsub.broadcast(stream, payload)
       end
     end
 
@@ -190,10 +192,11 @@ module Campfire
     end
   end
 
-  # Единая точка broadcast: локальная доставка кабелем этого воркера +
-  # ретрансляция остальным воркерам через шину (serverX Cluster).
+  # Единая точка broadcast для app-кода: доставку делает CampfireCable
+  # (локальный pubsub + ретрансляция воркерам через шину; см.
+  # config/cable.cr) — relay здесь не дублируем, иначе пиры получили бы
+  # кадр дважды.
   def self.broadcast(stream : String, frame : String) : Nil
     Turbo.cable.broadcast(stream, frame)
-    CableBus.relay(stream, frame)
   end
 end

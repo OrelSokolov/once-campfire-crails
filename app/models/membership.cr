@@ -1,4 +1,11 @@
+require "turbo_cr"
+
 class Membership < ActiveRecord::Base
+  # broadcast_*_to instance-методы (turbo-rails Broadcastable): directs
+  # #create зовёт membership.broadcast_prepend_to ... partial: (local
+  # membership Broadcastable подставляет сам).
+  include Turbo::Broadcastable
+
   belongs_to :room
   belongs_to :user
 
