@@ -14,9 +14,9 @@ module SessionsHelpers
   def flash_html : ERB::SafeString
     return ERB::SafeString.new("") unless login_alert
     ERB::SafeString.new(%(<div class="flash" data-controller="element-removal" data-action="animationend-&gt;element-removal#remove">\n) \
-      %(<div class="flash__inner shadow" style="--flash-background: var(--color-negative)">\n) \
-      %(<img src="#{ChatLayout.asset("alert.svg")}" aria-hidden="true" width="24" height="24" class="colorize--white">\n) \
-      %(</div>\n<span class="for-screen-reader" role="alert" aria-atomic="true">Too many requests or unauthorized.</span>\n</div>\n))
+                        %(<div class="flash__inner shadow" style="--flash-background: var(--color-negative)">\n) \
+                        %(<img src="#{ChatLayout.asset("alert.svg")}" aria-hidden="true" width="24" height="24" class="colorize--white">\n) \
+                        %(</div>\n<span class="for-screen-reader" role="alert" aria-atomic="true">Too many requests or unauthorized.</span>\n</div>\n))
   end
 
   # panel shake при неудачном входе (class="panel<%= panel_modifier %>").

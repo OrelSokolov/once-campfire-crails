@@ -19,7 +19,8 @@ module SearchesHelpers
   # Коллекция сообщений (fragment-кэш внутри messages_to).
   def messages_html : ERB::SafeString
     ERB::SafeString.new(String.build { |io|
-      ChatLayout.messages_to(io, messages, epoch, nil, origin) })
+      ChatLayout.messages_to(io, messages, epoch, nil, origin)
+    })
   end
 
   def search_icon_src : String

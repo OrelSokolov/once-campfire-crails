@@ -24,8 +24,8 @@ module UsersHelpers
   # transfer_link.eta (админский блок на профиле юзера).
   def transfer_link(subject : User) : ERB::SafeString
     url = origin + "/session/transfers/" +
-      generate_signed_id(subject.id.not_nil!, "user/transfer",
-        expires_at: Time.utc + 4.hours)
+          generate_signed_id(subject.id.not_nil!, "user/transfer",
+            expires_at: Time.utc + 4.hours)
     qr = "/qr_code/" + Base64.urlsafe_encode(url, padding: false)
     ERB::SafeString.new(
       %(<fieldset><legend class="gap">) +

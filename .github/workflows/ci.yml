@@ -1,0 +1,49 @@
+# CI: пайплайн из Dockerfile.github runtime.sh минус запуск сервера.
+# Прогоняется на свежем чекауте (lib/ в .gitignore, зависимости ставит
+# shards install) в том же кристалл-образе, что и docker-сборка:
+# shards install → compile → db:migrate (fresh sqlite) → assets:precompile.
+# Спеков у самого приложения нет (спеки шардов живут в их репозиториях);
+# capybara-парити требует весь стенд с rails-референсом — вне per-push CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      # тот же тулчейн, что в Dockerfile/Dockerfile.github
+      image: crystallang/crystal:1.21-alpine
+    steps:
+      # те же пакеты, что в docker-стадии сборки (vips — ActiveStorage)
+      - name: Install build deps
+        run: apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev git vips-dev glib-dev
+
+      - uses: actions/checkout@v4
+
+      - name: Cache shards
+        uses: actions/cache@v4
+        with:
+          # кэшируем установленный lib/ и кэш компиляции кристалла
+          path: |
+            /root/.cache/shards
+            lib
+          key: shards-${{ hashFiles('shard.lock') }}
+
+      - name: Shards install
+        run: shards install
+
+      - name: Compile (without_mt, как runtime.sh)
+        run: crystal build src/app.cr -o bin/app-ci -Dwithout_mt
+
+      - name: db:migrate on a fresh sqlite DB
+        run: |
+          export DATABASE_URL="sqlite3://$GITHUB_WORKSPACE/db/ci.sqlite3"
+          export SECRET_KEY_BASE="$(head -c 64 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+          bin/crails db:migrate
+
+      - name: assets:precompile
+        run: bin/crails assets:precompile

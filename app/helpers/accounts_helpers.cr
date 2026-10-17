@@ -12,7 +12,7 @@ module AccountsHelpers
   def page_close : ERB::SafeString
     version = HTML.escape(ENV["APP_VERSION"]? || "parity")
     footer = %(<div class="txt-align-center center margin-block-double txt-subtle">Campfire&trade; version <span class="version-badge">) +
-      version + %(</span></div>)
+             version + %(</span></div>)
     ERB::SafeString.new(ChatLayout.page_close(footer))
   end
 
