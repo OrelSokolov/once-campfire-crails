@@ -13,7 +13,7 @@ dependencies:
     version: ~> 0.1.6
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
-    branch: master # TODO: запушить тег v0.1.1 (Iteration 8: transformers) и вернуться на version: ~>
+    version: ~> 0.1.1
   active_support_cr:
     github: OrelSokolov/active_support.cr
     version: ~> 0.1.2
@@ -30,7 +30,7 @@ dependencies:
     version: ~> 0.1.0
   jbuilder_cr:
     github: OrelSokolov/jbuilder.cr
-    branch: main # TODO: запушить тег v0.1.0 и вернуться на version: ~> 0.1.0
+    version: ~> 0.1.0
   serverx:
     github: OrelSokolov/serverx.cr
     version: ~> 0.2.1
