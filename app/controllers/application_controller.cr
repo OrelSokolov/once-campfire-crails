@@ -44,6 +44,15 @@ abstract class ApplicationController < ActionController::Base
     redirect_to "/session/new" unless current_user
   end
 
+  # Rails authentication: start_new_session_for — создаёт сессию и
+  # подписывает permanent cookie session_token (sessions#create,
+  # first_runs#create).
+  def start_new_session_for(user : User) : Nil
+    session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
+    cookies.signed.set("session_token", session.token.not_nil!,
+      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
+  end
+
   def remote_ip : String?
     request.headers["X-Forwarded-For"]?.try(&.split(',').first?.try(&.strip)) ||
       request.headers["Remote-Addr"]? || "127.0.0.1"

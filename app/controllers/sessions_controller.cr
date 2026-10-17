@@ -23,9 +23,7 @@ class SessionsController < ApplicationController
 
   def create
     if (user = User.authenticate(params["email_address"].to_s, params["password"].to_s))
-      session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
-      cookies.signed.set("session_token", session.token.not_nil!,
-        expires: Time.utc + 20.years, httponly: true, same_site: :lax)
+      start_new_session_for user
       redirect_to "/"
     else
       prepare_login(alert: true)

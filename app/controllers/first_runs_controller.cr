@@ -6,61 +6,29 @@
 # данных экшен не готовит.
 class FirstRunsController < ApplicationController
   skip_before_action :require_authentication
+  before_action :prevent_repeats
 
   def show
-    return redirect_to "/" if Account.take
   end
 
   def create
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    if Account.take
-      return redirect_to "/"
-    end
+    user = FirstRun.create!(user_params)
+    start_new_session_for user
 
-    name = nested_param("name")
-    email = nested_param("email_address")
-    password = nested_param("password")
-    if name.empty? || email.empty? || password.empty?
-      response.status = :unprocessable_entity
-      return render(plain: "invalid first run parameters")
-    end
-
-    now = Time.utc
-    # join_code — base64url без padding (routes.js: randomBytes(18)
-    # .toString("base64url")) — безопасен в path.
-    account = Account.new(name: "Campfire",
-      join_code: Base64.urlsafe_encode(Random::Secure.random_bytes(18), padding: false),
-      created_at: now, updated_at: now)
-    account.save!
-
-    user = User.new(
-      name: name,
-      email_address: email,
-      password_digest: Crypto::Bcrypt::Password.create(password, cost: 10).to_s,
-      role: 1, # admin
-      status: 0,
-      created_at: now, updated_at: now)
-    user.save!
-
-    room = Rooms::Open.new(
-      name: "All Talk",
-      creator_id: user.id.not_nil!,
-      created_at: now, updated_at: now)
-    room.save!
-
-    membership = Membership.new(room_id: room.id.not_nil!, user_id: user.id.not_nil!,
-      involvement: "mentions", # Room#default_involvement референса
-      connections: 0,
-      created_at: now, updated_at: now)
-    membership.save!
-
-    session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
-    cookies.signed.set("session_token", session.token.not_nil!,
-      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
     redirect_to "/"
+  rescue ActiveRecord::RecordNotUnique
+    redirect_to "/"
+  rescue ActiveRecord::RecordInvalid | ActionController::ParameterMissing
+    # render(plain:) сбрасывает response.status — передаём аргументом
+    render(plain: "invalid first run parameters", status: :unprocessable_entity)
   end
 
   # ————— ERB-хелперы (app/views/first_runs/show.html.erb) —————
+
+  private def prevent_repeats
+    redirect_to "/" if Account.any?
+  end
 
   # head + body.signup + пустой nav + main (без user).
   private def page_open : ERB::SafeString
@@ -84,11 +52,9 @@ class FirstRunsController < ApplicationController
     ChatLayout.asset("default-avatar.svg")
   end
 
-  private def nested_param(key : String) : String
-    nested = params["user"]?
-    case nested
-    when ActionController::Parameters then nested[key]?.to_s
-    else nested.to_s
-    end
+  # avatar в permit-списке — паритет референса; загрузка аватара
+  # (has_secure_*) не портирована, FirstRun поле игнорирует.
+  private def user_params : ActionController::Parameters
+    params.require("user").permit("name", "avatar", "email_address", "password")
   end
 end
