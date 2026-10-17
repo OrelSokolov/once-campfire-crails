@@ -78,7 +78,7 @@ module MessageCreator
                      attachment : ChatLayout::Attachment? = nil,
                      base_url : String = "") : Nil
     turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="append" target="messages_room_#{room.id}"><template>)
+      io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
       io << ChatLayout.message_dom(message, room, author, attachment, base_url: base_url)
       io << %(</template></turbo-stream>\n)
     end
