@@ -1,4 +1,3 @@
-# NOTICE: This lockfile contains some overrides from shard.override.yml
 version: 2.0
 shards:
   action_cable_cr:
@@ -45,7 +44,7 @@ shards:
     git: https://github.com/orelsokolov/icr.cr.git
     version: 1.3.0
 
-  image_processing_cr: # Overridden
+  image_processing_cr:
     git: https://github.com/orelsokolov/image_processing.cr.git
     version: 1.14.0+git.commit.0199202fdb12aa1b9cfcbcf8454db64c522f7163
 
@@ -57,7 +56,7 @@ shards:
     git: https://github.com/orelsokolov/jbuilder.cr.git
     version: 0.1.0
 
-  marcel_cr: # Overridden
+  marcel_cr:
     git: https://github.com/orelsokolov/marcel.cr.git
     version: 2.1.0+git.commit.7c359ea6b31ade6847b971b4ee487ed51ae5c3bb
 
@@ -91,5 +90,5 @@ shards:
 
   turbo_cr:
     git: https://github.com/orelsokolov/turbo.cr.git
-    version: 0.1.3
+    version: 0.1.4
 
