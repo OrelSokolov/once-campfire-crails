@@ -4,12 +4,11 @@
 # message-area + composer + turbo-cable-stream-source + importmap).
 # Whole-page response cache (Фаза 3): готовый HTML кэшируется per-worker,
 # инвалидация по DB-epoch (PRAGMA data_version); отдача с gzip + ETag/304.
+#
+# База для Rooms::Opens/Closeds (new/create/edit/update комнат — в
+# подклассах, общая логика здесь, как в Rails rooms_controller.rb).
 class RoomsController < ApplicationController
   include RoomsHelpers
-
-  # Rails rooms/{opens,closeds}_controller.rb: before_action
-  # :ensure_permission_to_create_rooms, only: [:new, :create].
-  before_action :ensure_permission_to_create_rooms, only: [:new, :create]
 
   # new.html.erb / edit.html.erb + партиал _form.html.erb (room_form)
   # и direct-ветка edit. Данные формы готовит prepare_room_form.
@@ -141,65 +140,50 @@ class RoomsController < ApplicationController
     redirect_to "/rooms/#{room.id}/involvement"
   end
 
-  # GET /rooms/:kind/new — форма новой комнаты (rooms/new.html.erb +
-  # _form.html.erb: имя, список доступа с аватарами/свитчами, фильтр,
-  # save с иконкой, delete-панель). Роуты вида /rooms/{opens,closeds}/new
-  # даёт resources в routes.cr; kind приходит из defaults.
-  def new
-    user = current_user.not_nil!
-    kind = params["kind"].to_s
-    return head(:not_found) unless {"opens", "closeds", "directs"}.includes?(kind)
-    prepare_room_form(nil, kind, user)
+  # GET /rooms/{kind}/new, POST /rooms/{kind}, GET/PATCH
+  # /rooms/{kind}/:room_id — вынесены в Rooms::OpensController /
+  # Rooms::ClosedsController (см. app/controllers/rooms/); /rooms/directs
+  # — в Rooms::DirectsController.
+
+  # DELETE /rooms/:id — удаление комнаты (room_form.eta delete-панель).
+  def destroy
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    room = Room.find?(params["id"].to_s.to_i64)
+    return head(:not_found) unless room
+    rid = room.id.not_nil!
+    Membership.where("room_id = ?", rid).delete_all
+    Message.where("room_id = ?", rid).delete_all
+    room.destroy
+    redirect_to "/"
   end
 
-  # GET /rooms/{opens,closeds}/:room_id/edit и /rooms/directs/:room_id/edit —
-  # настройки комнаты (ссылка "Settings for this room"): opens/closeds — та
-  # же форма с текущим именем, _method=patch; directs — отдельная страница
-  # (edit.html.erb: аватары участников + кнопка Delete Ping).
-  def edit
-    user = current_user.not_nil!
-    room = Room.find?(params["room_id"].to_s.to_i64)
-    return head(:not_found) unless room
-    @user = user
-    @room = room
-    if room.type.to_s.ends_with?("Direct")
-      @direct = true
-      members = User.where(
-        %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
-        room.id.not_nil!).order("id").to_a
-      uid = user.id.not_nil!
-      others = members.reject { |m| m.id == uid }.map(&.name.to_s)
-      @direct_title = ChatLayout.display_sentence(others, user.name.to_s)
-      @direct_members = members.size > 1 ? members.reject { |m| m.id == uid } : members
-    else
-      kind = (room.type.to_s.split("::").last? || "").downcase + "s"
-      prepare_room_form(room, kind, user)
+  # Rails rooms_controller.rb: ensure_permission_to_create_rooms — при
+  # включённом restrict_room_creation_to_administrators создание комнат
+  # (opens/closeds) доступно только администраторам; directs не ограничены
+  # (вызывается из подклассов Rooms::Opens/Closeds).
+  private def ensure_permission_to_create_rooms : Nil
+    account = Account.take
+    if account.try(&.restrict_room_creation_to_administrators?) &&
+       current_user.try(&.role) != 1
+      head(:forbidden)
     end
   end
 
-  # POST /rooms/{opens,closeds} — создание (registerRoomForms): opens дают
-  # membership всем активным юзерам; closeds — выбранным user_ids[];
-  # broadcast prepend ссылки в shared_rooms стрима "rooms"; redirect
-  # на /rooms/<id>.
-  def create
+  # Общее create Rooms::Opens/Closeds: комната класса klass + membership
+  # member_ids (opens — все активные, closeds — выбранные), broadcast
+  # ссылки, redirect на /rooms/<id>.
+  private def create_room(klass : Rooms::Open.class | Rooms::Closed.class,
+                          member_ids : Array(Int64),
+                          user : User) : Nil
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    user = current_user.not_nil!
-    kind = params["kind"].to_s
-    return head(:not_found) unless {"opens", "closeds"}.includes?(kind)
-
     name = params["room"]?.try { |r| r.is_a?(ActionController::Parameters) ? r["name"]?.to_s : "" }.to_s
     now = Time.utc
-    room = (kind == "opens" ? Rooms::Open : Rooms::Closed).new(
+    room = klass.new(
       name: name,
       creator_id: user.id.not_nil!,
       created_at: now, updated_at: now)
     room.save!
 
-    member_ids = if kind == "opens"
-      User.where("status = 0").map(&.id.not_nil!)
-    else
-      selected_user_ids.unshift(user.id.not_nil!).uniq!
-    end
     member_ids.each do |uid|
       Membership.new(room_id: room.id.not_nil!, user_id: uid,
         involvement: "everything", connections: 0,
@@ -210,10 +194,10 @@ class RoomsController < ApplicationController
     redirect_to "/rooms/#{room.id}"
   end
 
-  # PATCH /rooms/{opens,closeds}/:room_id — переименование + sync memberships по
-  # user_ids[] (closeds), broadcast prepend с тем же id — Turbo
-  # дедуплицирует и перемещает ссылку.
-  def update
+  # Общее update Rooms::Opens/Closeds: переименование + sync memberships по
+  # user_ids[] (opens не пересобирают членство — membership у всех), broadcast
+  # prepend с тем же id — Turbo дедуплицирует и перемещает ссылку.
+  private def update_room : Nil
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     room = Room.find(params["room_id"].to_s.to_i64)
     return head(:not_found) unless room
@@ -245,30 +229,6 @@ class RoomsController < ApplicationController
 
     broadcast_sidebar_link(room)
     redirect_to "/rooms/#{room.id}"
-  end
-
-  # DELETE /rooms/:id — удаление комнаты (room_form.eta delete-панель).
-  def destroy
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    room = Room.find?(params["id"].to_s.to_i64)
-    return head(:not_found) unless room
-    rid = room.id.not_nil!
-    Membership.where("room_id = ?", rid).delete_all
-    Message.where("room_id = ?", rid).delete_all
-    room.destroy
-    redirect_to "/"
-  end
-
-  # Rails rooms_controller.rb: ensure_permission_to_create_rooms — при
-  # включённом restrict_room_creation_to_administrators создание комнат
-  # (opens/closeds) доступно только администраторам; directs не ограничены.
-  private def ensure_permission_to_create_rooms : Nil
-    return if params["kind"].to_s == "directs"
-    account = Account.take
-    if account.try(&.restrict_room_creation_to_administrators?) &&
-       current_user.try(&.role) != 1
-      head(:forbidden)
-    end
   end
 
   # user_ids[] из формы (формат action_pack: Scalar/Array/Parameters).

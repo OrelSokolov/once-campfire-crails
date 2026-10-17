@@ -2,9 +2,9 @@
 # (референс: users/profiles/show.html.erb + profile.eta): форма
 # name/email/password/bio, список комнат участия и session
 # transfer-ссылка с QR (4 часа действия, purpose "user/transfer").
-# Разметка — app/views/profiles/show.html.erb (implicit render),
+# Разметка — app/views/users/profiles/show.html.erb (implicit render),
 # контроллер готовит данные.
-class ProfilesController < ApplicationController
+class Users::ProfilesController < ApplicationController
   include ProfilesHelpers
 
   # show.html.erb: user, пары комната-membership для списка участия,

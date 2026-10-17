@@ -4,7 +4,7 @@
 #
 # Ключ подписи: PBKDF2-SHA256(secret, "active_record/signed_id", 1000, 64),
 # HMAC-SHA256 (см. campfire-express/src/rails.js: key()/verifyId).
-class AvatarsController < ApplicationController
+class Users::AvatarsController < ApplicationController
   skip_before_action :require_authentication # аватары публично линкуются
 
   def show

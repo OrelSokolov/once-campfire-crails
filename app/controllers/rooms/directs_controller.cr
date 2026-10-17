@@ -1,16 +1,44 @@
 # /rooms/directs — личные чаты (референс: registerRoomForms kind=
 # "directs" + direct_new.eta): new — форма автокомплита в turbo-frame
 # direct_rooms_control; create — найти существующую direct-комнату с
-# ровно этим набором участников или создать (membership "everything").
-class DirectsController < ApplicationController
-  # new.html.erb: viewer (для head-метаданных).
+# ровно этим набором участников или создать (membership "everything");
+# edit — настройки (аватары участников + Delete Ping).
+class Rooms::DirectsController < ApplicationController
+  include RoomsHelpers
+
+  # new.html.erb: viewer (для head-метаданных); edit.html.erb — комната,
+  # участники, заголовок.
   @user : User?
+  @room : Room?
+  @direct : Bool = false
+  @direct_title : String = ""
+  @direct_members : Array(User) = [] of User
+  # Геттер для RoomsHelpers#page_open (модуль не видит @user).
+  getter user
 
   # GET /rooms/directs/new — форма (подменяет direct_rooms_control в
   # сайдбаре через data-turbo-frame="_self"). Разметка — app/views/
-  # directs/new.html.erb (implicit render).
+  # rooms/directs/new.html.erb (implicit render).
   def new
     @user = current_user.not_nil!
+  end
+
+  # GET /rooms/directs/:room_id/edit — настройки direct-комнаты
+  # (rooms/directs/edit.html.erb: ссылка "Settings for this room").
+  def edit
+    user = current_user.not_nil!
+    room = Room.find?(params["room_id"].to_s.to_i64)
+    return head(:not_found) unless room
+    @user = user
+    @room = room
+    @direct = true
+    members = User.where(
+      %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
+      room.id.not_nil!).order("id").to_a
+    uid = user.id.not_nil!
+    others = members.reject { |m| m.id == uid }.map(&.name.to_s)
+    @direct_title = ChatLayout.display_sentence(others, user.name.to_s)
+    @direct_members = members.size > 1 ? members.reject { |m| m.id == uid } : members
   end
 
   # POST /rooms/directs — существующая комната с тем же набором участников
@@ -37,13 +65,10 @@ class DirectsController < ApplicationController
     redirect_to "/rooms/#{room.id}"
   end
 
-  # GET /rooms/directs/new — head для формы (chat: false).
-  private def head : ERB::SafeString
+  # GET /rooms/directs/new — head для формы (chat: false). Имя не `head`:
+  # перекрыл бы фреймворковый head(status) (404 в edit).
+  private def page_head : ERB::SafeString
     ERB::SafeString.new(ChatLayout.head("New ping", @user.not_nil!, nil, chat: false))
-  end
-
-  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 
   # Форма шлёт повторяющиеся user_ids[]: парсер кладёт их в

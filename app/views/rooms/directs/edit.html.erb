@@ -1,4 +1,4 @@
-<% if @direct %><%= page_open("Edit settings for #{@direct_title}", "/rooms/#{@room.not_nil!.id.not_nil!}") %><div class="panel txt-align-center">
+<%= page_open("Edit settings for #{@direct_title}", "/rooms/#{@room.not_nil!.id.not_nil!}") %><div class="panel txt-align-center">
 <section class="directs--edit margin-block-end">
 <% @direct_members.each do |member| %><div class="member flex flex-column gap fill-shade pad border-radius">
 <figure class="avatar center" style="--avatar-border-radius: 10ch; --avatar-size: 10ch;">
@@ -10,4 +10,4 @@
 <% end %></section>
 <form class="button_to" method="post" action="/rooms/<%= @room.not_nil!.id.not_nil! %>"><input type="hidden" name="_method" value="delete"><button class="btn btn--negative center" aria-label="Delete Ping" data-turbo-confirm="Are you sure you want to delete this ping and all messages in it? This can’t be undone." type="submit"><%= icon("trash.svg") %>Ping</button></form>
 </div>
-<%= page_close %><% else %><%= render partial: "rooms/_form", locals: {"room" => @room, "kind" => @kind, "user" => @user.not_nil!, "selected" => @selected, "is_open" => @is_open, "can_administer" => @can_administer, "users" => @users, "divider" => @divider} %><% end %>
+<%= page_close %>

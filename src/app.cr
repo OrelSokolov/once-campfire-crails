@@ -48,7 +48,7 @@ class JbuilderTemplate
                                     locals: {"message" => Message}},
     "messages/boosts/boost"      => {path: "app/views/messages/boosts/_boost.json.jbuilder",
                                     locals: {"boost" => Boost}},
-    "autocompletable_users/user" => {path: "app/views/autocompletable_users/_user.json.jbuilder",
+    "autocompletable/users/user" => {path: "app/views/autocompletable/users/_user.json.jbuilder",
                                     locals: {"user" => User}},
   })
 end

@@ -1,7 +1,7 @@
 # GET /users/me/sidebar — сайдбар со списком комнат (users/sidebars/
 # show.html.erb + rooms/_direct|_shared|_direct_placeholder референса;
 # разметка — ChatERB-шаблон, контроллер готовит данные).
-class SidebarsController < ApplicationController
+class Users::SidebarsController < ApplicationController
   def show
     user = current_user.not_nil!
 

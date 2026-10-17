@@ -1,7 +1,7 @@
 # /account/bots — чат-боты (референс: routes.js /account/bots* +
 # bot_form.eta/bots.eta): создание (role=2 + bot_token), список с
 # curl-командами, переименование. Только администратор.
-class BotsController < ApplicationController
+class Accounts::BotsController < ApplicationController
   include BotsHelpers
 
   before_action :require_admin

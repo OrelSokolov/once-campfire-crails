@@ -2,8 +2,8 @@
 # routes.js + custom_styles.eta): textarea account[custom_styles],
 # PATCH → UPDATE accounts.custom_styles; layout инжектит <style>
 # (см. ChatLayout.head). Только администратор.
-# Разметка GET — app/views/custom_styles/edit.html.erb (implicit render).
-class CustomStylesController < ApplicationController
+# Разметка GET — app/views/accounts/custom_styles/edit.html.erb (implicit render).
+class Accounts::CustomStylesController < ApplicationController
   include CustomStylesHelpers
 
   before_action :require_admin

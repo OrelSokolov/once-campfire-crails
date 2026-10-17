@@ -120,6 +120,42 @@ Rails держит `rooms/involvements_controller.rb`, `rooms/refreshes_controll
 Опционально потому, что это уже не «плоскость», а слияние экшенов —
 решить отдельно, стоит ли шевлить.
 
+**Решение (2026-10-17): отложено.** Оба экшена рендерятся через
+ChatERB-контекст (`compile_template "involvement_show"` в chat_erb.cr),
+а не implicit-render'ом контроллера; разделение создаёт тот же конфликт
+шаблонов, что и у сайдбара (файл по пути `<dir>/<action>.html.erb`
+компилируется и в контекст контроллера, где нет локалов ChatERB) —
+потребуется переименование в `_show.html.erb` и правка chat_erb.cr.
+Смысла в HTTP-паритете это не добавляет — оставлено как есть.
+
+## Статус выполнения (2026-10-17)
+
+- Стадия 1 — выполнена полностью (9 контроллеров + view-директории +
+  строки роутов; jbuilder-реестр в `src/app.cr` обновлён).
+- Стадия 2.1 — выполнена: `Rooms::OpensController`/`Rooms::ClosedsController`
+  (общее — в базовом `RoomsController`: `create_room`/`update_room`/
+  `prepare_room_form`), direct-ветка edit — в `Rooms::DirectsController#edit`
+  (шаблонный хелпер `head` переименован в `page_head`, чтобы не перекрывать
+  фреймворковый `head(status)`). Роуты — `namespace :rooms`. Вьюхи
+  new/edit разложены по `rooms/{opens,closeds}`, directs/edit выделен;
+  `_form.html.erb` остался один общий (`rooms/_form.html.erb`, locals
+  `kind`/`is_open`) — дублировать 100+ строк на вид комнат смысла нет.
+- Стадия 2.2 — выполнена: `Messages::ByBotsController`,
+  `Messages::BoostsController`, `Messages::Boosts::ByBotsController`;
+  вьюхи — `messages/by_bots/`, `messages/boosts/`,
+  `messages/boosts/by_bots/`.
+- Сайдбар: `users/sidebars/show.html.erb` → `_show.html.erb` — файл
+  компилируется только в контексте ChatERB с локалами; после неймспейса
+  контроллера имя без подчёркивания попадало бы и в implicit-scan
+  экшена `Users::SidebarsController#show`, где локалов нет.
+- Проверки: `rake build:crails` чистый; таблица роутов отличается от
+  исходной только колонкой Controller#Action (URL/глаголы/имена не
+  изменились); capybara-сьют 72/0, HTML-артефакты побайтово идентичны
+  прогону до рефакторинга (PNG-диффы — только пер-процессный сид
+  `String#hash` в цвете аватар-инициалов).
+- Изменений фреймворка не потребовалось: `scope module:` и view lookup
+  по неймспейс-пути уже поддержаны.
+
 ## Изменения фреймворка (только если понадобятся)
 
 Перед стартом проверить, и при отсутствии — добавить по процедуре из

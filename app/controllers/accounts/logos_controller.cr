@@ -1,4 +1,5 @@
-# GET/DELETE /account/logo — порт Accounts::LogosController: layouts/
+# GET/DELETE /account/logo — порт Accounts::LogosController
+# (app/controllers/accounts/logos_controller.cr): layouts/
 # application.html.erb линкует fresh_account_logo как rel=icon и
 # apple-touch-icon. show публичен (allow_unauthenticated_access) — браузер
 # запрашивает иконку без сессии. Варианты :small(192)/:large(512) не
@@ -59,7 +60,7 @@ class LogosController < ApplicationController
     ChatLayout.asset(small ? "logos/app-icon-192.png" : "logos/app-icon.png")
   end
 
-  # storage/files/<key[0,2]>/<key[2,2]>/<key> (см. AvatarsController).
+  # storage/files/<key[0,2]>/<key[2,2]>/<key> (см. Users::AvatarsController).
   private def storage_path(key : String) : String
     File.join(storage_root, key[0, 2], key[2, 2], key)
   end

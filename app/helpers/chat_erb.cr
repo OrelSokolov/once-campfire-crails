@@ -198,7 +198,11 @@ class ChatERB
     user.role == 1
   end
 
-  compile_template "sidebar", "app/views/users/sidebars/show.html.erb"
+  # _show.html.erb (не show.html.erb): файл компилируется только здесь,
+  # в контексте ChatERB с локалами; имя без подчёркивания попало бы и в
+  # implicit-scan экшена Users::SidebarsController#show, где локалов нет
+  # (контроллер рендерит сайдбар сам, через этот шаблон и PageCache).
+  compile_template "sidebar", "app/views/users/sidebars/_show.html.erb"
 
   compile_template "composer", "app/views/rooms/show/_composer.html.erb"
   compile_template "body_close", "app/views/layouts/_body_close.html.erb"

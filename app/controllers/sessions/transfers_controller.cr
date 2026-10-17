@@ -1,9 +1,9 @@
 # /session/transfers/:id — авто-логин по ссылке (референс:
 # campfire-express routes.js /session/transfers/:id + transfer.eta):
-# GET рендерит форму auto-submit (app/views/session_transfers/
+# GET рендерит форму auto-submit (app/views/sessions/transfers/
 # show.html.erb), PUT/PATCH проверяет signed_id (purpose
 # "user/transfer"), стартует сессию и редиректит на "/".
-class SessionTransfersController < ApplicationController
+class Sessions::TransfersController < ApplicationController
   include SessionTransfersHelpers
 
   skip_before_action :require_authentication

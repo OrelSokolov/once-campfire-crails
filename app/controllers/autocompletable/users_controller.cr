@@ -1,7 +1,7 @@
 # GET /autocompletable/users?filter=&room_id= — подсказки автокомплита
 # (референс: routes.js registerUsers + prompt_item.eta): HTML-фрагмент
 # lexxy-prompt-item на каждого пользователя (до 20, filter по имени).
-class AutocompletableUsersController < ApplicationController
+class Autocompletable::UsersController < ApplicationController
   # show.json.jbuilder (JSON-ветка) + show.html.erb (HTML-ветка): до 20
   # отфильтрованных юзеров.
   @users : Array(User) = [] of User
@@ -29,7 +29,7 @@ class AutocompletableUsersController < ApplicationController
     # (implicit render → show.html.erb).
     accept = request.headers["Accept"]?.to_s
     if accept.includes?("application/json") && !accept.includes?("text/html")
-      return render(template: "autocompletable_users/show")
+      return render(template: "autocompletable/users/show")
     end
   end
 
