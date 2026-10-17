@@ -3,6 +3,7 @@
 require "fileutils"
 require "open3"
 require "json"
+require "pathname"
 require "chunky_png"
 
 module Parity
@@ -23,9 +24,13 @@ module Parity
       []
     end
 
-    def run(baseline = ENV.fetch("PARITY_BASELINE", "rails"), target = ENV.fetch("TARGET", "crails"))
+    def run(baseline = nil, target = nil)
+      baseline ||= ENV.fetch("PARITY_BASELINE", "rails")
+      target ||= ENV.fetch("TARGET", "crails")
       max_ratio = Float(ENV.fetch("MAX_DIFF_RATIO", "0.002"))
       suite = File.expand_path("..", __dir__)
+      project_root = File.expand_path("../..", __dir__)
+      suite_prefix = Pathname.new(suite).relative_path_from(Pathname.new(project_root)).to_s
       base_dir = File.join(suite, "artifacts", baseline)
       target_dir = File.join(suite, "artifacts", target)
       out_dir = File.join(suite, "artifacts", "compare")
@@ -51,14 +56,15 @@ module Parity
                   missing: results.count { |r| r[:missing] }, failed: failed.size }
       File.write(File.join(out_dir, "summary.json"), JSON.pretty_generate({ summary:, results: }))
       require_relative "report"
-      File.write(File.join(out_dir, "report.html"), Parity::Report.render(summary:, results:, baseline:, target:))
+      File.write(File.join(out_dir, "report.html"), Parity::Report.render(summary:, results:, baseline:, target:, suite:))
       puts "\nparity #{baseline} vs #{target}: png #{summary[:png_passed]}/#{summary[:png_total]}, " \
            "html #{summary[:html_passed]}/#{summary[:html_total]}" +
            (summary[:missing].positive? ? ", missing #{summary[:missing]}" : "") +
-           " → artifacts/compare/report.html"
+           " → #{suite_prefix}/artifacts/compare/report.html"
       failed.first(40).each do |item|
         detail = item[:missing] ? "(missing in #{item[:missing]})" : ratio_detail(item)
-        puts "  FAIL #{item[:rel]} #{detail}"
+        side = item[:missing] == "target" ? baseline : target
+        puts "  FAIL #{suite_prefix}/artifacts/#{side}/#{item[:rel]} #{detail}"
       end
       failed.empty?
     end

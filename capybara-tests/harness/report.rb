@@ -4,7 +4,10 @@ module Parity
   module Report
     module_function
 
-    def render(summary:, results:, baseline:, target:)
+    def render(summary:, results:, baseline:, target:, suite: nil)
+      # Absolute file:// links so the report opens correctly from anywhere
+      # (terminal, IDE preview) — not only when resolved against its own dir.
+      base = suite ? "file://#{suite}/artifacts" : ".."
       rows = results.map do |item|
         status = item[:pass] ? "pass" : "fail"
         detail = if item[:missing]
@@ -23,8 +26,8 @@ module Parity
         pct = item[:ratio] ? item[:ratio] * 100 : nil
         severity = pct ? Parity::Compare.px_severity(pct) : nil
         detail_cls = severity && severity != :ok ? %( class="#{severity}") : ""
-        diff_link = item[:kind] == "png" && !item[:pass] ? %(<a href="#{item[:rel].sub('.png', '.diff.png')}">diff</a>) : ""
-        pair = %(<a href="../#{baseline}/#{item[:rel]}">#{baseline}</a> · <a href="../#{target}/#{item[:rel]}">#{target}</a>)
+        diff_link = item[:kind] == "png" && !item[:pass] ? %(<a href="#{base}/compare/#{item[:rel].sub('.png', '.diff.png')}">diff</a>) : ""
+        pair = %(<a href="#{base}/#{baseline}/#{item[:rel]}">#{baseline}</a> · <a href="#{base}/#{target}/#{item[:rel]}">#{target}</a>)
         %(<tr class="#{status}"><td><code>#{item[:rel]}</code></td><td>#{item[:kind]}</td><td>#{status}</td><td#{detail_cls}>#{detail}</td><td>#{diff_link}</td><td>#{pair}</td></tr>)
       end.join("\n")
       <<~HTML
