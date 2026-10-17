@@ -44,7 +44,7 @@ class SearchesController < ApplicationController
       "SELECT query FROM searches WHERE user_id = ? ORDER BY updated_at DESC LIMIT 10",
       args: [user.id.not_nil!], as: String)
 
-    # Комната возврата (search_composer: стрелка «Exit search»).
+    # Комната возврата (composer в show.html.erb: стрелка «Exit search»).
     return_room = (user.memberships.map(&.room_id.not_nil!).min? ||
                   Room.visible_for(user).order("id").first.try(&.id.not_nil!) || 1).to_i64
 
@@ -98,9 +98,10 @@ class SearchesController < ApplicationController
       body_class: "sidebar searches", nav_html: search_nav(@query, @messages.size, @recents)))
   end
 
-  # footer(composer) + aside(recents) + app-logo (layouts/_body_close).
+  # footer(content_for :footer из шаблона — composer поиска) +
+  # aside(recents) + app-logo (layouts/_body_close).
   private def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close(search_composer(@query, @return_room),
+    ERB::SafeString.new(ChatLayout.page_close(content_for(:footer).to_s,
       %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">) + recent_searches_html(@recents) + %(</div>)))
   end
 
@@ -112,6 +113,11 @@ class SearchesController < ApplicationController
 
   private def search_icon_src : String
     ChatLayout.asset("search.svg")
+  end
+
+  # <img>-иконка (ChatLayout.icon) — SafeString для <%= %> шаблона.
+  private def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 
   # search_nav.eta: чип запроса с количеством + recents.
@@ -145,34 +151,6 @@ class SearchesController < ApplicationController
         io << %(type="submit">) << ChatLayout.icon("broom.svg")
         io << %(<span class="for-screen-reader">Clear recent searches</span></button></form>)
       end
-    end
-  end
-
-  # search_composer.eta: выход из поиска (стрелка) + поле с иконками.
-  private def search_composer(query : String, return_room : Int64) : String
-    String.build do |io|
-      io << %(<div class="composer flex align-end gap">)
-      io << %(<a class="btn flex-item-no-shrink margin-block-end" )
-      io << %(style="view-transition-name: input-switcher; --btn-border-radius: 0.5em" )
-      io << %(href="/rooms/) << return_room << %(">)
-      io << ChatLayout.icon("arrow-left.svg")
-      io << %(<span class="for-screen-reader">Exit search</span></a>)
-      io << %(<form class="margin-block flex-item-grow contain flex align-center gap" )
-      io << %(data-controller="form" data-action="keydown.esc-&gt;form#cancel" )
-      io << %(action="/searches" accept-charset="UTF-8" method="post">)
-      io << %(<div class="composer__input flex align-center flex-item-grow gap full-width input input--actor min-width">)
-      io << %(<img aria-hidden="true" class="composer__input-hint colorize--black" )
-      io << %(style="view-transition-name: input-btn" src=")
-      io << ChatLayout.asset("search.svg") << %(" width="20" height="20">)
-      io << %(<input value=") << HTML.escape(query)
-      io << %(" class="searches__input input flex-item-grow" role="searchbox" aria-label="search" )
-      io << %(autofocus required type="text" name="q" id="q">)
-      io << %(<a data-form-target="cancel" role="button" class="searches__reset" href="/searches">)
-      io << ChatLayout.icon("remove.svg", 14, "colorize--black")
-      io << %(<span class="for-screen-reader">Clear search field</span></a>)
-      io << %(<button name="button" type="submit" class="btn btn--reversed flex-item-no-shrink txt-small" )
-      io << %(style="--btn-border-radius: 0.5em">) << ChatLayout.icon("arrow-up.svg")
-      io << %(<span class="for-screen-reader">Search</span></button></div></form></div>)
     end
   end
 end

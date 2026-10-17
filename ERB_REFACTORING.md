@@ -192,8 +192,10 @@ PageCache — не страница, не трогался.
 - **15 (searches)**: page-cache ПОВЕРХ шаблона: `__render_view("show").to_s`
   скармливается `PageCache::Page.new` как раньше был String.build — ETag
   (SHA1 тела) до/после совпал, что и доказывает идентичность кэшируемых
-  байтов. search_nav/search_composer/recent_searches остались String-
-  билдерами (прецедент account_nav/user_nav). Файл — `show.html.erb` по
+  байтов. search_composer позже перенесён в шаблон через `content_for
+  :footer` (как в референсе; `page_close` читает `content_for(:footer)`),
+  search_nav/recent_searches остались String-билдерами (прецедент
+  account_nav/user_nav). Файл — `show.html.erb` по
   экшену порта (в референсе `index.html.erb`; роут `get "/searches", to:
   "searches#show"`). Тривиальная гочча сравнения: тело содержит origin
   (пермалинки `/rooms/N/@M` с base_url) — «до»/«после» сравнивать только
