@@ -11,7 +11,8 @@
 # переменную окружения COMMIT (docker-compose / -e).
 
 FROM crystallang/crystal:1.21-alpine
-RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev git
+# vips-dev (+glib-dev): линковка libvips — ActiveStorage.variant_processor = :vips
+RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev git vips-dev glib-dev
 
 WORKDIR /app
 

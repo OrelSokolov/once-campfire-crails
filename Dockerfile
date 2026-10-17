@@ -2,7 +2,8 @@
 # Все зависимости — публичные git-шарды (shard.yml), контекст = каталог приложения
 # (.dockerignore отсекает lib/, базы, артефакты).
 FROM crystallang/crystal:1.21-alpine AS build
-RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev
+# vips-dev (+glib-dev): линковка libvips — ActiveStorage.variant_processor = :vips
+RUN apk add --no-cache sqlite-dev yaml-dev zlib-dev openssl-dev vips-dev glib-dev
 WORKDIR /app
 COPY shard.yml shard.lock ./
 RUN shards install
@@ -12,7 +13,7 @@ COPY . .
 RUN crystal build src/app.cr -o bin/app-release --release -Dwithout_mt
 
 FROM alpine:3.20
-RUN apk add --no-cache gc libevent pcre2 sqlite-libs libgcc libstdc++ yaml
+RUN apk add --no-cache gc libevent pcre2 sqlite-libs libgcc libstdc++ yaml vips glib
 WORKDIR /app
 COPY --from=build /app/bin/app-release ./bin/app-release
 COPY --from=build /app/public ./public
