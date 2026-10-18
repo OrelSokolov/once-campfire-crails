@@ -1,0 +1,15 @@
+# 1:1-парити артефактов capybara-харнесса из корня проекта:
+#   bundle exec twinshot generate oracle   # rails-прогон (артефакты capybara-tests/artifacts/rails)
+#   bundle exec twinshot generate current  # crails-прогон (артефакты capybara-tests/artifacts/crails)
+#   bundle exec twinshot compare
+# Запуск из capybara-tests: cd capybara-tests && bundle exec twinshot ...
+oracle:
+  path: capybara-tests/artifacts/rails
+  generate: cd capybara-tests && PARITY_RUBY=$HOME/.rvm/rubies/ruby-3.4.5/bin/ruby TARGET=rails bin/run
+
+current:
+  path: capybara-tests/artifacts/crails
+  generate: cd capybara-tests && PARITY_RUBY=$HOME/.rvm/rubies/ruby-3.4.5/bin/ruby TARGET=crails bin/run
+
+png:
+  max_diff_ratio: 0.002

@@ -17,7 +17,8 @@ module AccountsHelpers
   end
 
   def copy_button(url : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.copy_button(url, "Copy join link"))
+    # _invite.html.erb: span первой, img с colorize--black
+    ERB::SafeString.new(ChatLayout.copy_button(url, "Copy join link", "colorize--black"))
   end
 
   # translation_button (translations_helper): details/popup меню переводов
@@ -43,6 +44,7 @@ module AccountsHelpers
     uid = u.id.not_nil!
     name = HTML.escape(u.name.to_s)
     banned = u.status == 2
+    li_closed = false
     html = String.build do |io|
       io << %(<li class="flex align-center gap margin-none#{banned ? " banned" : " "}">\n)
       io << %(<figure class="avatar flex-item-no-shrink" style="--avatar-size: 3.75ch;">\n)
@@ -64,31 +66,47 @@ module AccountsHelpers
         if uid != viewer.id
           io << %(<form action="/account/users/#{uid}" class="button_to" method="post"><input type="hidden" name="_method" value="delete"><button class="btn txt-small flex-item-no-shrink btn--negative" data-turbo-confirm="Are you sure you want to permanently remove this person from the account? This can’t be undone." type="submit">\n)
           io << ChatLayout.icon("minus.svg") << %(\n)
-          io << %(<span class="for-screen-reader">Delete ) << name << %(</span>\n</button></form>\n)
+          io << %(<span class="for-screen-reader">Delete ) << name << %(</span>\n</button></form></li>\n)
+          li_closed = true
         end
       end
       if uid == viewer.id
-        io << %(<a class="btn txt-small flex-item-no-shrink" href="/users/me/profile" target="_top">)
-        io << ChatLayout.icon("pencil.svg")
-        io << %(<span class="for-screen-reader">My settings</span></a>\n)
+        io << %(<a class="btn txt-small flex-item-no-shrink" href="/users/me/profile" target="_top">\n)
+        io << ChatLayout.icon("pencil.svg") << %(\n)
+        io << %(<span class="for-screen-reader">My settings</span>\n</a></li>\n)
+        li_closed = true
       end
-      io << %(</li>\n)
+      # Строка без кнопок (banned/не-админ смотрящий): </li> без переноса.
+      io << %(</li>\n) unless li_closed
     end
     ERB::SafeString.new(html)
   end
 
-  # account_nav.eta: назад + ссылки на ботов/кастомные стили (админ).
+  # account_nav.eta: назад (link_back_to_last_room_visited) + ссылки на
+  # ботов/кастомные стили (админ).
   def account_nav(user : User) : String
     String.build do |io|
-      io << ChatLayout.nav_back("/")
+      io << ChatLayout.nav_back(last_room_visited_path(user))
       if user.role == 1
-        io << %(<div class="flex align-center gap flex-item-justify-end">)
-        io << %(<a href="/account/bots" class="btn" style="view-transition-name: chat-bots">)
-        io << ChatLayout.icon("bot.svg") << %(<span class="for-screen-reader">Set up chat bots</span></a>)
-        io << %(<a href="/account/custom_styles/edit" class="btn" style="view-transition-name: custom-styles">)
-        io << ChatLayout.icon("art.svg") << %(<span class="for-screen-reader">Custom styles</span></a>)
-        io << %(</div>)
+        io << %(\n<div class="flex align-center gap flex-item-justify-end">\n)
+        io << %(<a href="/account/bots" class="btn" style="view-transition-name: chat-bots">\n)
+        io << ChatLayout.icon("bot.svg") << %(\n<span class="for-screen-reader">Set up chat bots</span>\n</a>\n)
+        io << %(<a href="/account/custom_styles/edit" class="btn" style="view-transition-name: custom-styles">\n)
+        io << ChatLayout.icon("art.svg") << %(\n<span class="for-screen-reader">Custom styles</span>\n)
+        io << %(</a>    </div>)
       end
     end
+  end
+
+  # TrackedRoomVisit (rooms_helper): link_back_to_last_room_visited —
+  # cookie last_room (если комната видима пользователю), иначе
+  # original-комната; корень — когда видимых комнат нет.
+  private def last_room_visited_path(user : User) : String
+    room = nil
+    if last = cookies["last_room"]?
+      room = Room.visible_for(user).where("id = ?", last.to_i64?).take
+    end
+    room ||= Room.visible_for(user).order("id").first?
+    room ? "/rooms/#{room.id.not_nil!}" : "/"
   end
 end

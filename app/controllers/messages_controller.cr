@@ -42,10 +42,10 @@ class MessagesController < ApplicationController
     end
 
     # Rails messages#index: пустая страница → 204 No Content (пагинатор
-    # по нему понимает, что история дочитана).
+    # по нему понимает, что история дочитана). Rails: head :no_content —
+    # без тела и без Content-Type.
     if messages.empty?
-      response.status = :no_content
-      return render(plain: "")
+      return head(:no_content)
     end
 
     page = Campfire::PageCache::Page.new(messages_page_html(room, messages, epoch))

@@ -54,15 +54,21 @@ class RoomsController < ApplicationController
 
     # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
     # /rooms/:id/@:message_id — page_around (pagination.rb): 40 до якоря
-    # + якорь + 40 после (first_page), вывод ASC.
+    # + якорь + 40 после (first_page), вывод ASC. Сравнение — субзапросом
+    # по id (как в messages#index): литеральный Time-бинд sqlite3-шарда
+    # сериализуется с миллисекундами («…12:50:00.000»), и строка якоря
+    # «…12:50:00» без дроби префиксно меньше её — якорь попадал и в before,
+    # и в [anchor], дублируясь в выдаче.
     messages = if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
                    (anchor = Message.where("room_id = ? AND id = ?",
                      room.id.not_nil!, mid).first?)
       before = Message.where(
-        "room_id = ? AND created_at < ?", room.id.not_nil!, anchor.created_at.not_nil!)
+        "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, mid)
         .order("created_at DESC").limit(40).to_a.reverse
       after = Message.where(
-        "room_id = ? AND created_at > ?", room.id.not_nil!, anchor.created_at.not_nil!)
+        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, mid)
         .order("created_at ASC").limit(40).to_a
       before + [anchor] + after
     else

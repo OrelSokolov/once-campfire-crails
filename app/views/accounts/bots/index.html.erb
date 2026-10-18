@@ -1,9 +1,45 @@
-<%= page_open("Chat bots", "/account/edit") %><section class="panel panel--wide txt-align-center flex flex-column position-relative" style="view-transition-name: chat-bots"><div class="flex align-center gap"><div class="panel__button">Chat bots</div><div class="pad-inline-double center"><h1 class="margin-none">Chat bots</h1><p class="margin-none-block-start">With Chat bots, other sites and services can post updates directly to Campfire.</p><a href="/account/bots/new" class="btn btn--reversed txt-large" aria-label="Add a chat bot"><%= icon("bot.svg") %><%= icon("add.svg") %></a></div></div>
-<div class="pad-inline pad-block-start"><menu class="flex flex-column gap margin-none pad">
-<% @bots.each do |bot| %><% bid = bot.id.not_nil! %><li class="flex flex-column gap flush fill-shade border-radius pad-block pad-inline-double"><div class="flex align-center gap"><figure class="avatar flex-item-no-shrink" style="--avatar-size: 2.65em;"><a title="<%= bot.name.to_s %>" class="btn avatar" data-turbo-frame="_top" href="/users/<%= bid %>"><img src="/users/<%= bid %>/avatar" aria-hidden="true" width="48" height="48"></a></figure><div class="min-width"><div class="overflow-ellipsis txt-large"><strong><%= bot.name.to_s %></strong></div></div><a href="/account/bots/<%= bid %>/edit" class="btn flex-item-justify-end" style="view-transition-name: chat-bot-<%= bid %>"><%= icon("pencil.svg") %><span class="for-screen-reader">Edit <%= bot.name.to_s %></span></a></div>
-<% @bot_rooms[bid].each do |r| %><fieldset class="gap max-width pad border border-radius"><legend class="min-width txt-align-start pad-inline"><strong class="overflow-ellipsis"><%= r[:legend] %></strong></legend>
-<% r[:commands].each do |c| %><div class="flex align-center gap"><%= icon(c[:icn], 24, "colorize--black") %><div class="flex-item-grow"><input type="text" class="input full-width fill-white" value="<%= c[:cmd] %>" aria-label="curl command for <%= c[:label] %>" readonly></div><div class="txt-small"><%= copy_button(c[:cmd], c[:sr]) %></div></div>
+<%= page_open("Chat bots", "/account/edit") %><section class="panel panel--wide txt-align-center flex flex-column position-relative" style="view-transition-name: chat-bots">
+<div class="flex align-center gap">
+<div class="panel__button">
+<%= translation_button("chat_bots") %>
+</div>
+<div class="pad-inline-double center">
+<h1 class="margin-none">Chat bots</h1>
+<p class="margin-none-block-start">With Chat bots, other sites and services can post updates directly to Campfire.</p>
+<a href="/account/bots/new" class="btn btn--reversed txt-large" aria-label="Add a chat bot">
+<%= icon("bot.svg") %>
+<%= icon("add.svg") %>
+</a>    </div>
+</div>
+<div class="pad-inline pad-block-start ">
+<menu class="flex flex-column gap margin-none pad">
+<% @bots.each do |bot| %><% bid = bot.id.not_nil! %><li class="flex flex-column gap flush fill-shade border-radius pad-block pad-inline-double">
+<div class="flex align-center gap">
+<figure class="avatar flex-item--no-shrink" style="--avatar-size: 2.65em;">
+<%= avatar_link(bot, "lazy") %>
+</figure>
+<div class="min-width">
+<div class="overflow-ellipsis txt-large"><strong><%= bot.name.to_s %></strong></div>
+</div>
+<a href="/account/bots/<%= bid %>/edit" class="btn flex-item-justify-end" style="view-transition-name: chat-bot-<%= bid %>">
+<%= icon("pencil.svg") %>
+<span class="for-screen-reader">Edit <%= bot.name.to_s %></span>
+</a>  </div>
+<% @bot_rooms[bid].each do |r| %><fieldset class="gap max-width pad border border-radius">
+<legend class="min-width txt-align-start pad-inline">
+<strong class="overflow-ellipsis"><%= r[:legend] %></strong>
+</legend>
+<% r[:commands].each do |c| %><div class="flex align-center gap">
+<%= icon(c[:icn], 24, "colorize--black") %>
+<div class="flex-item-grow">
+<input type="text" class="input full-width fill-white" value="<%= c[:cmd] %>" aria-label="curl command for <%= c[:label] %>" readonly>
+</div>
+<div class="txt-small">
+<%= copy_button(c[:cmd], c[:sr]) %>        </div>
+</div>
 <% end %></fieldset>
 <% end %></li>
-<% end %></menu></div></section>
+<% end %></menu>
+</div>
+</section>
 <%= page_close %>

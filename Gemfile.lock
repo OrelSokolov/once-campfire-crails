@@ -1,6 +1,25 @@
+PATH
+  remote: /home/oleg/twinshot
+  specs:
+    twinshot (0.1.0)
+      colorize (~> 1.1)
+      diff-lcs (~> 2.0)
+      nokogiri (~> 1.16)
+      ruby-vips (~> 2.2)
+
 GEM
   remote: https://rubygems.org/
   specs:
+    colorize (1.1.0)
+    diff-lcs (2.0.0)
+    ffi (1.17.4-x86_64-linux-gnu)
+    logger (1.7.0)
+    nokogiri (1.19.4-x86_64-linux-gnu)
+      racc (~> 1.4)
+    racc (1.8.1)
+    ruby-vips (2.3.0)
+      ffi (~> 1.12)
+      logger
     terminal-table (4.0.0)
       unicode-display_width (>= 1.1.1, < 4)
     unicode-display_width (3.3.0)
@@ -8,11 +27,11 @@ GEM
     unicode-emoji (4.3.0)
 
 PLATFORMS
-  ruby
   x86_64-linux
 
 DEPENDENCIES
   terminal-table
+  twinshot!
 
 BUNDLED WITH
    2.6.9

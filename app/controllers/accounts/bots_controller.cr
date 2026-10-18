@@ -64,7 +64,7 @@ class Accounts::BotsController < ApplicationController
         .order("lower(name)").each do |room|
         rid = room.id.not_nil!
         text = "curl -d 'Hello!' #{origin}/rooms/#{rid}/#{bot_key}/messages"
-        upload = "curl -F 'file=@yourfile' #{origin}/rooms/#{rid}/#{bot_key}/messages"
+        upload = %{curl -F "attachment=@/path/to/file" #{origin}/rooms/#{rid}/#{bot_key}/messages}
         rooms << {legend: room.name.to_s, commands: [
           {icn: "messages-outlined.svg", label: "posting messages", sr: "Copy message command", cmd: text},
           {icn: "attachment.svg", label: "posting attachments", sr: "Copy attachment command", cmd: upload},

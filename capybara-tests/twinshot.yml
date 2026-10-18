@@ -1,0 +1,10 @@
+oracle:
+  path: artifacts/rails
+  generate: PARITY_RUBY=$HOME/.rvm/rubies/ruby-3.4.5/bin/ruby TARGET=rails bin/run
+
+current:
+  path: artifacts/crails
+  generate: PARITY_RUBY=$HOME/.rvm/rubies/ruby-3.4.5/bin/ruby TARGET=crails bin/run
+
+png:
+  max_diff_ratio: 0.002

@@ -38,3 +38,4 @@ once-campfire/
 
 # Локальный override шардов (dev): теги не запушены
 /shard.override.yml
+twinshot-report/

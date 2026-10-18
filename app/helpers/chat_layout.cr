@@ -1546,7 +1546,7 @@ module ChatLayout
       refresh_url = base_url.empty? ? "/rooms/#{room.id}/refresh" : "#{base_url}/rooms/#{room.id}/refresh"
       io << %(<div id="messages_#{room.dom_id}" class="messages" data-controller="maintain-scroll refresh-room" )
       io << %(data-action="turbo:before-stream-render@document-&gt;maintain-scroll#beforeStreamRender visibilitychange@document-&gt;refresh-room#visibilityChanged online@window-&gt;refresh-room#online" )
-      io << %(data-messages-target="messages" data-refresh-room-loaded-at-value="#{(room.updated_at || Time.utc).to_unix}" )
+      io << %(data-messages-target="messages" data-refresh-room-loaded-at-value="#{(room.updated_at || Time.utc).to_unix_ms}" )
       io << %(data-refresh-room-url-value="#{HTML.escape(refresh_url)}">\n)
       io << messages_html
       io << %(</div>\n)

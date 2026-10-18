@@ -70,9 +70,14 @@ module Parity
       File.open(log_file, "a") do |io|
         io.puts "# parity launch #{Time.now.utc.iso8601}: #{cmd} #{args.join(' ')}"
       end
-      pid = Process.spawn(clean_env.merge(env), cmd, *args, chdir: cwd,
-        out: [log_file, "a"], err: [log_file, "a"])
-      ProcessHandle.new(pid, log_file)
+      # bundle exec (bundler >= 2.6) сам дописывает свой контекст (BUNDLER_SETUP,
+      # RUBYOPT, vendor bin в PATH) в env детей Process.spawn — цели развёртываются
+      # против чужого бандла. with_unbundled_env снимает это на время spawn.
+      Bundler.with_unbundled_env do
+        pid = Process.spawn(clean_env.merge(env), cmd, *args, chdir: cwd,
+          out: [log_file, "a"], err: [log_file, "a"])
+        ProcessHandle.new(pid, log_file)
+      end
     end
 
     def self.copy_seed(target_dir)
