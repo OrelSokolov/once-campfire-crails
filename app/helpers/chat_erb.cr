@@ -88,11 +88,12 @@ class ChatERB
     room.name.nil? ? "Ping" : "room"
   end
 
-  # dom_id референса: STI route_key (Rooms::Open → rooms_open).
+  # dom_id референса: STI route_key (Rooms::Open → rooms_open). type бывает
+  # полным ('Rooms::Open', сид) и коротким ('Open', создание портом) —
+  # нормализуем: последний сегмент, downcase.
   def dom_id(prefix : String) : String
-    key = room.type.to_s.split("::")
-    key = ["rooms", key.last?.to_s.downcase] if key.size > 1
-    "#{prefix}_#{key.join("_")}_#{room.id}"
+    sti = room.type.to_s.split("::").last?.to_s.downcase
+    "#{prefix}_rooms_#{sti}_#{room.id}"
   end
 
   # ————— users/sidebars/show (сайдбар) —————
@@ -187,15 +188,16 @@ class ChatERB
     (t.to_unix * 1000) + (t.nanosecond // 1_000_000)
   end
 
-  # dom_id(room, :list) референса: STI route_key (open/direct/closed).
+  # dom_id(room, :list) референса: STI route_key (Rooms::Open →
+  # rooms_open). type бывает полным ('Rooms::Open', сид) и коротким
+  # ('Open', создание портом) — нормализуем к rooms_<sti>.
   def route_key(room : Room) : String
-    key = room.type.to_s.split("::")
-    return room.type.to_s.downcase if key.size == 1
-    key.join("_").downcase
+    "rooms_#{room.type.to_s.split("::").last?.to_s.downcase}"
   end
 
   def new_room_allowed? : Bool
-    user.role == 1
+    # Current.user.administrator? || !restrict_room_creation_to_administrators?
+    user.role == 1 || !Account.take.try(&.restrict_room_creation_to_administrators?)
   end
 
   # _show.html.erb (не show.html.erb): файл компилируется только здесь,

@@ -89,7 +89,9 @@ class Messages::ByBotsController < ApplicationController
     return render(plain: "invalid bot key", status: 404) unless bot
 
     plain = request.body.try(&.gets_to_end).to_s
-    body_html = "<p>#{HTML.escape(plain)}</p>"
+    # Rails message_params бота: body = raw_request_body — ActionText
+    # хранит plain-строку как есть, презентация рендерит текст без <p>.
+    body_html = HTML.escape(plain)
     client_message_id = UUID.random.to_s
 
     message = MessageCreator.create!(room, bot, body_html, client_message_id,

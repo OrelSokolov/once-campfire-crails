@@ -42,7 +42,7 @@ module UsersHelpers
       %(<a href=") + HTML.escape(qr) + %(" class="btn" data-lightbox-target="image" ) +
       %(data-action="lightbox#open" data-lightbox-url-value=") + HTML.escape(qr) + %(">) +
       ChatLayout.icon("qr-code.svg", 20, "colorize--black") + %(</a>) +
-      ChatLayout.copy_button(url, "Copy auto-login link") +
+      ChatLayout.copy_button(url, "Copy auto-login link", "flex-item-no-shrink colorize--black") +
       %(</div></div></fieldset>))
   end
 end

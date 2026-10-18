@@ -82,8 +82,10 @@ class Messages::BoostsController < ApplicationController
     if room
       entry = ChatLayout.boosts_for([mid])[mid]?.try(&.last?)
       if entry
+        # _boost.html.erb заканчивается переводом строки — Rails вставляет
+        # его вместе с партиалом, DOM после append сохраняет \n перед </div>.
         stream = %(<turbo-stream action="append" target="boosts_message_#{mid}" maintain_scroll="true"><template>) +
-          ChatLayout.boost_dom(mid, entry) + %(</template></turbo-stream>\n)
+          ChatLayout.boost_dom(mid, entry) + "\n" + %(</template></turbo-stream>\n)
         Campfire.broadcast(
           Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
           stream)

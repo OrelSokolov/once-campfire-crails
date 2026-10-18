@@ -7,6 +7,11 @@ module ViewHelpers
     ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 
+  # asset-путь пребилда (иконки без width/height и прочие ассеты шаблонов).
+  def asset(name : String) : String
+    ChatLayout.asset(name)
+  end
+
   # layouts/_body_close без контентных блоков (свои футеры —
   # accounts/searches — перекрывают метод в своих модулях).
   def page_close : ERB::SafeString

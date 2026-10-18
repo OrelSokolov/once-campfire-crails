@@ -7,7 +7,7 @@ module ProfilesHelpers
 
   # head + body + nav профиля (back + logout) + main (ChatLayout.page_open).
   def page_open(user : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("profile", "Profile: #{user.name}", user,
+    ERB::SafeString.new(ChatLayout.page_open("profile", user.name.to_s, user,
       nav_html: profile_nav))
   end
 

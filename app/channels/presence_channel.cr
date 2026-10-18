@@ -52,6 +52,10 @@ class PresenceChannel < ApplicationCable::Channel
       "connections = CASE WHEN connected_at >= ? THEN connections + 1 ELSE 1 END " \
       "WHERE room_id = ? AND user_id = ?",
       Time.utc, Time.utc - 60.seconds, room_id, current_user_id)
+    # Чистка unread_at меняет сайдбар/rooms#show, но пишем из своего
+    # соединения — PRAGMA data_version пула этого не видит (инвалидация
+    # только на чужие коммиты), поэтому сбрасываем PageCache явно.
+    PageCache.invalidate!
   end
 
   private def mark_absent(room_id : Int64) : Nil

@@ -5,7 +5,7 @@
 module SearchesHelpers
   # head + body.sidebar.searches + nav с чипом запроса и recents.
   def page_open : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("search", "Search: #{query}", user.not_nil!,
+    ERB::SafeString.new(ChatLayout.page_open("search", "Search", user.not_nil!,
       body_class: "sidebar searches", nav_html: search_nav(query, messages.size, recents)))
   end
 
@@ -13,7 +13,7 @@ module SearchesHelpers
   # aside(recents) + app-logo (layouts/_body_close).
   def page_close : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_close(content_for(:footer).to_s,
-      %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">) + recent_searches_html(recents) + %(</div>)))
+      %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">\n) + recent_searches_html(recents) + %(</div>)))
   end
 
   # Коллекция сообщений (fragment-кэш внутри messages_to).
@@ -31,32 +31,39 @@ module SearchesHelpers
   def search_nav(query : String, count : Int32, recents : Array(String)) : String
     String.build do |io|
       unless query.empty?
-        io << %(<div class="searches__query flex align-center gap pad-block-start-half">)
-        io << %(<div class="btn btn--reversed btn--faux align-center gap txt-nowrap">)
-        io << %(<span class="overflow-ellipsis">“) << HTML.escape(query) << %(”</span>)
-        io << %(<span class="flex-item-no-shrink">) << count << %(</span></div></div>)
+        io << %(<div class="searches__query flex align-center gap pad-block-start-half">\n)
+        io << %(<div class="btn btn--reversed btn--faux align-center gap txt-nowrap">\n)
+        io << %(<span class="overflow-ellipsis">“) << HTML.escape(query) << %(”</span>\n)
+        io << %(<span class="flex-item-no-shrink">) << count << %(</span>\n)
+        io << %(</div>    </div>\n)
       end
-      io << %(<div class="searches__recents align-center gap pad-block-half overflow-y overflow-hide-scrollbar">)
+      io << %(<div class="searches__recents align-center gap pad-block-half overflow-y overflow-hide-scrollbar">\n)
       io << recent_searches_html(recents)
       io << %(</div>)
     end
   end
 
   # recent_searches.eta: ссылки на последние запросы + очистка (broom).
+  # Переносы/пробелы — как в выводе Rails-ERB (артефакты): ссылки через
+  # 6 пробелов, после последней — \n, форма с полным URL (clear_searches_url),
+  # broom без width/height, хвост "  " перед закрывающим </div> вызывающего.
   def recent_searches_html(recents : Array(String)) : String
     String.build do |io|
-      recents.each do |q|
-        io << %(<a class="align-center gap room btn txt-nowrap" href="/searches?q=)
-        io << URI.encode_www_form(q) << %("><span class="overflow-ellipsis">“)
-        io << HTML.escape(q) << %(”</span></a>)
+      links = recents.map do |q|
+        %(<a class="align-center gap room btn txt-nowrap" href="/searches?q=#{URI.encode_www_form(q)}">\n) +
+          %(<span class="overflow-ellipsis">“#{HTML.escape(q)}”</span>\n</a>)
       end
+      io << links.join("      ")
       unless recents.empty?
-        io << %(<form class="button_to" method="post" action="/searches/clear">)
-        io << %(<input type="hidden" name="_method" value="delete">)
+        io << "\n"
+        io << %(<form action=") << origin << %(/searches/clear" class="button_to" method="post">)
+        io << %(<input name="_method" type="hidden" value="delete">)
         io << %(<button class="btn searches__btn" )
         io << %(data-turbo-confirm="Are you sure you want to clear your recent searches?" )
-        io << %(type="submit">) << ChatLayout.icon("broom.svg")
-        io << %(<span class="for-screen-reader">Clear recent searches</span></button></form>)
+        io << %(type="submit">\n)
+        io << %(<img aria-hidden="true" src="#{ChatLayout.asset("broom.svg")}">\n)
+        io << %(<span class="for-screen-reader">Clear recent searches</span>\n)
+        io << %(</button></form>  )
       end
     end
   end
