@@ -72,7 +72,7 @@ module ChatLayout
   def self.head(title : String, user : User?, room_id : Int64?, chat : Bool,
                 head_extra : String = "") : String
     String.build do |io|
-      io << "<!DOCTYPE html>\n<html><head>\n<title>" << HTML.escape(title) << "</title>\n"
+      io << "<!DOCTYPE html>\n<html>\n<head>\n<title>" << HTML.escape(title) << "</title>\n"
       io << %(<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, interactive-widget=resizes-content">\n)
       # layouts/application.html.erb:7-21 — точный порядок метатегов.
       # csp_meta_tag пуст (CSP не сконфигурирован); csrf-token meta у Rails
@@ -84,9 +84,9 @@ module ChatLayout
       io << %(<meta name="apple-mobile-web-app-capable" content="yes">\n)
       if u = user
         # current_user_meta_tags: safe_join без разделителя — обе меты в
-        # одной строке.
-        io << %(<meta name="current-user-id" content="#{u.id}">)
-        io << %(<meta name="current-user-name" content=") << HTML.escape(u.name.to_s) << %(">\n)
+        # одной строке; Rails пишет их через tag.meta с самозакрытием.
+        io << %(<meta name="current-user-id" content="#{u.id}"/>)
+        io << %(<meta name="current-user-name" content=") << HTML.escape(u.name.to_s) << %("/>\n)
       end
       io << %(<meta name="action-cable-url" content="/cable">\n)
       io << %(<meta name="vapid-public-key" content="#{VAPID_PUBLIC_KEY}">\n)
@@ -206,11 +206,12 @@ module ChatLayout
     %(<img src="#{asset(name)}" aria-hidden="true"#{dims}#{c}>)
   end
 
-  # nav-кнопка «Go Back» (layout_start.eta: form-экраны).
+  # nav-кнопка «Go Back» (layout_start.eta: form-экраны). Переносы строк —
+  # как в выводе Rails-ERB (артефакты: <div>/<a>/</div> на отдельных строках).
   def self.nav_back(path : String) : String
-    %(<div class="flex-item-justify-start"><a class="btn" href="#{path}">) +
+    %(<div class="flex-item-justify-start">\n<a class="btn" href="#{path}">) +
       icon("arrow-left.svg") +
-      %(<span class="for-screen-reader">Go Back</span></a></div>)
+      %(<span class="for-screen-reader">Go Back</span></a>\n</div>)
   end
 
   # head + <body class=body_class(+admin)> + nav + main — layout_start для
@@ -230,7 +231,7 @@ module ChatLayout
       io << head(title, user, nil, chat: false, head_extra: head_extra)
       io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
       io << %(<a href="#main-content" class="skip-navigation btn">Skip to main content</a>\n)
-      io << %(<nav id="nav">\n) << nav_html << %(</nav>\n)
+      io << %(<nav id="nav">\n) << nav_html << %(\n</nav>\n)
       io << %(<main id="main-content">\n)
     end
   end
@@ -249,13 +250,19 @@ module ChatLayout
       icon("qr-code.svg", 20, "colorize--black") + %(</a>)
   end
 
-  # Кнопка «копировать» (copy-to-clipboard + copy-paste.svg).
-  def self.copy_button(content : String, sr_label : String) : String
+  # Кнопка «копировать» (copy-to-clipboard + copy-paste.svg) —
+  # button_to_copy_to_clipboard: порядок иконки/sr-текста и класс img
+  # задаются блоком вызова (bots: img первой без класса; profile/invite:
+  # span первой с colorize--black).
+  def self.copy_button(content : String, sr_label : String,
+                       icon_class : String? = nil, icon_first : Bool = false) : String
+    icon_html = icon("copy-paste.svg", 20, icon_class)
+    span_html = %(<span class="for-screen-reader">#{HTML.escape(sr_label)}</span>)
+    inner = (icon_first ? [icon_html, span_html] : [span_html, icon_html]).join('\n')
     %(<button class="btn" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" ) +
       %(data-copy-to-clipboard-success-class="btn--success" ) +
-      %(data-copy-to-clipboard-content-value="#{HTML.escape(content)}">) +
-      %(<span class="for-screen-reader">#{HTML.escape(sr_label)}</span>) +
-      icon("copy-paste.svg", 20, "colorize--black") + %(</button>)
+      %(data-copy-to-clipboard-content-value="#{HTML.escape(content)}">\n) +
+      inner + %(\n</button>)
   end
 
   # translations_helper.rb: TRANSLATIONS — словари кнопки перевода
@@ -304,7 +311,7 @@ module ChatLayout
       "वेबहुक URL", "Webhook-URL", "URL do Webhook", "Webhook URL"},
     "chat_bots" => {"Chat bots. With Chat bots, other sites and services can post updates directly to Campfire.",
       "Bots de chat. Con los bots de chat, otros sitios y servicios pueden publicar actualizaciones directamente en Campfire.",
-      "Bots de discussion. Avec les bots de discussion, d'autres sites et services peuvent publier des mises à jour directement dans Campfire.",
+      "Bots de discussion. Avec les bots de discussion, d'autres sites et services peuvent publier des mises à jour directement sur Campfire.",
       "चैट बॉट। चैट बॉट के साथ, अन्य साइटों और सेवाएं सीधे कैम्पफायर में अपडेट पोस्ट कर सकती हैं।",
       "Chat-Bots. Mit Chat-Bots können andere Websites und Dienste Updates direkt in Campfire veröffentlichen.",
       "Chat bots. Com Chat bots, outros sites e serviços podem postar atualizações diretamente no Campfire.",
@@ -419,9 +426,10 @@ module ChatLayout
       io << %(<a class="lightbox__btn--download btn hide-in-ios-pwa" data-lightbox-target="download" href="">\n)
       io << icon("download.svg", size: nil) << "\n"
       io << %(<span class="for-screen-reader">Download file</span>\n</a>\n)
-      io << %(<button class="lightbox__btn--share btn" data-action="web-share#share" )
-      io << %(data-controller="web-share" data-lightbox-target="share" )
-      io << %(data-web-share-files-value="" hidden="">\n)
+      io << %(<button class="lightbox__btn--share btn"\n)
+      io << %(data-controller="web-share"\ndata-action="web-share#share"\n)
+      io << %(data-web-share-files-value=""\n)
+      io << %(data-lightbox-target="share">\n)
       io << icon("share.svg", size: nil) << "\n"
       io << %(<span class="for-screen-reader">Share file</span>\n</button>\n</dialog>\n)
     end
@@ -559,9 +567,14 @@ module ChatLayout
   end
 
   # <action-text-attachment> → итоговая разметка:
-  #  * opengraph-embed: content-атрибут (figure/actiontext-обёртки и
-  #    rel/target срезает финальный sanitize Rails — сразу отдаём
-  #    внутренность og-embed);
+  #  * opengraph-embed: рендер партиалом action_text/attachables/
+  #    _opengraph_embed (переносы строк — как в ERB-выводе; sanitize
+  #    срезает figure/actiontext-обёртки и rel, target остаётся).
+  #    Данные — из атрибутов узла (filename/href/url/caption) либо, для
+  #    lexxy-сериализаций, из content-разметки (title-якорь, описание,
+  #    img). URL только абсолютный http(s) на чужой хост (web_url);
+  #    twitter-аватар (pbs.twimg.com/profile_images) даёт модификатор
+  #    og-embed--twitter-avatar;
   #  * mention: sgid → User → span.mention (sanitize снимает sgid и
   #    data-turbo-frame, потому их не рендерим);
   #  * прочие: content-атрибут как есть.
@@ -569,6 +582,7 @@ module ChatLayout
   # посимвольно с учётом кавычек, а не регекспом.
   def self.render_embeds(body : String) : String
     outp = IO::Memory.new
+    body = remove_solo_unfurled_link_text(body)
     cursor = 0
     while (start = body.index("<action-text-attachment", cursor))
       attrs, tag_end = parse_tag(body, start)
@@ -577,8 +591,8 @@ module ChatLayout
         content = attrs["content"]?
         content_type = attrs["content-type"]?
         sgid = attrs["sgid"]?
-        if content_type.try(&.includes?("application/vnd.actiontext.opengraph-embed")) && content
-          outp << strip_embed_wrappers(unescape_entities(content.not_nil!))
+        if content_type.try(&.includes?("application/vnd.actiontext.opengraph-embed"))
+          outp << opengraph_embed_dom(attrs, content)
         elsif content_type.try(&.includes?("application/vnd.campfire.mention")) && sgid
           outp << mention_dom(sgid.not_nil!)
         elsif content
@@ -646,6 +660,128 @@ module ChatLayout
       .gsub(/<\/?actiontext-opengraph-embed\b[^>]*>/, "")
       .gsub(/\s(?:rel|target)="[^"]*"/, "")
       .strip
+  end
+
+  # ————— OG-embed: партиал action_text/attachables/_opengraph_embed —————
+
+  # ActionText::Attachment::OpengraphEmbed#web_url: только абсолютный
+  # http(s)-URL на домене (с точкой, без %-экранирования хоста).
+  private def self.og_web_url(value : String?) : String?
+    return nil if (raw = value.to_s.strip).empty?
+    return nil unless raw.starts_with?("http://", "https://")
+    host = URI.parse(raw).host.to_s
+    return nil if host.empty? || host.includes?("%") || !host.includes?(".")
+    raw
+  rescue
+    nil
+  end
+
+  # attributes_from_node: атрибуты узла (filename задан) либо разбор
+  # content-разметки (lexxy сериализует детали вложением).
+  private def self.og_attributes(attrs : Hash(String, String), content : String?)
+    if (filename = attrs["filename"]?).to_s.empty?
+      html = unescape_entities(content.to_s)
+      title_html = html[/class=["']og-embed__title["'][^>]*>(.*?)<\/div>/m, 1]?.to_s
+      {
+        href:     og_web_url(title_html[/<a[^>]*\shref=["']([^"']*)["']/, 1]?),
+        url:      og_web_url(html[/<img[^>]*\ssrc=["']([^"']*)["']/, 1]?),
+        filename: title_html.gsub(/<[^>]*>/, "").strip,
+        desc:     html[/class=["']og-embed__description["'][^>]*>([^<]*)</, 1]?.to_s.strip,
+      }
+    else
+      {href:     og_web_url(attrs["href"]?),
+       url:      og_web_url(attrs["url"]?),
+       filename: filename,
+       desc:     attrs["caption"]?.to_s}
+    end
+  end
+
+  # Rails truncate(length:, omission: "…").
+  private def self.truncate_ellipsis(text : String, length : Int32) : String
+    return text if text.size <= length
+    text[0, length - 1] + "…"
+  end
+
+  # _opengraph_embed.html.erb после sanitize: без figure/actiontext
+  # обёрток, rel срезан, target="_blank" оставлен (allowed autolink).
+  # Переносы строк — как в выводе ERB-партиала.
+  private def self.opengraph_embed_dom(attrs : Hash(String, String),
+                                       content : String?) : String
+    data = og_attributes(attrs, content)
+    twitter = data[:url].to_s.starts_with?("https://pbs.twimg.com/profile_images")
+    klass = twitter ? "og-embed gap og-embed--twitter-avatar" : "og-embed gap "
+    title = truncate_ellipsis(HTML.escape(data[:filename].to_s), 280)
+    desc = truncate_ellipsis(HTML.escape(data[:desc].to_s), 560)
+    String.build do |io|
+      io << "\n<div class=\"#{klass}\">\n"
+      io << "<div class=\"og-embed__content\">\n<div class=\"og-embed__title\">\n"
+      if (href = data[:href])
+        # target="_blank" в DOM добавляет клиент (lexxy) — серверный вывод
+        # Rails его не содержит.
+        io << %(<a href="#{HTML.escape(href)}">) << title << %(</a>\n)
+      else
+        io << title << "\n"
+      end
+      io << "</div>\n"
+      io << "<div class=\"og-embed__description\">" << desc << "</div>\n</div>\n"
+      if (url = data[:url])
+        io << "<div class=\"og-embed__image\">\n"
+        io << %(<img src="#{HTML.escape(url)}" class="image center" alt="">\n)
+        io << "</div>\n"
+      end
+      io << "</div>\n"
+    end
+  end
+
+  # ContentFilters::RemoveSoloUnfurledLinkText: единственный og-embed,
+  # plain-текст тела == его href (twitter-URL нормализуются: x.com →
+  # twitter.com, query срезается) — текст ссылки удаляется. Trix-тела
+  # (есть div): содержимое div заменяется одним вложением; иначе
+  # удаляются абзацы без вложения.
+  private def self.remove_solo_unfurled_link_text(body : String) : String
+    spans = [] of {Int32, Int32}
+    cursor = 0
+    while (start = body.index("<action-text-attachment", cursor))
+      attrs, tag_end = parse_tag(body, start)
+      close = body.index("</action-text-attachment>", tag_end) || break
+      if attrs["content-type"]?.to_s.includes?("application/vnd.actiontext.opengraph-embed")
+        spans << {start, close + "</action-text-attachment>".size}
+      end
+      cursor = close + "</action-text-attachment>".size
+    end
+    return body unless spans.size == 1
+
+    s, e = spans[0]
+    attrs, _ = parse_tag(body, s)
+    data = og_attributes(attrs, attrs["content"]?)
+    return body unless (href = data[:href])
+
+    plain = body[0...s] + body[e..]
+    plain = plain.gsub(/<[^>]*>/, " ").gsub("&nbsp;", " ").gsub(/\s+/, " ").strip
+    return body unless normalize_tweet_url(plain) == normalize_tweet_url(href)
+
+    if body.includes?("<div")
+      return body unless (div_start = body.rindex("<div", s))
+      content_start = body.index(">", div_start).try(&. + 1) || return body
+      div_end = body.index("</div>", e) || return body
+      body[0...content_start] +
+        body[s...e] +
+        "</div>" + body[(div_end + "</div>".size)..]
+    else
+      body.gsub(/<p\b[^>]*>(.*?)<\/p>/m) do
+        $~[1].includes?("<action-text-attachment") ? $~[0] : ""
+      end
+    end
+  end
+
+  # RemoveSoloUnfurledLinkText#normalize_tweet_url.
+  private def self.normalize_tweet_url(url : String) : String
+    return url unless url.includes?("x.com") || url.includes?("twitter.com")
+    parsed = URI.parse(url)
+    host = parsed.host.to_s.downcase == "x.com" ? "twitter.com" : parsed.host.to_s
+    "#{parsed.scheme || "https"}://#{host}#{parsed.path}"
+  rescue
+    url
   end
 
   # users/_mention.html.erb после sanitize: span.mention с аватаром
@@ -792,6 +928,121 @@ module ChatLayout
     end.gsub(/&#(\d+);/) { |m| ((m[/\d+/].to_i32?) || 63).chr.to_s }
   end
 
+  # ————— Звуки /play (models/sound.rb референса) —————
+
+  # BUILTIN-звуки: name → текст или картинка (sounds/<file>, WxH).
+  class ChatSound
+    getter name : String
+    getter text : String?
+    getter image_name : String?
+    property image_width : Int32 = 0
+    property image_height : Int32 = 0
+
+    def initialize(@name, @text = nil, @image_name = nil)
+    end
+
+    def image? : Bool
+      !@image_name.nil?
+    end
+  end
+
+  SOUNDS = {
+    "56k"         => {image: {"56k.webp", 79, 33}},
+    "bell"        => {text: "🔔"},
+    "bezos"       => {text: "😆💭"},
+    "bueller"     => {text: "anyone?"},
+    "butts"       => {text: "👐 🚬"},
+    "clowntown"   => {image: {"clowntown.webp", 210, 150}},
+    "cottoneyejoe" => {text: "🎶🙉🎶 "},
+    "crickets"    => {text: "hears crickets chirping"},
+    "curb"        => {image: {"curb.webp", 150, 101}},
+    "dadgummit"   => {text: "dad gummit!! 🎣"},
+    "dangerzone"  => {image: {"dangerzone.webp", 157, 32}},
+    "danielsan"   => {text: "🎆 🏆 🎆"},
+    "deeper"      => {image: {"top.webp", 188, 80}},
+    "ballmer"     => {text: "developers!"},
+    "donotwant"   => {image: {"donotwant.webp", 150, 150}},
+    "drama"       => {image: {"drama.webp", 300, 16}},
+    "flawless"    => {text: "#flawless"},
+    "glados"      => {text: "🤖💢"},
+    "gogogo"      => {text: "Go, go, go!"},
+    "greatjob"    => {image: {"greatjob.webp", 79, 16}},
+    "greyjoy"     => {text: "😖🎺"},
+    "guarantee"   => {text: "guarantees it 👌"},
+    "heygirl"     => {text: "✨💁✨"},
+    "honk"        => {text: "HONK"},
+    "horn"        => {text: "🐶 ✂️ 🐱"},
+    "horror"      => {text: "💀 💀 💀 💀 💀 💀 💀"},
+    "inconceivable" => {text: "doesn't think it means what you think it means…"},
+    "letitgo"     => {text: "❄️👩❄️⛄️❄️"},
+    "live"        => {text: "is DOING IT LIVE"},
+    "loggins"     => {image: {"loggins.webp", 200, 151}},
+    "makeitso"    => {text: "make it so 👉"},
+    "noooo"       => {text: "👸💀😒"},
+    "nyan"        => {image: {"nyan.webp", 36, 15}},
+    "ohmy"        => {text: "raises an eyebrow 😏"},
+    "ohyeah"      => {text: "isn't playing by the rules"},
+    "pushit"      => {image: {"pushit.webp", 104, 15}},
+    "rimshot"     => {text: "plays a rimshot"},
+    "rollout"     => {text: "is rolling out 🚗"},
+    "rumble"      => {image: {"rumble.webp", 220, 150}},
+    "sax"         => {text: "🌇🎷🎶"},
+    "secret"      => {text: "found a secret area 🔑"},
+    "sexyback"    => {text: "🔞"},
+    "story"       => {text: "and now you know…"},
+    "tada"        => {text: "plays a fanfare 🎏"},
+    "tmyk"        => {text: "✨ ⭐️ The More You Know ✨ ⭐️"},
+    "totes"       => {text: "😁👍"},
+    "trololo"     => {text: "трололо"},
+    "trombone"    => {text: "plays a sad trombone"},
+    "unix"        => {text: "knows this 💻"},
+    "vuvuzela"    => {text: "======<() ~ ♪ ~♫"},
+    "what"        => {image: {"what.webp", 100, 131}},
+    "whoomp"      => {text: "👏‼️😎"},
+    "wups"        => {text: "wups!"},
+    "yay"         => {image: {"yay.webp", 103, 50}},
+    "yeah"        => {image: {"yeah.webp", 104, 15}},
+    "yodel"       => {text: "📣🗻🙉"},
+  }
+
+  # Sound.find_by_name по BUILTIN-индексу референса.
+  def self.sound_by_name(name : String) : ChatSound?
+    spec = SOUNDS[name]? || return nil
+    sound = ChatSound.new(name, text: spec[:text]? || nil,
+      image_name: spec[:image]?.try(&.[0]))
+    if (image = spec[:image]?)
+      sound.image_width = image[1]
+      sound.image_height = image[2]
+    end
+    sound
+  end
+
+  # Message#sound референса: plain-тело вида «/play <name>» с известным
+  # именем → звук (content_type "sound").
+  def self.message_sound(body : String?) : ChatSound?
+
+    plain = body.to_s.gsub(/<[^>]*>/, " ").gsub("&nbsp;", " ").strip
+    if (match = plain.match(/\A\/play (\w+)\z/))
+      sound_by_name(match[1])
+    end
+  end
+
+  # message_sound_presentation (MessagesHelper): div.sound с кнопкой 🔊
+  # и текстом/картинкой звука.
+  def self.sound_presentation(sound : ChatSound) : String
+    String.build do |io|
+      io << %(<div class="sound" data-action="messages:play-&gt;sound#play" data-controller="sound" )
+      io << %(data-sound-url-value="#{asset("#{sound.name}.mp3")}">)
+      io << %(<button class="btn btn--plain" data-action="sound#play">🔊</button>)
+      if sound.image? && (iname = sound.image_name)
+        io << %(<img class="align--middle" height="#{sound.image_height}" src="#{asset("sounds/#{iname}")}" width="#{sound.image_width}">)
+      else
+        io << sound.text.to_s
+      end
+      io << %(</div>)
+    end
+  end
+
   # DOM одного сообщения — порт _message.html.erb референса: id по
   # message.id (dom_id; client_message_id — только data-атрибут),
   # turbo-frame edit_message_<id> вокруг body, presentation div
@@ -806,8 +1057,17 @@ module ChatLayout
     created = m.created_at || Time.utc
     updated = m.updated_at || created
     permalink = "/rooms/#{room.id}/@#{mid}"
-    presentation_html = attachment ? attachment_presentation(attachment) : text_presentation(m.body.to_s)
-    emoji = all_emoji?(presentation_html) ? " message--emoji" : ""
+    sound = attachment ? nil : message_sound(m.body.to_s)
+    presentation_html = if attachment
+      attachment_presentation(attachment)
+    elsif sound
+      sound_presentation(sound)
+    else
+      text_presentation(m.body.to_s)
+    end
+    # message--emoji: plain_text_body.all_emoji? — звук («/play …») не
+    # эмодзи-сообщение, класс по тексту тела, а не по разметке плеера.
+    emoji = (attachment.nil? && sound.nil? && all_emoji?(presentation_html)) ? " message--emoji" : ""
     entries = boosts || boosts_for([mid])[mid]? || [] of BoostEntry
 
     # message_tag rescue → _unrenderable.html.erb: автор записи удалён —
@@ -842,7 +1102,7 @@ module ChatLayout
       io << %(</h3>\n)
       io << message_actions(mid, room, permalink, attachment, base_url)
       io << %(</div>\n)
-      io << presentation_dom(mid, presentation_html, lexxy_wrapper: attachment.nil?)
+      io << presentation_dom(mid, presentation_html, lexxy_wrapper: attachment.nil? && sound.nil?)
       io << boosts_dom(mid, entries)
       io << %(</div>\n</div>\n</turbo-frame>\n</div>\n)
     end
@@ -1243,7 +1503,7 @@ module ChatLayout
       io << %(data-messages-target="message">\n)
       io << %(<div class="message__day-separator"><time class="message__timestamp" datetime="$messageDatetime$" data-local-time-target="date"></time></div>\n)
       io << %(<figure class="avatar message__avatar">\n)
-      io << %(<a title=") << HTML.escape(user.name.to_s)
+      io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
       io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{user.id}">)
       io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(user.id.not_nil!, user.updated_at)}" width="48" height="48"/></a>\n)
       io << %(</figure>\n)
@@ -1278,7 +1538,7 @@ module ChatLayout
       io << messages_html
       io << %(</div>\n)
       io << %(<turbo-cable-stream-source channel="RoomMessagesChannel" signed-stream-name="#{signed_name}"></turbo-cable-stream-source>\n)
-      io << %(<button class="message-area__return-to-latest btn" data-action="messages#returnToLatest" data-messages-target="latest" hidden>)
+      io << %(<button class="message-area__return-to-latest btn" data-action="messages#returnToLatest" data-messages-target="latest" hidden="hidden">)
       io << icon("arrow-down.svg", 20)
       io << %(<span class="for-screen-reader">Jump to newest message</span></button>\n)
       io << %(</div>\n)

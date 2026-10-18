@@ -17,25 +17,30 @@ class Users::SidebarsController < ApplicationController
     # Участники direct-комнат одним запросом (было N+1).
     members_by_room = direct_members(user)
 
-    directs = [] of ChatERB::SidebarDirect
-    shared = [] of ChatERB::SidebarShared
-    Room.visible_for(user).order("id").to_a.each do |room|
-      if room.name.nil?
-        members = members_by_room[room.id.not_nil!]? || [user]
-        members = members.reject { |m| m.id == user.id }
-        members = [user] if members.empty?
-        epoch_ms = (room.updated_at.as(Time).to_unix * 1000) +
-                   (room.updated_at.as(Time).nanosecond // 1_000_000)
-        unread = Membership.where(
-          "room_id = ? AND user_id = ? AND unread_at IS NOT NULL",
-          room.id.not_nil!, user.id.not_nil!).any?
-        directs << ChatERB::SidebarDirect.new(room.id.not_nil!, epoch_ms, unread, members)
-      else
-        unread = Membership.where(
-          "room_id = ? AND user_id = ? AND unread_at IS NOT NULL",
-          room.id.not_nil!, user.id.not_nil!).any?
-        shared << ChatERB::SidebarShared.new(room, unread)
-      end
+    # Rails: with_direct_rooms (rooms.updated_at DESC — «свежесть» DM),
+    # with_ordered_room (LOWER(name) ASC); в браузере sorted-list всё равно
+    # пересортирует, но сырой ответ /users/me/sidebar должен совпадать.
+    direct_rooms, shared_rooms = Room.visible_for(user).order("id").to_a
+      .partition { |room| room.name.nil? }
+    direct_rooms.sort! { |a, b| b.updated_at.as(Time) <=> a.updated_at.as(Time) }
+    shared_rooms.sort! { |a, b| a.name.to_s.downcase <=> b.name.to_s.downcase }
+
+    directs = direct_rooms.map do |room|
+      members = members_by_room[room.id.not_nil!]? || [user]
+      members = members.reject { |m| m.id == user.id }
+      members = [user] if members.empty?
+      epoch_ms = (room.updated_at.as(Time).to_unix * 1000) +
+                 (room.updated_at.as(Time).nanosecond // 1_000_000)
+      unread = Membership.where(
+        "room_id = ? AND user_id = ? AND unread_at IS NOT NULL",
+        room.id.not_nil!, user.id.not_nil!).any?
+      ChatERB::SidebarDirect.new(room.id.not_nil!, epoch_ms, unread, members)
+    end
+    shared = shared_rooms.map do |room|
+      unread = Membership.where(
+        "room_id = ? AND user_id = ? AND unread_at IS NOT NULL",
+        room.id.not_nil!, user.id.not_nil!).any?
+      ChatERB::SidebarShared.new(room, unread)
     end
 
     # Коллеги без существующего ping'а (direct_placeholder): активные
@@ -49,8 +54,23 @@ class Users::SidebarsController < ApplicationController
     view = ChatERB.new(user: user, directs: directs, shared: shared,
       placeholders: placeholders, rooms_stream: HTML.escape(rooms_stream),
       user_rooms_stream: HTML.escape(user_rooms_stream))
-    html = "<!doctype html>\n<html>\n<head><title>Sidebar</title></head>\n<body>\n" +
-      %(<turbo-frame id="user_sidebar">\n) + view.sidebar.to_s + "</turbo-frame>\n</body>\n</html>\n"
+    sidebar = view.sidebar.to_s
+
+    # Turbo-запрос фрейма (браузер reload) получает голый фрагмент;
+    # обычный GET — полный layout-каркас, как Rails (turbo_frame_tag +
+    # layout при отсутствии заголовка Turbo-Frame): title «Campfire»,
+    # body class admin без «sidebar», пустые nav/footer/aside.
+    html = if request.headers["Turbo-Frame"]? == "user_sidebar"
+             "<!doctype html>\n<html>\n<head><title>Sidebar</title></head>\n<body>\n" +
+               %(<turbo-frame id="user_sidebar">\n) + sidebar + "</turbo-frame>\n</body>\n</html>\n"
+           else
+             ChatLayout.page_open("sidebar", "Campfire", user) +
+               %(<turbo-frame id="user_sidebar" data-turbo-permanent="true" target="_top" ) +
+               %(data-controller="rooms-list read-rooms turbo-frame" data-rooms-list-unread-class="unread" ) +
+               %(data-action="presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload">\n) +
+               sidebar + %(</turbo-frame>\n) +
+               ChatLayout.page_close
+           end
 
     page = Campfire::PageCache::Page.new(html)
     # Кэшируем только если БД не менялась за время рендера и ответ чист

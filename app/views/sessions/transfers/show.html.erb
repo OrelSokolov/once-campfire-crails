@@ -1,6 +1,2 @@
-<%= head %><body>
-<main id="main-content">
-<form action="/session/transfers/<%= @token %>" accept-charset="UTF-8" method="post" data-controller="auto-submit"><input type="hidden" name="_method" value="put"></form>
-</main>
-</body>
-</html>
+<%= page_open %><form action="/session/transfers/<%= @token %>" accept-charset="UTF-8" method="post" data-controller="auto-submit"><input type="hidden" name="_method" value="put">
+</form><%= page_close %>

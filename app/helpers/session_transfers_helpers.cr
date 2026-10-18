@@ -1,8 +1,9 @@
-# SessionTransfersHelpers — ERB-хелперы app/views/session_transfers/
-# show.html.erb: head формы авто-логина. Включается в
-# SessionTransfersController; общий icon/page_close — ViewHelpers.
+# SessionTransfersHelpers — ERB-хелперы app/views/sessions/transfers/
+# show.html.erb: полный layout-каркас формы авто-логина (Rails: layout
+# c title «Campfire», неавторизованный viewer). Включается в
+# Sessions::TransfersController; page_close — ViewHelpers.
 module SessionTransfersHelpers
-  def head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("Session transfer", nil, nil, chat: false))
+  def page_open : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.page_open("transfer", "Campfire", nil))
   end
 end
