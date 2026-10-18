@@ -48,6 +48,7 @@ class RoomsController < ApplicationController
     epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
     key = PageCache.key("rooms#show", request, user.id)
     if (cached = PageCache.get(key, epoch))
+      remember_last_room_visited(room)
       return send_page(cached)
     end
 
@@ -98,7 +99,15 @@ class RoomsController < ApplicationController
     if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
       PageCache.set(key, epoch, page)
     end
+    # Cookie last_room — на каждом ответе, но ПОСЛЕ решения кэша
+    # (express: writeHead-хук эмитит её и на cache-hit, не блокируя кэш).
+    remember_last_room_visited(room)
     send_page(page)
+  end
+
+  # TrackedRoomVisit#remember_last_room_visited: cookies.permanent.
+  private def remember_last_room_visited(room : Room) : Nil
+    cookies.permanent["last_room"] = room.id.not_nil!.to_s
   end
 
   # rooms/show/_invitation.html.erb: блок «Welcome to Campfire» — только
@@ -112,16 +121,53 @@ class RoomsController < ApplicationController
     ChatLayout.system_welcome(user, origin)
   end
 
-  # GET /rooms/:id/refresh — опрос refresh-room-контроллера (видимость
-  # вкладки/онлайн). Полный_REFRESH_протокол (turbo-stream с пропущенными
-  # сообщениями) — Фаза 2 далее; пока честный пустой ответ.
+  # GET /rooms/:id/refresh — turbo-stream опрос refresh-room-контроллера
+  # (refreshes_controller.rb + show.turbo_stream.erb): сообщения, созданные
+  # после since, — append в контейнер сообщений; обновлённые (кроме новых) —
+  # replace по dom_id. Пустой набор рендерится как одиночный "\n" с
+  # Content-Type text/vnd.turbo-stream.html — Turbo рендерит его в DOM,
+  # оставляя text-узел ребёнком <html> после </body> (видно в артефактах).
   def refresh
     room = Room.find?(params["id"].to_s.to_i64)
     unless room
       response.status = :not_found
       return render(plain: "Room not found")
     end
-    render(plain: "", status: 200)
+    room = room.not_nil!
+
+    # since — мс-эпоха (refresh_room_controller: loaded-at / message
+    # updated-at), пустое/невалидное — Time.at(0).
+    since = Time.unix_ms(params["since"]?.try(&.to_s.to_i64?) || 0_i64)
+
+    # page_created_since: created_at > since, первая страница (40 ASC).
+    new_messages = Message.where(
+      "room_id = ? AND created_at > ?", room.id.not_nil!, since)
+      .order("created_at ASC").limit(40).to_a
+
+    # page_updated_since + without(new): updated_at > since, последняя
+    # страница сортировки по created_at (DESC limit 40 → ASC), минус новые.
+    new_ids = Set.new(new_messages.map(&.id.not_nil!))
+    updated_messages = Message.where(
+      "room_id = ? AND updated_at > ?", room.id.not_nil!, since)
+      .order("created_at DESC").limit(40).to_a.reverse
+      .reject { |m| new_ids.includes?(m.id.not_nil!) }
+
+    epoch = db_epoch
+    stream = String.build do |io|
+      unless new_messages.empty?
+        io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
+        io << ChatLayout.messages_html(new_messages, epoch, room, origin)
+        io << %(</template></turbo-stream>)
+      end
+      io << '\n'
+      updated_messages.each do |message|
+        io << %(<turbo-stream action="replace" target="message_#{message.id}"><template>)
+        io << ChatLayout.messages_html([message], epoch, room, origin)
+        io << %(</template></turbo-stream>\n)
+      end
+    end
+
+    render(html: stream, content_type: "text/vnd.turbo-stream.html")
   end
 
   # GET /rooms/:id/involvement — содержимое turbo-frame колокольчика
@@ -290,13 +336,18 @@ class RoomsController < ApplicationController
     @selected = selected
     @is_open = kind == "opens"
     @can_administer = room.nil? || user.role == 1 || room.creator_id == user.id
-    @users = User.where("status = 0").to_a
-      .sort_by(&.name.to_s.downcase)
-      .sort! { |a, b|
+    @users = User.where("status = 0").to_a.sort_by(&.name.to_s.downcase)
+    if @is_open
+      # opens-форма: User.active.ordered — просто LOWER(name), без
+      # деления на выбранных/остальных (артефакт room-settings).
+      @divider = 0
+    else
+      @users.sort! { |a, b|
         (selected.includes?(b.id.not_nil!) ? 1 : 0) <=>
         (selected.includes?(a.id.not_nil!) ? 1 : 0)
       }
-    @divider = selected.size
+      @divider = selected.size
+    end
   end
 
   # turbo-stream prepend ссылки комнаты в #shared_rooms (registerRoomForms:

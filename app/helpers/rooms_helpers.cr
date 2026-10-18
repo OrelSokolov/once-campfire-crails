@@ -17,4 +17,15 @@ module RoomsHelpers
   def everyone_src : String
     ChatLayout.asset("everyone.svg")
   end
+
+  # translation_button (translations_helper) — SafeString для <%= %>.
+  def translation_button(key : String) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout.translation_button(key))
+  end
+
+  # Rails boolean-атрибут checked="checked" — SafeString, чтобы <%= %>
+  # не экранировал кавычки повторно.
+  def checked_attr(checked : Bool) : ERB::SafeString
+    ERB::SafeString.new(checked ? %( checked="checked") : "")
+  end
 end
