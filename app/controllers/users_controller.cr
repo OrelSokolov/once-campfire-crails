@@ -9,6 +9,13 @@ class UsersController < ApplicationController
   @viewer : User?
   @subject : User?
 
+  # HTML-партиал nav профиля (layout_start Screen "user"): назад +
+  # «Edit my profile» для себя; рендерится обёрткой UsersHelpers#user_nav.
+  compile_partials({
+    "users/nav" => {path: "app/views/users/_nav.html.erb",
+                    locals: {"viewer" => User, "subject" => User}},
+  })
+
   def show
     viewer = current_user.not_nil!
     @viewer = viewer

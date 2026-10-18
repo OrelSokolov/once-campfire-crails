@@ -24,6 +24,13 @@ class AccountsController < ApplicationController
   @admins : Array(User) = [] of User
   @members : Array(User) = [] of User
 
+  # HTML-партиал nav аккаунта (account_nav.eta): назад + боты/кастомные
+  # стили для админа; рендерится обёрткой AccountsHelpers#account_nav.
+  compile_partials({
+    "accounts/nav" => {path: "app/views/accounts/_nav.html.erb",
+                       locals: {"user" => User}},
+  })
+
   def edit
     account = set_account
     user = current_user.not_nil!

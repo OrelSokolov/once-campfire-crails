@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
-# Usage: bin/run [--target rails|crails] [--compare] [minitest args, e.g. -n /auth/]
+# Usage: bin/run [--target rails|crails] [minitest args, e.g. -n /auth/]
 # Boots the target locally against a fresh seed copy, runs the suite, tears
 # the server down. Artifacts land in artifacts/<target>/.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 export TARGET="${TARGET:-rails}"
-COMPARE="${PARITY_COMPARE:-0}"
 if [[ "${1:-}" == "--target" ]]; then TARGET="$2"; shift 2; fi
-if [[ "${1:-}" == "--compare" ]]; then COMPARE=1; shift; fi
 case "$TARGET" in rails|crails) ;; *) echo "unknown target: $TARGET" >&2; exit 2 ;; esac
 export TARGET
 
@@ -25,12 +23,7 @@ unset BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLE_SETUP BUNDLER_SETUP BUNDLE_VERSION \
 ARTIFACTS_DIR="${PARITY_ARTIFACTS:-$PWD/artifacts/$TARGET}"
 rm -rf "$ARTIFACTS_DIR"
 
-STATUS=0
 # Fixed seed ⇒ fixed test order ⇒ identical cross-test contamination in
 # every run, which the determinism and parity comparisons rely on.
-"$PARITY_RUBY" -S bundle exec ruby run.rb --seed "${PARITY_SEED:-20260302}" "$@" || STATUS=1
-
-if [[ "$COMPARE" == "1" ]]; then
-  "$PARITY_RUBY" -S bundle exec ruby harness/compare.rb rails "$TARGET" || STATUS=1
-fi
-exit "$STATUS"
+"$PARITY_RUBY" -S bundle exec ruby run.rb --seed "${PARITY_SEED:-20260302}" "$@"
+exit "$?"

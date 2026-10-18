@@ -1,8 +1,30 @@
 # NAV_PARTIALS_REFACTORING — nav-хелперы String.build → ERB-партиалы
 
-Статус: не начат. Отдельная задача, вне ERB_REFACTORING (тот закрыт:
-inline-HTML контроллеров больше нет; здесь — хелперы вьюх, оставшиеся
-на `String.build`/`io <<`).
+Статус: завершено (2026-10-18). Все 3 шага сделаны с byte-parity;
+capybara-сьют 72/0. Изначально задача шла вне ERB_REFACTORING (тот
+закрыт: inline-HTML контроллеров больше не было; здесь — хелперы вьюх,
+оставшиеся на `String.build`/`io <<`).
+
+## Итог (что сделано)
+
+- `app/views/accounts/_nav.html.erb` + обёртка `AccountsHelpers#account_nav`
+  (compile_partials в AccountsController);
+- `app/views/users/_nav.html.erb` + обёртка `UsersHelpers#user_nav`
+  (compile_partials в UsersController);
+- `app/views/searches/_nav.html.erb` + вложенный
+  `app/views/searches/_recent_searches.html.erb` + обёртки
+  `SearchesHelpers#search_nav` / `#recent_searches_html` (compile_partials
+  в SearchesController; `_recent_searches` рендерится и из `_nav`, и из
+  `page_close` — aside с recents).
+
+## Отступление от плана (зафиксировано)
+
+Ссылки — литеральные `<a ...>` в партиалах, НЕ блочный `link_to`:
+`link_to` из action_view_cr ставит `href` ПОСЛЕДНИМ атрибутом
+(`link_attributes`: opts, затем href), а вывод порта (eta-шаблоны
+express) — `href` ПЕРВЫМ. link_to менял бы байты, byte-parity важнее.
+`ChatLayout.nav_back` возвращает String — в партиалах оборачивается
+`ERB::SafeString.new(...)`, иначе `<%= %>` эскейпит разметку.
 
 ## Цель
 
@@ -81,24 +103,21 @@ Rails-референсе (`once-campfire/app/views/...`) эти куски — �
   (гочча 8; здесь nilable-типов нет, но помнить).
 - Хелпер-обёртка с аргументами — экшен-детекция не заденет (гочча 6).
 
-## Верификация каждого шага (обязательна, byte-parity)
+## Верификация (выполнена, 2026-10-18)
 
-1. Сборка «до»/«после»: `crystal build src/app.cr -o tmp/app-before
-   -Dwithout_mt` (release не нужен).
-2. Оба сервера на копии БД (`DATABASE_URL=sqlite3:.../tmp/X.sqlite3`;
-   сессия — `tmp/verify_boost_session.cr` как образец; для searches
-   env `SECRET_KEY_BASE` не нужен, для attachable_sgid-вьюх нужен).
-3. `curl` задетых эндпоинтов до/после → `cmp` побайтово (заголовки
-   расходятся только на `X-Request-Id`/`X-Runtime`):
-   - шаг 1: /account/edit × {admin, plain};
-   - шаг 2: /users/:id × {self, чужой};
-   - шаг 3: /searches × {пустой query, непустой} × {recents пусто,
-     recents есть} (recents печатаются в nav — покрыть обе ветки
-     формы clear).
-4. Краевые: unauth-редирект 302 на каждом роуте.
-5. Порядок внутри шага: сначала партиал рядом со старым выводом
-   (временный `<%=` обоих в шаблон-пробник не заводить — сверять
-   серверами «до»/«после», как в ERB_REFACTORING).
+Сборки `tmp/app-before`/`tmp/app-after` (`crystal build src/app.cr
+-Dwithout_mt`), серверы (serverx-транспорт) на копиях сид-БД с двумя
+юзерами (admin + plain; в dev-БД единственный юзер — админ, plain-юзер
+добавлен в тестовую копию) и сессиями (`tmp/nav_session.cr` по образцу
+`tmp/verify_boost_session.cr`). Матрица: /account/edit × {admin, plain},
+/users/:id × {self, чужой}, /searches × {q пустой/непустой} × {recents
+есть/пусты} + unauth 302 на каждом роуте. Результат: все тела и
+заголовки побайтово идентичны; расхождения только X-Request-Id/
+X-Runtime/Date и origin-подстроки при разных портах (на одном порту
+идентичны вплоть до ETag). users/чужой: transfer-URL содержит
+origin+expires — маскировался (0 посторонних diff-строк), by design
+(см. plans/completed/ERB_REFACTORING.md). Capybara: 72 runs, 0 errors
+(`PARITY_RUBY` → системный ruby).
 
 ## Что НЕ входит
 

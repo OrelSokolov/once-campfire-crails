@@ -82,20 +82,13 @@ module AccountsHelpers
     ERB::SafeString.new(html)
   end
 
-  # account_nav.eta: назад (link_back_to_last_room_visited) + ссылки на
-  # ботов/кастомные стили (админ).
+  # account_nav.eta → accounts/_nav.html.erb: назад
+  # (link_back_to_last_room_visited) + ссылки на боты/кастомные стили
+  # (админ). Ссылки — литеральные <a>: link_to из action_view_cr ставит
+  # href последним атрибутом, а вывод порта (account_nav.eta) — href
+  # первым, byte-parity важнее.
   def account_nav(user : User) : String
-    String.build do |io|
-      io << ChatLayout.nav_back(last_room_visited_path(user))
-      if user.role == 1
-        io << %(\n<div class="flex align-center gap flex-item-justify-end">\n)
-        io << %(<a href="/account/bots" class="btn" style="view-transition-name: chat-bots">\n)
-        io << ChatLayout.icon("bot.svg") << %(\n<span class="for-screen-reader">Set up chat bots</span>\n</a>\n)
-        io << %(<a href="/account/custom_styles/edit" class="btn" style="view-transition-name: custom-styles">\n)
-        io << ChatLayout.icon("art.svg") << %(\n<span class="for-screen-reader">Custom styles</span>\n)
-        io << %(</a>    </div>)
-      end
-    end
+    render(partial: "accounts/nav", locals: {"user" => user}).raw
   end
 
   # TrackedRoomVisit (rooms_helper): link_back_to_last_room_visited —

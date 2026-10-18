@@ -27,44 +27,18 @@ module SearchesHelpers
     ChatLayout.asset("search.svg")
   end
 
-  # search_nav.eta: чип запроса с количеством + recents.
+  # search_nav.eta → searches/_nav.html.erb: чип запроса с количеством +
+  # recents. Ссылки recents — литеральные <a> (порядок атрибутов вывода
+  # порта: class до href), форма clear — button_to-подобный литерал.
   def search_nav(query : String, count : Int32, recents : Array(String)) : String
-    String.build do |io|
-      unless query.empty?
-        io << %(<div class="searches__query flex align-center gap pad-block-start-half">\n)
-        io << %(<div class="btn btn--reversed btn--faux align-center gap txt-nowrap">\n)
-        io << %(<span class="overflow-ellipsis">“) << HTML.escape(query) << %(”</span>\n)
-        io << %(<span class="flex-item-no-shrink">) << count << %(</span>\n)
-        io << %(</div>    </div>\n)
-      end
-      io << %(<div class="searches__recents align-center gap pad-block-half overflow-y overflow-hide-scrollbar">\n)
-      io << recent_searches_html(recents)
-      io << %(</div>)
-    end
+    render(partial: "searches/nav",
+      locals: {"query" => query, "count" => count, "recents" => recents}).raw
   end
 
-  # recent_searches.eta: ссылки на последние запросы + очистка (broom).
-  # Переносы/пробелы — как в выводе Rails-ERB (артефакты): ссылки через
-  # 6 пробелов, после последней — \n, форма с полным URL (clear_searches_url),
-  # broom без width/height, хвост "  " перед закрывающим </div> вызывающего.
+  # recent_searches.eta → searches/_recent_searches.html.erb: ссылки на
+  # последние запросы (6 пробелов между, \n после последней) + очистка
+  # (broom). Рендерится из search_nav И из page_close (aside).
   def recent_searches_html(recents : Array(String)) : String
-    String.build do |io|
-      links = recents.map do |q|
-        %(<a class="align-center gap room btn txt-nowrap" href="/searches?q=#{URI.encode_www_form(q)}">\n) +
-          %(<span class="overflow-ellipsis">“#{HTML.escape(q)}”</span>\n</a>)
-      end
-      io << links.join("      ")
-      unless recents.empty?
-        io << "\n"
-        io << %(<form action=") << origin << %(/searches/clear" class="button_to" method="post">)
-        io << %(<input name="_method" type="hidden" value="delete">)
-        io << %(<button class="btn searches__btn" )
-        io << %(data-turbo-confirm="Are you sure you want to clear your recent searches?" )
-        io << %(type="submit">\n)
-        io << %(<img aria-hidden="true" src="#{ChatLayout.asset("broom.svg")}">\n)
-        io << %(<span class="for-screen-reader">Clear recent searches</span>\n)
-        io << %(</button></form>  )
-      end
-    end
+    render(partial: "searches/recent_searches", locals: {"recents" => recents}).raw
   end
 end

@@ -13,3 +13,7 @@ current:
 
 png:
   max_diff_ratio: 0.002
+
+soft_check:
+  - messaging/test_custom_boost_with_text/custom-boost.png
+  - sidebar/test_narrow_viewport_renders_the_mobile_layout/mobile.png

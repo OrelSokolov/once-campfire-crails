@@ -64,7 +64,7 @@ module Parity
       FileUtils.mkdir_p(dir)
       html = stable_html(page) { page.evaluate_script("document.querySelector(#{selector.to_json}).outerHTML") }
       hide_volatile(page, ["time"]) if mask_times
-      page.save_screenshot(File.join(dir, "#{name}.png"), full: true, selector:)
+      page.save_screenshot(File.join(dir, "#{name}.png"), full: true)
       File.write(File.join(dir, "#{name}.html"), html)
     ensure
       restore_volatile(page) if mask_times

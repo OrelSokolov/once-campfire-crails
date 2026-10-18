@@ -12,7 +12,7 @@
 1. Rails-референс (`once-campfire/app/views/...`) — с отступами, читаемый.
    Плоскость — артефакт порта, а не наследие Rails.
 2. Вьюхи порта выносились из inline `String.build`-билдеров контроллеров,
-   которые генерировали плоский HTML (см. `ERB_REFACTORING.md`). Требование
+   которые генерировали плоский HTML (см. `plans/completed/ERB_REFACTORING.md`). Требование
    byte-parity — «шаблон обязан воспроизводить текущий вывод порта
    байт-в-байт (включая переводы строк!)» — заставило воспроизвести в
    исходнике буквально плоские байты: отступ в исходнике ушёл бы в ответ
@@ -29,7 +29,7 @@
 Текущее состояние (сверено, НЕ однородное):
 
 - **Плоские** (ведущих пробелов нет): все вьюхи, мигрированные по
-  `ERB_REFACTORING.md`, кроме одной — `sessions`, `boosts`, `profiles`,
+  `plans/completed/ERB_REFACTORING.md`, кроме одной — `sessions`, `boosts`, `profiles`,
   `accounts`, `bots`, `rooms/{_form,new,edit}`, `users/show`, `joins`,
   `searches`, `messages/{show,edit}`, `welcome`, `first_runs`,
   `custom_styles`, `directs/new`, `session_transfers`,
@@ -65,7 +65,7 @@
 - **Переводы строк не добавляются и не убираются** — только ведущие
   пробелы строк. Erubi-трим `\n` после `<% %>` сохраняется.
 - **Хвостовой `\n` файла** воспроизводится как раньше (см. гоччу про
-  `boosts/index.html.erb` в `ERB_REFACTORING.md`).
+  `boosts/index.html.erb` в `plans/completed/ERB_REFACTORING.md`).
 
 Почему режим опциональный (а не безусловный): у ChatERB-группы и
 `autocompletable_users/show` текущий вывод УЖЕ содержит отступы, и он
@@ -133,9 +133,9 @@ collapsing небезопасен для inline-элементов (`<a> <a>` �
 ### Этап B — переформатирование плоских вьюх
 
 Группами (внутри группы — один коммит, верификация до/после по
-процедуре `ERB_REFACTORING.md` «Верификация»: `tmp/app-before`/
+процедуре `plans/completed/ERB_REFACTORING.md` «Верификация»: `tmp/app-before`/
 `app-after` на копии БД, `curl` + `cmp` побайтово; затронутые эндпоинты —
-как в таблице инвентаризации `ERB_REFACTORING.md`):
+как в таблице инвентаризации `plans/completed/ERB_REFACTORING.md`):
 
 1. Простые full-page экраны: `welcome`, `first_runs`,
    `session_transfers`, `custom_styles`, `sessions`, `searches`.
@@ -162,13 +162,13 @@ parity-бейзлайны этих эндпоинтов перезаписыва
 1. Полный прогон parity (`tmp/parity_report.py`) + capybara-набор —
    зелёные без перебазлайна (вывод не менялся; исключение — этап C,
    если делался).
-2. Обновить `ERB_REFACTORING.md` п.5 (byte-parity теперь гарантируется
+2. Обновить `plans/completed/ERB_REFACTORING.md` п.5 (byte-parity теперь гарантируется
    dedent-режимом компилятора, а не отсутствием отступов в исходнике) и
    этот файл — статус «завершено».
 
 ## Верификация каждого шага (обязательна)
 
-Как в `ERB_REFACTORING.md`: сборка до/после (`crystal build src/app.cr
+Как в `plans/completed/ERB_REFACTORING.md`: сборка до/после (`crystal build src/app.cr
 -o tmp/app-{before,after} -Dwithout_mt`), серверы на тестовой копии БД,
 `curl` всех задетых эндпоинтов до/после → `diff`/`cmp` побайтово.
 Критерий: нулевая разница на каждом шаге этапов A–B (для этапа C —

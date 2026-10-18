@@ -8,20 +8,12 @@ module UsersHelpers
       nav_html: user_nav(viewer, subject)))
   end
 
-  # layout_start (Screen "user"): назад + «Edit my profile» для себя,
-  # у чужого профиля — пустой блок справа (артефакты profile-jason).
+  # layout_start (Screen "user") → users/_nav.html.erb: назад +
+  # «Edit my profile» для себя, у чужого профиля — пустой блок справа
+  # (артефакты profile-jason). Ссылка — литеральный <a>: link_to из
+  # action_view_cr ставит href последним, вывод порта — href первым.
   def user_nav(viewer : User, subject : User) : String
-    String.build do |io|
-      io << ChatLayout.nav_back("/")
-      if viewer.id == subject.id
-        io << %(<div class="flex align-center gap flex-item-justify-end">)
-        io << %(<a href="/users/me/profile" class="btn">)
-        io << ChatLayout.icon("pencil.svg")
-        io << %(<span class="for-screen-reader">Edit my profile</span></a></div>)
-      else
-        io << %(<div class="flex align-center gap flex-item-justify-end">\n</div>)
-      end
-    end
+    render(partial: "users/nav", locals: {"viewer" => viewer, "subject" => subject}).raw
   end
 
   # transfer_link.eta (админский блок на профиле юзера): QR/копирование/

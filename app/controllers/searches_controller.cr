@@ -15,6 +15,17 @@ class SearchesController < ApplicationController
   getter epoch : String = ""
   @return_room : Int64 = 1_i64
 
+  # HTML-партиалы nav поиска (search_nav.eta/recent_searches.eta): чип
+  # запроса + recents; рендерятся обёртками SearchesHelpers#search_nav и
+  # #recent_searches_html (второй используется и в page_close — aside).
+  compile_partials({
+    "searches/nav" => {path: "app/views/searches/_nav.html.erb",
+                       locals: {"query" => String, "count" => Int32,
+                                "recents" => Array(String)}},
+    "searches/recent_searches" => {path: "app/views/searches/_recent_searches.html.erb",
+                                   locals: {"recents" => Array(String)}},
+  })
+
   def show
     user = current_user.not_nil!
 
