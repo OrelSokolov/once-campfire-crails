@@ -7,24 +7,35 @@
 class Users::ProfilesController < ApplicationController
   include ProfilesHelpers
 
-  # show.html.erb: user, пары комната-membership для списка участия,
+  # show.html.erb: user, пары комната-membership для списка участия
+  # (shared по LOWER(name), direct по id — с порядком референса:
+  # сначала shared, разделитель, затем directs), UA для pwa-инструкций,
   # transfer-ссылка и QR-путь к ней.
   @user : User?
-  @room_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
+  @shared_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
+  @direct_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
+  @ua : String = ""
   @transfer_url : String = ""
   @qr_path : String = ""
 
   def show
     user = current_user.not_nil!
     @user = user
+    @ua = request.headers["User-Agent"]?.to_s
     rooms = Room.where(
       %(id IN (SELECT room_id FROM memberships WHERE user_id = ?)), user.id.not_nil!)
       .to_a.index_by(&.id.not_nil!)
     user.memberships.each do |membership|
-      if room = rooms[membership.room_id.not_nil!]?
-        @room_memberships << {room, membership}
+      next unless room = rooms[membership.room_id.not_nil!]?
+      if room.name.nil?
+        @direct_memberships << {room, membership}
+      else
+        @shared_memberships << {room, membership}
       end
     end
+    # with_ordered_room: LOWER(name) ASC; directs (name NULL) — по id.
+    @shared_memberships.sort_by! { |(room, _)| room.name.to_s.downcase }
+    @direct_memberships.sort_by! { |(room, _)| room.id.not_nil! }
     @transfer_url = transfer_url_for(user)
     @qr_path = "/qr_code/" + Base64.urlsafe_encode(@transfer_url, padding: false)
   end

@@ -265,6 +265,19 @@ module ChatLayout
       inner + %(\n</button>)
   end
 
+  # web-share (transfer-блок profile/invite/user): делиться auto-login
+  # ссылкой; кнопка скрыта (hidden), стимулус показывает при поддержке
+  # navigator.share. Вызов добавляет хвост «    </div>» (артефакты).
+  def self.web_share_button(url : String) : String
+    %(<button class="btn" data-action="web-share#share" data-controller="web-share" ) +
+      %(data-web-share-text-value="This is your own private sign-in URL, DO NOT SHARE IT. Use it to sign-in on another device or if you get locked out." ) +
+      %(data-web-share-title-value="Your sign-in link" ) +
+      %(data-web-share-url-value="#{HTML.escape(url)}" hidden="">\n) +
+      %(<span class="for-screen-reader">Share auto-login link</span>\n) +
+      icon("share.svg", 20, "flex-item-no-shrink colorize--black") +
+      %(\n</button>)
+  end
+
   # translations_helper.rb: TRANSLATIONS — словари кнопки перевода
   # (порядок флагов: US, ES, FR, IN, DE, BR, JP).
   TRANSLATIONS = {
