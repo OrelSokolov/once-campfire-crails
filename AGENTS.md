@@ -31,3 +31,6 @@ end
 
 
 Выполненные планы переноси в plans/completed/
+
+
+После любых изменений прогони twinshot review default
