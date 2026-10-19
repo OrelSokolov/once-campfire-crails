@@ -5,6 +5,14 @@ module ChatLayout
   STYLESHEETS = {{ read_file "#{__DIR__}/../views/stylesheets.html" }}
   IMPORTMAP   = {{ read_file "#{__DIR__}/../views/importmap.html" }}
 
+  # Именованные роуты в статическом контексте: та же таблица имён, что
+  # у *_path-хелперов контроллеров (Routes::UrlHelpers), но без
+  # инстанса — прямой вызов RouteSet#path_for. Выход байт-идентичен
+  # бывшим строковым интерполяциям.
+  def self.route_path(name : String, *values) : String
+    CRails.application.routes.path_for(name, values.map(&.to_s).to_a)
+  end
+
   # file_uploader.js читает meta[name=csrf-token] перед fetch; сервер
   # CSRF не проверяет, поэтому достаточно стабильного значения на процесс.
   CSRF_TOKEN = Random::Secure.hex(32)
@@ -514,7 +522,7 @@ module ChatLayout
     uid = user.id.not_nil!
     String.build do |io|
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{uid}">)
+      io << %(" class="btn avatar" data-turbo-frame="_top" href="#{route_path("user", uid)}">)
       io << %(<img aria-hidden="true"#{lazy} src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a>)
     end
   end
@@ -806,7 +814,7 @@ module ChatLayout
     String.build do |io|
       io << %(<span class="mention">)
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
-      io << %(" class="btn avatar" href="/users/#{uid}" target="_top">)
+      io << %(" class="btn avatar" href="#{route_path("user", uid)}" target="_top">)
       io << %(<img src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48"></a> )
       io << HTML.escape(user.name.to_s) << %(</span>)
     end
@@ -1069,7 +1077,7 @@ module ChatLayout
     cid = m.client_message_id.to_s
     created = m.created_at || Time.utc
     updated = m.updated_at || created
-    permalink = "/rooms/#{room.id}/@#{mid}"
+    permalink = route_path("room_at_message", room.id, mid)
     sound = attachment ? nil : message_sound(m.body.to_s)
     presentation_html = if attachment
       attachment_presentation(attachment)
@@ -1321,7 +1329,7 @@ module ChatLayout
                                    attachment : Attachment?,
                                    base_url : String) : String
     url = base_url.empty? ? permalink : "#{base_url}#{permalink}"
-    boost_path = "/messages/#{mid}/boosts"
+    boost_path = route_path("message_boosts", mid)
     boost_frame = "boosting_message_#{mid}"
 
     String.build do |io|
@@ -1372,7 +1380,7 @@ module ChatLayout
       io << icon("link.svg", 20, "colorize--black") << "\n</button>\n"
       io << %(<a class="btn message__action-btn center full-width message__edit-btn" )
       io << %(data-turbo-frame="edit_message_#{mid}" title="Edit" aria-label="Edit" )
-      io << %(href="/rooms/#{room.id}/messages/#{mid}/edit">\n)
+      io << %(href="#{route_path("edit_room_message", room.id, mid)}">\n)
       io << icon("pencil.svg", 20, "colorize--black") << "\n"
       io << %(</a>      </div>\n)
       io << %(</div>\n</details></div>\n)
@@ -1392,7 +1400,7 @@ module ChatLayout
       io << %(</div>\n)
       io << %(<turbo-frame id="new_boost_message_#{mid}">\n)
       io << %(<div class="flex-inline message__boost-inline" data-controller="soft-keyboard">\n)
-      io << %(<a class="boost__action txt-small btn" data-action="soft-keyboard#open" href="/messages/#{mid}/boosts/new">\n)
+      io << %(<a class="boost__action txt-small btn" data-action="soft-keyboard#open" href="#{route_path("new_message_boost", mid)}">\n)
       io << icon("boost.svg", 20) << "\n"
       io << %(<span class="for-screen-reader">Add a boost</span>\n)
       io << %(</a>      </div>\n)
@@ -1411,7 +1419,7 @@ module ChatLayout
       io << %(data-boost-delete-reveal-class="expanded" data-boost-delete-booster-id-value="#{b.booster_id}">\n)
       io << %(<figure class="avatar boost__avatar flex-item-no-shrink">\n)
       io << %(<a title=") << HTML.escape(user_title(b.booster_name, b.booster_bio))
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{b.booster_id}">)
+      io << %(" class="btn avatar" data-turbo-frame="_top" href="#{route_path("user", b.booster_id)}">)
       io << %(<img aria-label=")
       io << HTML.escape("#{b.booster_name} boosted #{b.content}")
       io << %(" src="#{fresh_user_avatar_path(b.booster_id, b.booster_updated_at)}" width="48" height="48"></a>\n)
@@ -1495,7 +1503,7 @@ module ChatLayout
     signed_name = HTML.escape(Turbo::Streams::StreamName.signed_stream_name([room, "messages"]))
     # messages_helper.rb:16 — messages_page_url_value: room_messages_url(room)
     # (абсолютный URL: JS-пагинатор делает new URL(value) без базы).
-    page_url = base_url.empty? ? "/rooms/#{room.id}/messages" : "#{base_url}/rooms/#{room.id}/messages"
+    page_url = base_url.empty? ? route_path("room_messages", room.id) : "#{base_url}#{route_path("room_messages", room.id)}"
     String.build do |io|
       io << %(<div id="message-area" class="message-area" contents="true" data-controller="messages presence drop-target" )
       io << %(data-action="turbo:before-stream-render@document-&gt;messages#beforeStreamRender keydown.up@document-&gt;messages#editMyLastMessage dragenter-&gt;drop-target#dragenter dragover-&gt;drop-target#dragover drop-&gt;drop-target#drop visibilitychange@document-&gt;presence#visibilityChanged" )
@@ -1517,7 +1525,7 @@ module ChatLayout
       io << %(<div class="message__day-separator"><time class="message__timestamp" datetime="$messageDatetime$" data-local-time-target="date"></time></div>\n)
       io << %(<figure class="avatar message__avatar">\n)
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="/users/#{user.id}">)
+      io << %(" class="btn avatar" data-turbo-frame="_top" href="#{route_path("user", user.id)}">)
       io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(user.id.not_nil!, user.updated_at)}" width="48" height="48"/></a>\n)
       io << %(</figure>\n)
       io << %(<div class="message__body">\n)

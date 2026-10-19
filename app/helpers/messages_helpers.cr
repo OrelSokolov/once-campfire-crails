@@ -15,11 +15,6 @@ module MessagesHelpers
     ERB::SafeString.new(ChatLayout.attachment_presentation(attachment.not_nil!))
   end
 
-  # /rooms/:id/messages/:message_id для экшена.
-  def message_path : String
-    "/rooms/#{room.not_nil!.id}/messages/#{mid}"
-  end
-
   # messages.eta (референс): каждая запись — тот же DOM, что в комнате
   # (message_dom: <div data-message-id=...> + turbo-frame + </turbo-frame>
   # </div> closure); минимальный <article> не проходит route-contract-v1

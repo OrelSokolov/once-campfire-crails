@@ -1,11 +1,11 @@
 <%= ERB::SafeString.new(ChatLayout.nav_back(last_room_visited_path(user))) %><% if user.role == 1 %>
 
   <div class="flex align-center gap flex-item-justify-end">
-    <a href="/account/bots" class="btn" style="view-transition-name: chat-bots">
+    <a href="<%= account_bots_path %>" class="btn" style="view-transition-name: chat-bots">
       <%= icon("bot.svg") %>
       <span class="for-screen-reader">Set up chat bots</span>
     </a>
-    <a href="/account/custom_styles/edit" class="btn" style="view-transition-name: custom-styles">
+    <a href="<%= edit_account_custom_styles_path %>" class="btn" style="view-transition-name: custom-styles">
       <%= icon("art.svg") %>
       <span class="for-screen-reader">Custom styles</span>
     </a>    </div><% end %>

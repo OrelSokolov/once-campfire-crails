@@ -100,6 +100,6 @@ module AccountsHelpers
       room = Room.visible_for(user).where("id = ?", last.to_i64?).take
     end
     room ||= Room.visible_for(user).order("id").first?
-    room ? "/rooms/#{room.id.not_nil!}" : "/"
+    room ? room_path(room.id.not_nil!) : root_path
   end
 end

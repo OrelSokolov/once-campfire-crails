@@ -7,7 +7,7 @@ shards:
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.6
+    version: 0.2.7
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git

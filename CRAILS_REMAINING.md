@@ -7,9 +7,12 @@
 
 ## 1. Named route helpers: `*_path` / `*_url`
 
-> **Сделано частично** (2026-10-19) — см. `URL_HELPERS_GENERATOR.md`
-> (этапы 0/1/2/3 и redirect_to-батч выполнены; остались миграция
-> `action=`/`href=`/ChatLayout и чистка ручных хелперов).
+> **Сделано** (2026-10-19) — см. `URL_HELPERS_GENERATOR.md`: все этапы
+> (0–5) выполнены; имена порта == Rails (21 имя), миграция
+> redirect_to/action=/href=/ChatLayout проведена, неименованные роуты
+> осознанно оставлены строками. Опубликовано: action_pack.cr v0.2.6
+> (UrlHelpers) + v0.2.7 (фикс inherited-origin), railties.cr v0.1.13
+> (route_set wiring).
 
 **Статус в CRails**: отсутствует. `CRails::Routes::RouteSet` хранит
 имена маршрутов (`route.name`, объявляются через `as:` / `resources`),

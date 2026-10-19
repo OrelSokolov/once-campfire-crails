@@ -4,7 +4,7 @@
 module CustomStylesHelpers
   def page_open(user : User) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("custom-styles", "Custom CSS", user,
-      nav_html: ChatLayout.nav_back("/account/edit")))
+      nav_html: ChatLayout.nav_back(edit_account_path)))
   end
 
   # translation_button (translations_helper): details/popup меню переводов.

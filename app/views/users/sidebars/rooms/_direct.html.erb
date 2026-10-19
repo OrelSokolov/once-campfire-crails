@@ -1,4 +1,4 @@
-<% members = direct_members(membership) %><a class="direct<%= unread?(membership) ? " unread" : "" %>" data-badge-dot-target="unread" data-room-id="<%= membership.room_id %>" data-rooms-list-target="room" data-sorted-list-number="<%= epoch_ms(membership.room.not_nil!) %>" data-sorted-list-target="item" href="/rooms/<%= membership.room_id %>" id="list_rooms_direct_<%= membership.room_id %>">
+<% members = direct_members(membership) %><a class="direct<%= unread?(membership) ? " unread" : "" %>" data-badge-dot-target="unread" data-room-id="<%= membership.room_id %>" data-rooms-list-target="room" data-sorted-list-number="<%= epoch_ms(membership.room.not_nil!) %>" data-sorted-list-target="item" href="<%= room_path(membership.room_id) %>" id="list_rooms_direct_<%= membership.room_id %>">
 <% if members.size > 1 %>
 <div class="avatar__group">
 <% members.first(4).each do |m| %>

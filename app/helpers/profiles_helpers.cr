@@ -58,7 +58,7 @@ module ProfilesHelpers
     name = HTML.escape(profile_display_name(room, viewer))
     ERB::SafeString.new(
       %(<li class="flex align-center gap margin-none min-width membership-item">\n) +
-      %(<a class="overflow-ellipsis fill-shade txt-primary txt-undecorated" href="/rooms/#{room.id.not_nil!}">\n) +
+      %(<a class="overflow-ellipsis fill-shade txt-primary txt-undecorated" href="#{room_path(room.id.not_nil!)}">\n) +
       %(<strong>#{name}</strong>\n</a>\n) +
       %(<hr aria-hidden="true" class="separator">\n) +
       %(<span class="txt-small">\n) +

@@ -5,10 +5,10 @@
 перестаёт хардкодить пути строками (~сотня мест: 26 `redirect_to`,
 23 `action=`, ~21 рабочий `href=`, 34 интерполяции в ChatLayout).
 
-> **Статус** (2026-10-19). Сделаны этапы 0, 1, 2, 3 (route_set wiring)
-> и 4.1 (redirect_to-батч). Остались: 4.2–4.4 (form action=, href=,
-> ChatLayout), этап 5 (чистка ручных хелперов). Детали — пометки
-> «Сделано» по этапам ниже.
+> **Статус** (2026-10-19). Сделаны этапы 0, 1, 2, 3 и 4.1–4.4
+> (redirect_to, action=, href=, ChatLayout/хелперы). Остался этап 5
+> (чистка ручных хелперов: решено по аудиту — см. ниже). Детали —
+> пометки «Сделано» по этапам ниже.
 
 ## Отправная точка (что уже есть)
 
@@ -218,10 +218,60 @@ version `vX.Y.Z`, publish; в проекте подтянуть опублико
    > строкам.
 2. `action=` в ERB-формах (23 / 17), включая `_form.html.erb:1` с
    конкатенацией.
+
+   > **Сделано** (2026-10-19). Заменены только формы с именованными
+   > роутами: boosts/new → `message_boosts_path(@mid)`,
+   > composer → `room_messages_path(room.id)` (POST create неименованный,
+   > путь == index — Rails в форме пишет room_messages_path),
+   > directs/edit delete → `room_url(@room…id)` (было
+   > `origin + "/rooms/#{id}"` — `*_url`-случай), messages/edit ×2 →
+   > `room_message_path(room.id, mid)` + удалён ручной `message_path`
+   > из messages_helpers.cr (байт-идентичен сгенерированному, других
+   > вызовов нет). Прочие action= ведут на неименованные
+   > create/update/destroy-роуты (`/session`, `/account.<id>`,
+   > `/account/join_code`, `/users/:id/ban`, `/rooms/directs`,
+   > `/account/bots[...]`, `/account/custom_styles`,
+   > `/users/me/profile`, `/rooms/<kind>[...]`, involvement,
+   > `/searches`, `/join/:code`, transfers) — хелперов нет ни в порте,
+   > ни в Rails, оставлены строками.
 3. `href=` в рабочих вьюхах (~21, не трогая asset-ссылки
    importmap/stylesheets).
+
+   > **Сделано** (2026-10-19). 15 замен: сайдбар (directs/`room_path`
+   > ×2, `new_rooms_direct_path`, `new_rooms_open_path`,
+   > `edit_account_path`), accounts/_nav (`account_bots_path`,
+   > `edit_account_custom_styles_path`), bots/index
+   > (`new_account_bot_path`, `edit_account_bot_path(bid)`),
+   > boosts/new (`user_path`, `message_boosts_path` ×2),
+   > searches/show (`room_path(@return_room)`),
+   > autocompletable (`user_path(u.id)`). Оставлены строками:
+   > `/users/me/profile`, `/users/me/sidebar`, `/searches…`,
+   > avatar-src `/users/:id/avatar` (неименованные), `_form.html.erb`
+   > href с выбором kind opens/closeds (см. этап 5 — навсегда
+   > строка/ручной хелпер, вид выбирается в рантайме).
+
 4. Интерполяции в `ChatLayout`/хелперах (34 места; здесь же —
    самые хитрые, `chat_layout.cr:1138` с `base_url`, это `*_url`).
+
+   > **Сделано** (2026-10-19). Инстанс-хелперы (модули, включённые в
+   > контроллеры): joins → `new_session_path`, profiles →
+   > `room_path`, accounts → `room_path`/`root_path`, custom_styles →
+   > `edit_account_path`. Статический `ChatLayout` (инстанс-хелперы
+   > недоступны) — обёртка `ChatLayout.route_path(name, *values)` →
+   > `CRails.application.routes.path_for` (та же таблица имён):
+   > `user_path` ×4 (avatar_link, mention, boost, message),
+   > `room_at_message` (permalink), `message_boosts`,
+   > `new_message_boost`, `edit_room_message`, `room_messages`
+   > (page_url, `*_url`-случай с base_url). Оставлены: avatar/logo
+   > cache-buster-пути, `room_edit_path` (STI-выбор), `/account/logo`,
+   > `/account/join_code`, involvement, refresh (неименованные).
+   >
+   > Попутно найден и закрыт баг хелперов: `*_url`-origin смотрел
+   > только собственные методы включающего типа
+   > (`@type.methods`) — наследуемый из ApplicationController `origin`
+   > не находился, `*_url` молча давал `http://localhost`. Фикс —
+   > обход `@type.ancestors` (action_pack.cr **v0.2.7**, регрессионный
+   > спек UrlHelperInheritedHost).
 
 Правило каждого батча — **байтовая сверка**: хелпер обязан давать
 те же байты, что заменяемая строка (сверка по коду + спека/скрипт
@@ -233,6 +283,19 @@ version `vX.Y.Z`, publish; в проекте подтянуть опублико
 (`tmp/parity_report.py`) до/после — диффов быть не должно.
 
 ### 5. Чистка
+
+> **Сделано** (2026-10-19). Аудит всех ручных path/url-методов:
+> удалён только `message_path` (messages_helpers.cr — байт-идентичен
+> `room_message_path`, других вызовов не было; убран в батче 4.2).
+> Оставлены осознанно (не дубликаты сгенерированных):
+> `ChatERB#root_url`/`#avatar_path`/`#direct_uploads_url`/
+> `#blob_url_template` — отдельный ERB-контекст без UrlHelpers,
+> с пустым origin дают относительные пути (иная семантика);
+> `room_edit_path` (STI-выбор сегмента — у порта нет неймспейсных
+> контроллеров), `fresh_*` (аналог `direct`, вне объёма),
+> `blob_url`/`representation_url` (ActiveStorage),
+> `last_room_visited_path` (accounts) — использует `root_path`/
+> `room_path` внутри. `CRAILS_REMAINING.md` §1 закрыт.
 
 - Удалить ручные хелперы, полностью совпадающие с сгенерированными
   (`message_path` из `messages_helpers.cr` — если его сигнатуру

@@ -6,7 +6,7 @@
     <div class="pad-inline-double center">
       <h1 class="margin-none">Chat bots</h1>
       <p class="margin-none-block-start">With Chat bots, other sites and services can post updates directly to Campfire.</p>
-      <a href="/account/bots/new" class="btn btn--reversed txt-large" aria-label="Add a chat bot">
+      <a href="<%= new_account_bot_path %>" class="btn btn--reversed txt-large" aria-label="Add a chat bot">
         <%= icon("bot.svg") %>
         <%= icon("add.svg") %>
       </a>    </div>
@@ -21,7 +21,7 @@
           <div class="min-width">
             <div class="overflow-ellipsis txt-large"><strong><%= bot.name.to_s %></strong></div>
           </div>
-          <a href="/account/bots/<%= bid %>/edit" class="btn flex-item-justify-end" style="view-transition-name: chat-bot-<%= bid %>">
+          <a href="<%= edit_account_bot_path(bid) %>" class="btn flex-item-justify-end" style="view-transition-name: chat-bot-<%= bid %>">
             <%= icon("pencil.svg") %>
             <span class="for-screen-reader">Edit <%= bot.name.to_s %></span>
           </a>  </div>
