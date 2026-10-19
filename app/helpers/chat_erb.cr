@@ -4,6 +4,10 @@
 # (compile_template, как jbuilder-партиалы); хелперы делегируют в ChatLayout.
 class ChatERB
   include ERB::Rendering
+  # Шаблоны sidebar/composer/_direct рендерятся и в контексте
+  # контроллера, и здесь — именованные *_path-хелперы (routes.url_for)
+  # должны работать в обоих; route_set назначается railties при буте.
+  include CRails::Routes::UrlHelpers
 
   def initialize(@room : Room? = nil, @footer : String = "", @sidebar : String = "",
                  @origin : String = "", @involvement : String = "mentions",
