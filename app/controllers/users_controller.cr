@@ -14,7 +14,7 @@ class UsersController < ApplicationController
   compile_partials({
     "users/nav" => {path: "app/views/users/_nav.html.erb",
                     locals: {"viewer" => User, "subject" => User}},
-  })
+  }, dedent: true)
 
   def show
     viewer = current_user.not_nil!

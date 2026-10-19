@@ -1,6 +1,9 @@
 # GET /autocompletable/users?filter=&room_id= — подсказки автокомплита
 # (референс: routes.js registerUsers + prompt_item.eta): HTML-фрагмент
 # lexxy-prompt-item на каждого пользователя (до 20, filter по имени).
+# Вывод show.html.erb содержит отступы (перенесён с ними, бейзлайны
+# parity их фиксируют) — отключаем dedent implicit-рендера.
+@[ActionController::NoTemplateDedent]
 class Autocompletable::UsersController < ApplicationController
   # show.json.jbuilder (JSON-ветка) + show.html.erb (HTML-ветка): до 20
   # отфильтрованных юзеров.

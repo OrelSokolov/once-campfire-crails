@@ -24,7 +24,7 @@ class SearchesController < ApplicationController
                                 "recents" => Array(String)}},
     "searches/recent_searches" => {path: "app/views/searches/_recent_searches.html.erb",
                                    locals: {"recents" => Array(String)}},
-  })
+  }, dedent: true)
 
   def show
     user = current_user.not_nil!

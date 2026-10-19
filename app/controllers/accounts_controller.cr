@@ -29,7 +29,7 @@ class AccountsController < ApplicationController
   compile_partials({
     "accounts/nav" => {path: "app/views/accounts/_nav.html.erb",
                        locals: {"user" => User}},
-  })
+  }, dedent: true)
 
   def edit
     account = set_account

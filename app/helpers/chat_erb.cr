@@ -204,12 +204,12 @@ class ChatERB
   # в контексте ChatERB с локалами; имя без подчёркивания попало бы и в
   # implicit-scan экшена Users::SidebarsController#show, где локалов нет
   # (контроллер рендерит сайдбар сам, через этот шаблон и PageCache).
-  compile_template "sidebar", "app/views/users/sidebars/_show.html.erb"
+  compile_template "sidebar", "app/views/users/sidebars/_show.html.erb", dedent: true
 
   compile_template "composer", "app/views/rooms/show/_composer.html.erb"
-  compile_template "body_close", "app/views/layouts/_body_close.html.erb"
+  compile_template "body_close", "app/views/layouts/_body_close.html.erb", dedent: true
   compile_template "bell", "app/views/rooms/involvements/_bell.html.erb"
-  compile_template "involvement_show", "app/views/rooms/involvements/show.html.erb"
+  compile_template "involvement_show", "app/views/rooms/involvements/show.html.erb", dedent: true
 
   # Вложенные партиалы — через render(): compile_template-методы
   # переключают общий @__erb_buf, вложенный вызов затёр бы буфер

@@ -7,7 +7,7 @@ shards:
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.3
+    version: 0.2.4
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
@@ -27,7 +27,7 @@ shards:
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
-    version: 0.1.4
+    version: 0.1.5
 
   bcrypt:
     git: https://github.com/jgaskins/bcrypt.git
@@ -39,7 +39,7 @@ shards:
 
   erb_cr:
     git: https://github.com/orelsokolov/erb.cr.git
-    version: 0.1.1
+    version: 0.1.2
 
   icr:
     git: https://github.com/orelsokolov/icr.cr.git

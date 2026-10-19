@@ -34,7 +34,7 @@ class RoomsController < ApplicationController
                                "user" => User, "selected" => Set(Int64),
                                "is_open" => Bool, "can_administer" => Bool,
                                "users" => Array(User), "divider" => Int32}},
-  })
+  }, dedent: true)
 
   def show
     room = Room.find?(params["id"].to_s.to_i64)
