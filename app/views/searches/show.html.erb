@@ -1,26 +1,26 @@
 <%= page_open %><div class="message-area" id="message-area">
-<div class="message-area--empty min-width center">
-<figure class="center pad">
-<img aria-hidden="true" class="colorize--black translucent" src="<%= search_icon_src %>">
-</figure>
-</div>
-<div id="search-results" class="messages searches__results" data-controller="search-results" data-search-results-target="messages" data-search-results-me-class="message--me" data-search-results-threaded-class="message--threaded" data-search-results-mentioned-class="message--mentioned" data-search-results-formatted-class="message--formatted">
-<%= messages_html %></div></div>
+  <div class="message-area--empty min-width center">
+    <figure class="center pad">
+      <img aria-hidden="true" class="colorize--black translucent" src="<%= search_icon_src %>">
+    </figure>
+  </div>
+  <div id="search-results" class="messages searches__results" data-controller="search-results" data-search-results-target="messages" data-search-results-me-class="message--me" data-search-results-threaded-class="message--threaded" data-search-results-mentioned-class="message--mentioned" data-search-results-formatted-class="message--formatted">
+    <%= messages_html %></div></div>
 <% content_for :footer do %><div class="composer flex align-end gap">
-<a class="btn flex-item-no-shrink margin-block-end" style="view-transition-name: input-switcher; --btn-border-radius: 0.5em" href="/rooms/<%= @return_room %>">
-<img aria-hidden="true" src="<%= asset("arrow-left.svg") %>">
-<span class="for-screen-reader">Exit search </span>
-</a>
-<form class="margin-block flex-item-grow contain flex align-center gap" data-controller="form" data-action="keydown.esc-&gt;form#cancel" action="/searches" accept-charset="UTF-8" method="post">
-<div class="composer__input flex align-center flex-item-grow gap full-width input input--actor min-width">
-<img aria-hidden="true" class="composer__input-hint colorize--black" style="view-transition-name: input-btn;" src="<%= search_icon_src %>" width="20" height="20">
-<input <%= ERB::SafeString.new(@query.empty? ? "" : %( value="#{HTML.escape(@query)}")) %> class="searches__input input flex-item-grow" role="searchbox" aria-label="search" autofocus="autofocus" required="required" type="text" name="q" id="q">
-<a data-form-target="cancel" role="button" class="searches__reset" href="/searches">
-<%= icon("remove.svg", 14, "colorize--black") %>
-<span class="for-screen-reader">Clear search field</span>
-</a>
-<button name="button" type="submit" class="btn btn--reversed flex-item-no-shrink txt-small" style="--btn-border-radius: 0.5em">
-<img aria-hidden="true" src="<%= asset("arrow-up.svg") %>">
-<span class="for-screen-reader">Search</span>
-</button>      </div>
-</form>  </div><% end %><%= page_close %>
+  <a class="btn flex-item-no-shrink margin-block-end" style="view-transition-name: input-switcher; --btn-border-radius: 0.5em" href="/rooms/<%= @return_room %>">
+    <img aria-hidden="true" src="<%= asset("arrow-left.svg") %>">
+    <span class="for-screen-reader">Exit search </span>
+  </a>
+  <form class="margin-block flex-item-grow contain flex align-center gap" data-controller="form" data-action="keydown.esc-&gt;form#cancel" action="/searches" accept-charset="UTF-8" method="post">
+    <div class="composer__input flex align-center flex-item-grow gap full-width input input--actor min-width">
+      <img aria-hidden="true" class="composer__input-hint colorize--black" style="view-transition-name: input-btn;" src="<%= search_icon_src %>" width="20" height="20">
+      <input <%= ERB::SafeString.new(@query.empty? ? "" : %( value="#{HTML.escape(@query)}")) %> class="searches__input input flex-item-grow" role="searchbox" aria-label="search" autofocus="autofocus" required="required" type="text" name="q" id="q">
+      <a data-form-target="cancel" role="button" class="searches__reset" href="/searches">
+        <%= icon("remove.svg", 14, "colorize--black") %>
+        <span class="for-screen-reader">Clear search field</span>
+      </a>
+      <button name="button" type="submit" class="btn btn--reversed flex-item-no-shrink txt-small" style="--btn-border-radius: 0.5em">
+        <img aria-hidden="true" src="<%= asset("arrow-up.svg") %>">
+        <span class="for-screen-reader">Search</span>
+    </button>      </div>
+  </form>  </div><% end %><%= page_close %>

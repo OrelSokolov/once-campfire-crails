@@ -1,7 +1,7 @@
 <% unless query.empty? %><div class="searches__query flex align-center gap pad-block-start-half">
-<div class="btn btn--reversed btn--faux align-center gap txt-nowrap">
-<span class="overflow-ellipsis">“<%= query %>”</span>
-<span class="flex-item-no-shrink"><%= count %></span>
-</div>    </div>
+  <div class="btn btn--reversed btn--faux align-center gap txt-nowrap">
+    <span class="overflow-ellipsis">“<%= query %>”</span>
+    <span class="flex-item-no-shrink"><%= count %></span>
+  </div>    </div>
 <% end %><div class="searches__recents align-center gap pad-block-half overflow-y overflow-hide-scrollbar">
-<%= render(partial: "searches/recent_searches", locals: {"recents" => recents}) %></div>
+  <%= render(partial: "searches/recent_searches", locals: {"recents" => recents}) %></div>
