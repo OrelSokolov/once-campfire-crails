@@ -32,12 +32,29 @@
   ANALYZER_REMAINING.md` (blob.analyze! → metadata
   `{"width":…,"height":…,"analyzed":true}`; после — удалить интерим
   `app/models/image_dimensions.cr` из приложения).
-- `Account#logo_variant(:large 512 / :small 192)` + `LogosController`
-  — варианты логотипа вместо оригинала (теперь просто
-  `blob.variant(resize_to_limit: …)` шарда).
-- `Dockerfile`: build `apk add vips-dev`, runtime `apk add vips`;
 - тег `v0.1.1` шарда → `version: ~> 0.1.1` в shard.yml, удалить
   `shard.override.yml`.
+
+### Сделано (продолжение, 2026-10-20)
+
+- `Account#logo_variant(:large 512 / :small 192)` (app/models/misc.cr,
+  `blob.variant(resize_to_limit: …, format: "png").processed` шарда) +
+  `Accounts::LogosController#show` отдаёт вариант вместо оригинала
+  (nil — нет вложения / не-variable / ошибка vips → сток-иконка,
+  как `logo_variant ... else send_stock_icon` референса); destroy
+  сносит и файлы вариантов `variants/<key>/*`. Смоук (tmp/logo-smoke):
+  1382×1382 → 512/192 png, кеш вариантов на диске, 304 по ETag,
+  text/plain → сток-иконка байт-в-байт, purge: attachment + blob +
+  оригинал + варианты; после delete — сток-иконка.
+- Попутный фикс фреймворка: `skip_before_action ... only:` в
+  action_pack.cr игнорировал `only:` и отключал фильтр для ВСЕХ экшенов
+  (анонимный DELETE /account/logo выполнял destroy → 500). Патч —
+  условия скипа теперь вычитаются из условий фильтра (безусловный скип
+  отключает целиком). Опубликовано action_pack.cr v0.2.8 (регрессионные
+  спеки SkippedController/PartiallySkippedController), проект
+  подтянул 0.2.8.
+- `Dockerfile`: vips уже был (build `vips-dev glib-dev`, runtime
+  `vips glib`) — пункт закрыт ранее.
 
 ### Отклонения от 1 к 1 (актуальные)
 

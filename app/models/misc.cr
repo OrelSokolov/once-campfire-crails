@@ -15,8 +15,7 @@ class Account < ActiveRecord::Base
   end
 
   # Rails: has_one_attached :logo — логотип аккаунта (favicon,
-  # accounts/logos_controller). Варианты :large(512)/:small(192) не
-  # портированы (нет vips) — отдаётся оригинал вложения.
+  # accounts/logos_controller).
   def logo_attachment : ActiveStorageAttachment?
     ActiveStorageAttachment
       .where("record_type = ? AND record_id = ? AND name = ?", "Account", id.not_nil!, "logo")
@@ -27,6 +26,25 @@ class Account < ActiveRecord::Base
     logo_attachment.try do |attachment|
       ActiveStorageBlob.find(attachment.blob_id.not_nil!)
     end
+  end
+
+  # attachable.variant :large/:small (account.rb:4-7): resize_to_limit
+  # 512/192, format png. logo_variant (account.rb:11-13) —
+  # logo.variant(size).processed при variable?; nil (нет вложения /
+  # не-variable тип / ошибка vips-обработки) — контроллер отдаёт
+  # сток-иконку. Blob — шардовый ActiveStorage::Blob (variant/variable?
+  # живут там, ср. create_and_upload! в MessageCreator).
+  LOGO_VARIANT_SIZES = {"large" => [512, 512], "small" => [192, 192]}
+
+  def logo_variant(size : String = "large") : ActiveStorage::Variant?
+    attachment = logo_attachment
+    return nil unless attachment
+    blob = ActiveStorage::Blob.find?(attachment.blob_id.not_nil!)
+    return nil unless blob && blob.variable?
+    dims = LOGO_VARIANT_SIZES[size]? || LOGO_VARIANT_SIZES["large"]
+    blob.variant(resize_to_limit: dims, format: "png").processed
+  rescue ex : Exception
+    nil
   end
 end
 
