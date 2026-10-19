@@ -107,6 +107,92 @@ class Messages::ByBotsController < ApplicationController
     render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
   end
 
+  # PATCH/PUT /rooms/:id/:bot_key/messages/:message_id — правка своего
+  # сообщения ботом (by_bots update: message_params = raw body,
+  # ensure_can_administer — создатель или админ). Тело — ActionText +
+  # FTS5 + touch, broadcast replace presentation (maintain_scroll);
+  # ответ — bot_show JSON (format :json роута).
+  def bot_update
+    bot = bot_from_key
+    unless bot
+      return render(plain: "Unauthorized", status: :unauthorized)
+    end
+    room = bot_room(bot)
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    unless room && message && message.room_id == room.id.not_nil!
+      return render(plain: "Not Found", status: :not_found)
+    end
+    if message.creator_id != bot.id
+      return render(plain: "Cannot edit this message", status: :forbidden)
+    end
+    room = room.not_nil!
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+
+    # by_bots message_params: body = raw_request_body — ActionText
+    # хранит plain-строку с escape (как в bot_create).
+    plain = request.body.try(&.gets_to_end).to_s
+    body_html = HTML.escape(plain)
+    now = Time.utc
+    target = message
+    Campfire::WriteQueue.perform do
+      conn = ActiveRecord::Base.connection
+      conn.exec(
+        "UPDATE action_text_rich_texts SET body = ?, updated_at = ? WHERE record_type = 'Message' AND record_id = ?",
+        body_html, now, target.not_nil!.id.not_nil!)
+      conn.exec(
+        "DELETE FROM message_search_index WHERE rowid = ?", target.not_nil!.id.not_nil!)
+      conn.exec(
+        "INSERT INTO message_search_index (rowid, body) VALUES (?, ?)",
+        target.not_nil!.id.not_nil!, plain)
+      # touch сообщения (аналог AR updated_at при update!)
+      target.not_nil!.touch
+    end
+
+    mid = target.not_nil!.id.not_nil!
+    message = Message.find?(mid).not_nil!
+    # by_bots update наследует MessagesController#update: broadcast_replace
+    # presentation (maintain_scroll, attributes — через broadcast_action_to).
+    broadcast_action_to([room, "messages"], :replace,
+      target: "presentation_message_#{mid}",
+      html: ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s)),
+      attributes: {"maintain_scroll" => "true"})
+    @message = message
+    render(template: "messages/by_bots/bot_show")
+  end
+
+  # DELETE /rooms/:id/:bot_key/messages/:message_id — удаление своего
+  # сообщения ботом (by_bots destroy: super — broadcast_remove, затем
+  # head :no_content; ensure_can_administer — создатель или админ).
+  def bot_destroy
+    bot = bot_from_key
+    unless bot
+      return render(plain: "Unauthorized", status: :unauthorized)
+    end
+    room = bot_room(bot)
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    unless room && message && message.room_id == room.id.not_nil!
+      return render(plain: "Not Found", status: :not_found)
+    end
+    if message.creator_id != bot.id
+      return render(plain: "Cannot delete this message", status: :forbidden)
+    end
+    room = room.not_nil!
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    mid = message.id.not_nil!
+    ActiveRecord::Base.connection.exec(
+      "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
+    ActiveRecord::Base.connection.exec(
+      "DELETE FROM message_search_index WHERE rowid=?", mid)
+    message.destroy
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+
+    broadcast_remove_to([room, "messages"], target: "message_#{mid}")
+    head(:no_content)
+  end
+
   # botUser(req) эталона: "<id>-<token>" → User (role=2, активный).
   private def bot_from_key : User?
     bot_key = params["bot_key"].to_s

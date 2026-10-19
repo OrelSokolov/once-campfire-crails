@@ -31,6 +31,9 @@ CRails.application.routes.draw do
       resource :custom_styles, only: [:edit, :update], controller: "custom_styles"
     end
   end
+  # resource :key, only: :update внутри resources :bots — PUT/PATCH
+  put   "/account/bots/:bot_id/key", to: "accounts/bots/keys#update"
+  patch "/account/bots/:bot_id/key", to: "accounts/bots/keys#update"
   get "/account", to: "accounts#edit"
   get "/account/custom_styles", to: "accounts/custom_styles#edit"
   get "/account/logo", to: "accounts/logos#show"
@@ -72,16 +75,24 @@ CRails.application.routes.draw do
     resources :messages, except: [:new], param: :message_id
     get "refresh", to: "rooms#refresh"
     get "involvement", to: "rooms#involvement"
+    # resource :settings, only: :show — в express общий handler для
+    # /rooms/:id/settings и /rooms/:id/involvement (routes.js:597):
+    # алиас GET-ветки rooms#involvement.
+    get "settings", to: "rooms#involvement"
     put "involvement", to: "rooms#update_involvement"
     get "@:message_id", to: "rooms#show", as: :at_message
 
     # Bot-API: /rooms/:id/:bot_key/messages (в Rails — scope path:
     # ":bot_key" внутри nested с controller: "messages/by_bots").
     scope path: ":bot_key", as: :bot do
-      post "messages", to: "messages/by_bots#bot_create"
-      get  "messages", to: "messages/by_bots#bot_index"
-      get  "messages/:message_id", to: "messages/by_bots#bot_show"
-      post "messages/:message_id/boosts", to: "messages/boosts/by_bots#bot_create"
+      post   "messages", to: "messages/by_bots#bot_create"
+      get    "messages", to: "messages/by_bots#bot_index"
+      get    "messages/:message_id", to: "messages/by_bots#bot_show"
+      patch  "messages/:message_id", to: "messages/by_bots#bot_update"
+      put    "messages/:message_id", to: "messages/by_bots#bot_update"
+      delete "messages/:message_id", to: "messages/by_bots#bot_destroy"
+      post   "messages/:message_id/boosts", to: "messages/boosts/by_bots#bot_create"
+      delete "messages/:message_id/boosts/:boost_id", to: "messages/boosts/by_bots#bot_destroy"
     end
   end
 

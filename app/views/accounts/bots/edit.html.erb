@@ -27,7 +27,7 @@
     </div>
     <button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
   </form>
-  <hr class="separator full-width margin-block-double"><div class="flex align-center gap justify-space-between"><form action="/account/bots/<%= @bot.not_nil!.id.not_nil! %>" method="post"><input type="hidden" name="_method" value="delete"><button class="btn txt--small btn--negative" aria-label="Delete this chat bot" data-turbo-confirm="Are you sure you want to permanently remove this bot from the account? This can’t be undone."><%= icon("trash.svg") %><%= icon("bot.svg") %></button></form>
+  <hr class="separator full-width margin-block-double"><div class="flex align-center gap justify-space-between"><form action="/account/bots/<%= @bot.not_nil!.id.not_nil! %>" method="post"><input type="hidden" name="_method" value="delete"><button class="btn txt--small btn--negative" aria-label="Delete this chat bot" data-turbo-confirm="Are you sure you want to permanently remove this bot from the account? This can’t be undone."><%= icon("trash.svg") %><%= icon("bot.svg") %></button></form><form action="/account/bots/<%= @bot.not_nil!.id.not_nil! %>/key" method="post"><input type="hidden" name="_method" value="put"><button class="btn full-width txt--small btn--negative" aria-label="Generate a new key" data-turbo-confirm="Are you sure you want to change the bot key? All usage of this bot must be updated."><%= icon("refresh.svg") %><%= icon("key.svg") %></button></form>
   </div>
 </section>
 <%= page_close %>

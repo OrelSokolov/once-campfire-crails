@@ -10,13 +10,7 @@ class Messages::Boosts::ByBotsController < ApplicationController
   @boost : Boost?
 
   def bot_create
-    bot_key = params["bot_key"].to_s
-    dash = bot_key.index('-')
-    bot = if dash && (bot_id = bot_key[0, dash].to_i64?)
-      User.where(
-        "id = ? AND bot_token = ? AND role = 2 AND status = 0",
-        bot_id, bot_key[(dash + 1)..]).take
-    end
+    bot = bot_from_key
     unless bot
       return render(plain: "Unauthorized", status: :unauthorized)
     end
@@ -61,5 +55,56 @@ class Messages::Boosts::ByBotsController < ApplicationController
         attributes: {"maintain_scroll" => "true"})
     end
     render(template: "messages/boosts/by_bots/bot_create", status: :created)
+  end
+
+  # DELETE /rooms/:id/:bot_key/messages/:message_id/boosts/:boost_id —
+  # снятие своего буста ботом (by_bots destroy: set_boost ищет по
+  # booster == бот, broadcast_remove boost_<id>, 204).
+  def bot_destroy
+    bot = bot_from_key
+    unless bot
+      return render(plain: "Unauthorized", status: :unauthorized)
+    end
+    bot = bot.not_nil!
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    room = message.try(&.room_id).try do |room_id|
+      Room.find?(room_id).try do |r|
+        Membership.where(
+          "room_id = ? AND user_id = ?", r.id.not_nil!, bot.id.not_nil!).take ? r : nil
+      end
+    end
+    unless message && room && params["id"].to_s == room.id.to_s
+      return render(plain: "Not Found", status: :not_found)
+    end
+    boost = Boost.where(
+      "id = ? AND message_id = ? AND booster_id = ?",
+      params["boost_id"].to_s.to_i64, message.id.not_nil!, bot.id.not_nil!).take
+    return head(:not_found) unless boost
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    boost_id = boost.id.not_nil!
+    Campfire::WriteQueue.perform do
+      # after_destroy коллбэк belongs_to :message, touch: true трогает
+      # messages.updated_at
+      boost.not_nil!.destroy
+    end
+
+    # by_bots destroy наследует broadcast_remove boosts_controller:
+    # remove по dom_id буста в стриме комнаты.
+    if (r = Room.find?(message.room_id.not_nil!))
+      broadcast_remove_to([r, "messages"], target: "boost_#{boost_id}")
+    end
+    render(plain: "", status: :no_content)
+  end
+
+  # botUser(req) эталона: "<id>-<token>" → User (role=2, активный).
+  private def bot_from_key : User?
+    bot_key = params["bot_key"].to_s
+    dash = bot_key.index('-')
+    if dash && (bot_id = bot_key[0, dash].to_i64?)
+      User.where(
+        "id = ? AND bot_token = ? AND role = 2 AND status = 0",
+        bot_id, bot_key[(dash + 1)..]).take
+    end
   end
 end

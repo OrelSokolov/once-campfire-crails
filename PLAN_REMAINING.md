@@ -144,6 +144,9 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ## 4. Управление пользователями аккаунта (`/account/users`)
 
+> **Сделано** (ранее; контроллер `app/controllers/accounts/users_controller.cr`,
+> роуты `patch/delete /account/users/:user_id` в `config/routes.cr`).
+
 ### Почему
 
 `resources :users` внутри `resource :account` не портированы: нет
@@ -208,6 +211,9 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ## 6. Ротация join-кода (`POST /account/join_code`)
 
+> **Сделано** (ранее; контроллер `app/controllers/accounts/join_codes_controller.cr`,
+> роут `post "/account/join_code"` в `config/routes.cr`).
+
 ### Почему
 
 `resource :join_code, only: :create` не портирован: код читается
@@ -229,6 +235,15 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
       новый — страницу регистрации.
 
 ## 7. Ротация ключа бота (`PUT /account/bots/:id/key`)
+
+> **Сделано** (2026-10-19). Роуты `put/patch /account/bots/:bot_id/key` →
+> `Accounts::Bots::KeysController#update` (require_admin; active_bots-lookup,
+> 404 если нет; `bot_token = Random::Secure.hex(6)` — генерация как при
+> создании бота; redirect `/account/bots`). Кнопка «Generate a new key»
+> (refresh/key-иконки, data-turbo-confirm) добавлена в
+> `app/views/accounts/bots/edit.html.erb` — 1:1 с edit.html.erb референса.
+> Смоук: не-админ — 403, аноним — редирект на логин; после PUT старый
+> bot_key — 401 на Bot-API, новый работает (tmp/plan-smoke).
 
 ### Почему
 
@@ -252,7 +267,11 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ## 8. `GET /rooms/:id/settings`
 
-### Почему
+> **Сделано** (2026-10-19). Роут `get "settings"` в `resources :rooms` →
+> `rooms#involvement` (GET-ветка, контракт express — общий handler).
+> Смоук: `/rooms/:id/settings` и `/rooms/:id/involvement` байт-идентичны.
+
+### Что делать
 
 `resource :settings, only: :show` (`config/routes.rb:75`) не
 портирован — страница настроек уведомлений комнаты. В express —
@@ -270,6 +289,20 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
       идентичный HTML для одного пользователя.
 
 ## 9. Bot-API: update/destroy сообщений, destroy бустов
+
+> **Сделано** (2026-10-19). Роуты `patch/put/delete
+> /rooms/:id/:bot_key/messages/:message_id` → `messages/by_bots#
+> bot_update/bot_destroy`; `delete
+> /rooms/:id/:bot_key/messages/:message_id/boosts/:boost_id` →
+> `messages/boosts/by_bots#bot_destroy`. Семантика as upstream: bot-аутентификация
+> (неверный ключ — 401), комната по membership бота (иначе 404),
+> ensure_can_administer — только свои сообщения (иначе 403). bot_update:
+> ActionText + FTS5 + touch, broadcast replace presentation
+> (maintain_scroll), ответ — bot_show JSON; bot_destroy: зачистка
+> action_text/FTS, broadcast_remove, 204; boost bot_destroy: свой буст
+> (booster == бот, иначе 404), broadcast_remove, 204. Смоук-ветки — все
+> зелёные (tmp/plan-smoke); broadcast-вызовы переиспользуют верифицированные
+> в OTHER_REFACTORING §1 хелперы turbo_cr.
 
 ### Почему
 
