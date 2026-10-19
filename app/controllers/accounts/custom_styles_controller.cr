@@ -24,7 +24,7 @@ class Accounts::CustomStylesController < ApplicationController
       account.custom_styles = styles.to_s
     end
     account.save!
-    redirect_to "/account/custom_styles/edit"
+    redirect_to edit_account_custom_styles_path
   end
 
   # Strong Parameters: textarea account[custom_styles].

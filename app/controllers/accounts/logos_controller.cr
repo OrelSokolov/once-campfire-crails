@@ -51,7 +51,7 @@ class Accounts::LogosController < ApplicationController
         end
       end
     end
-    redirect_to "/account/edit"
+    redirect_to edit_account_path
   end
 
   # Стоковая иконка (send_stock_icon): app-icon-192.png для :small,

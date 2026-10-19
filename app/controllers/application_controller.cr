@@ -47,7 +47,7 @@ abstract class ApplicationController < ActionController::Base
   end
 
   def require_authentication : Nil
-    redirect_to "/session/new" unless current_user
+    redirect_to new_session_path unless current_user
   end
 
   # Rails concerns/authorization.rb: ensure_can_administer — 403 для

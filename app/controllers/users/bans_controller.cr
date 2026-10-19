@@ -12,7 +12,7 @@ class Users::BansController < ApplicationController
     return unless user
     user.not_nil!.ban
     Campfire::PageCache.invalidate! # write: сброс page+identity кэшей
-    redirect_to "/users/#{user.not_nil!.id.not_nil!}"
+    redirect_to user_path(user.not_nil!.id.not_nil!)
   end
 
   # destroy → @user.unban, redirect_to @user.
@@ -21,7 +21,7 @@ class Users::BansController < ApplicationController
     return unless user
     user.not_nil!.unban
     Campfire::PageCache.invalidate! # write: сброс page+identity кэшей
-    redirect_to "/users/#{user.not_nil!.id.not_nil!}"
+    redirect_to user_path(user.not_nil!.id.not_nil!)
   end
 
   # set_user: User.find(params[:user_id]) — включая забаненных (чтобы

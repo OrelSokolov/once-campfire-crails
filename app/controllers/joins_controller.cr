@@ -19,7 +19,7 @@ class JoinsController < ApplicationController
               Account.where("join_code = ?", code.gsub(' ', '+')).take
     return head(:not_found) unless account
     if current_user
-      return redirect_to "/"
+      return redirect_to root_path
     end
     @account = account
   end
@@ -61,7 +61,7 @@ class JoinsController < ApplicationController
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
     cookies.signed.set("session_token", session.token.not_nil!,
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
-    redirect_to "/"
+    redirect_to root_path
   end
 
   private def nested(key : String) : String

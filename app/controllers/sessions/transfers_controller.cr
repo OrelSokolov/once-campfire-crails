@@ -23,6 +23,6 @@ class Sessions::TransfersController < ApplicationController
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
     cookies.signed.set("session_token", session.token.not_nil!,
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
-    redirect_to "/"
+    redirect_to root_path
   end
 end

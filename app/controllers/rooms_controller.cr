@@ -228,7 +228,7 @@ class RoomsController < ApplicationController
     Membership.where("room_id = ?", rid).delete_all
     Message.where("room_id = ?", rid).delete_all
     room.destroy
-    redirect_to "/"
+    redirect_to root_path
   end
 
   # Rails rooms_controller.rb: ensure_permission_to_create_rooms — при
@@ -265,7 +265,7 @@ class RoomsController < ApplicationController
     end
 
     broadcast_sidebar_link(room)
-    redirect_to "/rooms/#{room.id}"
+    redirect_to room_path(room.id)
   end
 
   # Общее update Rooms::Opens/Closeds: переименование + sync memberships по
@@ -302,7 +302,7 @@ class RoomsController < ApplicationController
     end
 
     broadcast_sidebar_link(room)
-    redirect_to "/rooms/#{room.id}"
+    redirect_to room_path(room.id)
   end
 
   # user_ids[] из формы (формат action_pack: Scalar/Array/Parameters).

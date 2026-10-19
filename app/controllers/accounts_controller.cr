@@ -59,7 +59,7 @@ class AccountsController < ApplicationController
       account.restrict_room_creation_to_administrators = value.to_s == "true"
     end
     account.save!
-    redirect_to "/account/edit"
+    redirect_to edit_account_path
   end
 
   private def set_account : Account

@@ -5,6 +5,11 @@
 перестаёт хардкодить пути строками (~сотня мест: 26 `redirect_to`,
 23 `action=`, ~21 рабочий `href=`, 34 интерполяции в ChatLayout).
 
+> **Статус** (2026-10-19). Сделаны этапы 0, 1, 2, 3 (route_set wiring)
+> и 4.1 (redirect_to-батч). Остались: 4.2–4.4 (form action=, href=,
+> ChatLayout), этап 5 (чистка ручных хелперов). Детали — пометки
+> «Сделано» по этапам ниже.
+
 ## Отправная точка (что уже есть)
 
 - `Route` хранит `name`, сегменты и `defaults`
@@ -67,6 +72,18 @@ end
 
 ### 0. Аудит (без кода)
 
+> **Сделано** (2026-10-19). Дампы `bin/crails routes` порта и
+> `bin/rails routes` эталона (`tmp/routes-new.txt`): множества имён
+> идентичны — 21 имя (root, first_run, new_session, edit_account,
+> account_bots, new/edit_account_bot, edit_account_custom_styles,
+> user, room, room_messages, room_message, edit_room_message,
+> room_at_message, message_boosts, new_message_boost,
+> new/edit_rooms_open, new/edit_rooms_closed, new_rooms_direct).
+> Дублей имён в таблице нет. Конфликты с ручными хелперами
+> (`message_path`, `avatar_path`, `room_edit_path`, `fresh_*`,
+> `blob_url`) не проявились: явные методы тенят сгенерированные —
+> решения по каждому отложены на этап 5.
+
 - Дамп имён: `bin/crails routes` уже печатает таблицу
   (`railties_cr.cr:611`) — снять список `name != nil` и сверить с
   `bin/rails routes` эталона (`once-campfire/`); расхождения имен
@@ -81,6 +98,28 @@ end
   opens/closeds — оставить навсегда).
 
 ### 1. Шард `action_pack_cr` (локально, первым)
+
+> **Сделано** (2026-10-19). `RouteSet#named_routes` (ленивый индекс,
+> последнее имя выигрывает) + `RouteSet#path_for(name, args)` —
+> позиционные аргументы в динамические сегменты слева направо
+> (`URI.encode_www_form`, префикс `@:message_id` сохраняет `@`),
+> остаток → query (key=value, как Rails), `ArgumentError` на
+> неизвестное имя / нехватку аргументов. Новый
+> `src/routes/url_helpers.cr`: `macro method_missing` генерирует
+> методы только для имён с суффиксом `_path`/`_url` (прочие —
+> compile error с внятным текстом); `class_property route_set`
+> (railties_cr назначает `CRails.application.routes` в
+> `Application#initialize`) и `default_url_origin` (фолбэк `*_url`);
+> origin для `*_url` — compile-time выбор по `@type.methods`:
+> `origin` (контроллеры) → `jb_origin` (Jbuilder) → дефолт.
+> `include` в `ActionController::Base` (base.cr). Спеки:
+> `spec/action_pack_spec.cr` (базовые/вложенные/`@`-префикс/query/
+> лишний позиционный → query, to_param, `_url` c origin и фолбэком,
+> неизвестное имя, неименованный маршрут, нехватка аргументов) —
+> suite шарда 176 примеров зелёные. Особенность реализации:
+> `responds_to?(:origin)` в рантайм-ветвлении не годится (мёртвая
+> ветка компилируется и триггерит method_missing) — поэтому
+> compile-time `@type.methods`.
 
 Файлы:
 
@@ -113,12 +152,33 @@ end
 
 ### 2. Публикация шарда (процесс из AGENTS.md)
 
+> **Сделано** (2026-10-19). `action_pack.cr` **v0.2.6** (02d3c19:
+> UrlHelpers + попутно зафиксирован отдельным коммитом 0ed73f5 чужой
+> WIP source-location роутов, лежавший в рабочем дереве myshards);
+> `railties.cr` **v0.1.13** (54cdd26: wiring `UrlHelpers.route_set`
+> в `Application#initialize`, рабочий чекаут `~/myshards/railties.cr`
+> развёрнут по конвенции), монорепо `rails.cr` засинкано (4f669a1).
+> Проект: `shards update railties_cr action_pack_cr` → 0.2.6/0.1.13,
+> сборка + смоук зелёные. Известное: спек
+> `integration_spec.cr:137 get_with_params` в standalone-railties
+> падает и ДО наших правок (на 0.1.12 + action_pack 0.2.5) — фикс
+> есть только в монорепо (3c801c4 «Fix two stale test failures»),
+> standalone-спек старый; не регресс.
+
 После зелёных спеков: патч в `~/myshards/action_pack.cr`, bump
 version `vX.Y.Z`, publish; в проекте подтянуть опубликованную версию
 в `shard.yml`, протестировать снова, `rake build:crails`, коммит и
 пуш если всё зелёное.
 
 ### 3. Подключение в приложении
+
+> **Сделано** (2026-10-19, частично). `railties_cr.cr`
+> `Application#initialize` назначает
+> `CRails::Routes::UrlHelpers.route_set = @routes` — контроллеры и
+> вьюхи получают хелперы автоматически. Осталось (по мере
+> надобности): `include` в `JbuilderTemplate` (origin из
+> `jb_origin` уже поддержан хелпером) и сеттинг
+> `default_url_origin` из ENV/конфига для jobs.
 
 - Контроллеры/вьюхи — уже через `include` из `base.cr`.
 - Jbuilder-партиалы (контекст без контроллера, `src/app.cr:41-54`,
@@ -137,6 +197,25 @@ version `vX.Y.Z`, publish; в проекте подтянуть опублико
 1. `redirect_to` в контроллерах (26 мест / 15 файлов):
    `redirect_to "/rooms/#{room.id}/involvement"` → `redirect_to
    room_involvement_path(room.id)`.
+
+   > **Сделано** (2026-10-19, 24 из 26 мест). Заменены все строки с
+   > именованными роутами: `"/"` → `root_path`, `"/first_run"` →
+   > `first_run_path`, `"/session/new"` → `new_session_path`,
+   > `"/account/edit"` → `edit_account_path`, `"/account/bots"` →
+   > `account_bots_path`, `"/account/custom_styles/edit"` →
+   > `edit_account_custom_styles_path`, `"/rooms/#{id}"` →
+   > `room_path(room.id)`, вложенный `room_message_path(..., mid)`,
+   > `message_boosts_path(mid)`, `user_path(user...id)`. НЕ заменены
+   > (роуты без имени — хелпера нет, как в Rails):
+   > `"/users/me/profile"` (profiles#update), `"/rooms/#{id}/involvement"`
+   > (rooms#update_involvement), `"/searches..."` — 5 мест, вернуться
+   > при появлении имён (в Rails это `profile_path` и named
+   > involvement-роуты). Верификация: сборка + HTTP-смоук
+   > (`tmp/urlhelpers-smoke`: сервер на копии bf9, сессия
+   > `tmp/urlhelpers_smoke_session.cr`) — все Location-заголовки
+   > (`/session/new`, `/account/edit`, `/users/<id>` ban/unban,
+   > `/rooms/<id>` welcome, `/` logout) байт-в-байт равны старым
+   > строкам.
 2. `action=` в ERB-формах (23 / 17), включая `_form.html.erb:1` с
    конкатенацией.
 3. `href=` в рабочих вьюхах (~21, не трогая asset-ссылки

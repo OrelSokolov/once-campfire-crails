@@ -14,7 +14,7 @@ class Accounts::UsersController < ApplicationController
     target = @target.not_nil!
     target.role = role == "administrator" ? 1 : 0
     target.save!
-    redirect_to "/account/edit"
+    redirect_to edit_account_path
   end
 
   # User#deactivate: статус deactivated + удаление сессий (разлогин).
@@ -24,7 +24,7 @@ class Accounts::UsersController < ApplicationController
     target.status = 1
     target.save!
     Session.where("user_id = ?", target.id.not_nil!).delete_all
-    redirect_to "/account/edit"
+    redirect_to edit_account_path
   end
 
   # set_user: User.active.find (деактивированных/забаненных менять нельзя).

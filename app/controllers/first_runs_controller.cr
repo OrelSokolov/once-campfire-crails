@@ -18,16 +18,16 @@ class FirstRunsController < ApplicationController
     user = FirstRun.create!(user_params)
     start_new_session_for user
 
-    redirect_to "/"
+    redirect_to root_path
   rescue ActiveRecord::RecordNotUnique
-    redirect_to "/"
+    redirect_to root_path
   rescue ActiveRecord::RecordInvalid | ActionController::ParameterMissing
     # render(plain:) сбрасывает response.status — передаём аргументом
     render(plain: "invalid first run parameters", status: :unprocessable_entity)
   end
 
   private def prevent_repeats
-    redirect_to "/" if Account.any?
+    redirect_to root_path if Account.any?
   end
 
   # avatar в permit-списке — паритет референса; загрузка аватара

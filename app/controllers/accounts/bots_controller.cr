@@ -45,7 +45,7 @@ class Accounts::BotsController < ApplicationController
         involvement: "mentions", connections: 0,
         created_at: now, updated_at: now).save!
     end
-    redirect_to "/account/bots"
+    redirect_to account_bots_path
   end
 
   # GET /account/bots — список ботов с curl-командами по комнатам
@@ -95,7 +95,7 @@ class Accounts::BotsController < ApplicationController
     bot.updated_at = Time.utc
     bot.save!
     sync_webhook(bot.id.not_nil!, nested("webhook_url"))
-    redirect_to "/account/bots"
+    redirect_to account_bots_path
   end
 
   # DELETE /account/bots/:id — удаление бота (bot_form.eta delete-панель).
@@ -108,7 +108,7 @@ class Accounts::BotsController < ApplicationController
     ActiveRecord::Base.connection.exec(
       "DELETE FROM webhooks WHERE user_id = ?", bot.id.not_nil!)
     bot.destroy
-    redirect_to "/account/bots"
+    redirect_to account_bots_path
   end
 
   # ————— приватное контроллера (не для шаблонов) —————

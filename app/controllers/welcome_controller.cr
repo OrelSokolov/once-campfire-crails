@@ -20,7 +20,7 @@ class WelcomeController < ApplicationController
     room ||= default_room(user)
 
     if room
-      redirect_to("/rooms/#{room.id.not_nil!}")
+      redirect_to(room_path(room.id.not_nil!))
     end
   end
 

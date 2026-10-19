@@ -7,6 +7,10 @@
 
 ## 1. Named route helpers: `*_path` / `*_url`
 
+> **Сделано частично** (2026-10-19) — см. `URL_HELPERS_GENERATOR.md`
+> (этапы 0/1/2/3 и redirect_to-батч выполнены; остались миграция
+> `action=`/`href=`/ChatLayout и чистка ручных хелперов).
+
 **Статус в CRails**: отсутствует. `CRails::Routes::RouteSet` хранит
 имена маршрутов (`route.name`, объявляются через `as:` / `resources`),
 но методов-хелперов не генерирует — в `lib/railties_cr/src` нет ни

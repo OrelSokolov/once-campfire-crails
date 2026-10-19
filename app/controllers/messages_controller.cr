@@ -230,7 +230,7 @@ class MessagesController < ApplicationController
       target: "presentation_message_#{mid}",
       html: ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s)),
       attributes: {"maintain_scroll" => "true"})
-    redirect_to "/rooms/#{room.id.not_nil!}/messages/#{mid}"
+    redirect_to room_message_path(room.id.not_nil!, mid)
   end
 
   private def message_body_param : String
