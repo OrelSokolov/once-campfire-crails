@@ -1,5 +1,9 @@
 abstract class ApplicationController < ActionController::Base
   include ViewHelpers
+  # turbo-rails engine.rb подключает Turbo::Streams::Broadcasts в
+  # ActionController::Base — контроллеры зовут broadcast_*_to напрямую
+  # (транспорт: Turbo.cable = CampfireCable, тот же, что у Campfire.broadcast).
+  include Turbo::Streams::Broadcasts
 
   @db_epoch : String? = nil
   @identity_entry : Campfire::IdentityCache::Entry? = nil

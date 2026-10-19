@@ -369,11 +369,10 @@ class RoomsController < ApplicationController
       io << %(" style="--column-gap: 0.5em" href="/rooms/) << room.id.not_nil!.to_s << %(">)
       io << %(<span class="overflow-ellipsis">) << HTML.escape(room.name.to_s) << %(</span></a>)
     end
-    stream_html = %(<turbo-stream action="prepend" target="shared_rooms"><template>)
-    stream_html += link
-    stream_html += %(</template></turbo-stream>)
-    Campfire.broadcast(
-      Turbo::Streams::StreamName.stream_name_from(["rooms"]),
-      stream_html)
+    # opens_controller.rb:50: broadcast_prepend_to :rooms, target:
+    # :shared_rooms, partial: "users/sidebars/rooms/shared" (link — ручной
+    # аналог партиала _shared; id list_rooms_<kind>_<id> — как DOM("list")
+    # референса, чтобы Turbo дедуплицировал при переименовании).
+    broadcast_prepend_to(["rooms"], target: "shared_rooms", html: link)
   end
 end

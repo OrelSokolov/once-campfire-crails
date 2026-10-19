@@ -55,11 +55,13 @@ class Messages::Boosts::ByBotsController < ApplicationController
     end
 
     if (entry = ChatLayout.boosts_for([mid])[mid]?.try(&.last?))
-      stream = %(<turbo-stream action="append" target="boosts_message_#{mid}" maintain_scroll="true"><template>) +
-        ChatLayout.boost_dom(mid, entry) + %(</template></turbo-stream>\n)
-      Campfire.broadcast(
-        Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-        stream)
+      # Как Messages::BoostsController#create (broadcast_create): \n
+      # партиала _boost.html.erb — в template, maintain_scroll перед
+      # action/target как в геме (attributes — через broadcast_action_to).
+      broadcast_action_to([room, "messages"], :append,
+        target: "boosts_message_#{mid}",
+        html: ChatLayout.boost_dom(mid, entry) + "\n",
+        attributes: {"maintain_scroll" => "true"})
     end
     render(template: "messages/boosts/by_bots/bot_create", status: :created)
   end

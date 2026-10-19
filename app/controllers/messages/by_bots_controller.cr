@@ -97,14 +97,13 @@ class Messages::ByBotsController < ApplicationController
     message = MessageCreator.create!(room, bot, body_html, client_message_id,
       base_url: origin)
 
-    turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
-      io << ChatLayout.message_dom(message, room, bot, base_url: origin)
-      io << %(</template></turbo-stream>\n)
-    end
-    Campfire.broadcast(
-      Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-      turbo_frame)
+    # broadcast_create референса: append в [room, :messages] (cable-фрейм —
+    # без хвостового \n); HTTP-ответ — create.turbo_stream.erb-аналог (тег + \n).
+    message_html = ChatLayout.message_dom(message, room, bot, base_url: origin)
+    broadcast_append_to([room, "messages"],
+      target: "messages_#{room.dom_id}", html: message_html)
+    turbo_frame = %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>) +
+      message_html + %(</template></turbo-stream>\n)
     render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
   end
 

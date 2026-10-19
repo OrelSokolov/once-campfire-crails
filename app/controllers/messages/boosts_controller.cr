@@ -82,13 +82,16 @@ class Messages::BoostsController < ApplicationController
     if room
       entry = ChatLayout.boosts_for([mid])[mid]?.try(&.last?)
       if entry
-        # _boost.html.erb заканчивается переводом строки — Rails вставляет
-        # его вместе с партиалом, DOM после append сохраняет \n перед </div>.
-        stream = %(<turbo-stream action="append" target="boosts_message_#{mid}" maintain_scroll="true"><template>) +
-          ChatLayout.boost_dom(mid, entry) + "\n" + %(</template></turbo-stream>\n)
-        Campfire.broadcast(
-          Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-          stream)
+        # boosts_controller.rb#broadcast_create: broadcast_append_to room,
+        # :messages, target: dom_id(message, :boosts), partial: boost
+        # (_boost.html.erb заканчивается \n — идёт вместе с партиалом),
+        # attributes: { maintain_scroll: true }. ActionHelper ставит
+        # maintain_scroll ПЕРЕД action/target — как **attributes гема;
+        # в turbo_cr attributes пробрасывает broadcast_action_to.
+        broadcast_action_to([room, "messages"], :append,
+          target: "boosts_message_#{mid}",
+          html: ChatLayout.boost_dom(mid, entry) + "\n",
+          attributes: {"maintain_scroll" => "true"})
       end
     end
     redirect_to "/messages/#{mid}/boosts"
@@ -116,11 +119,10 @@ class Messages::BoostsController < ApplicationController
         "UPDATE messages SET updated_at = ? WHERE id = ?", now, mid)
     end
 
+    # boosts_controller.rb#broadcast_remove: broadcast_remove_to room,
+    # :messages (target — dom_id буста).
     if (room = Room.find?(message.room_id.not_nil!))
-      stream = %(<turbo-stream action="remove" target="boost_#{boost_id}"></turbo-stream>\n)
-      Campfire.broadcast(
-        Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-        stream)
+      broadcast_remove_to([room, "messages"], target: "boost_#{boost_id}")
     end
     render(plain: "", status: :no_content)
   end

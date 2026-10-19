@@ -77,14 +77,13 @@ module MessageCreator
   def self.broadcast(room : Room, message : Message, author : User,
                      attachment : ChatLayout::Attachment? = nil,
                      base_url : String = "") : Nil
-    turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
-      io << ChatLayout.message_dom(message, room, author, attachment, base_url: base_url)
-      io << %(</template></turbo-stream>\n)
-    end
-    Campfire.broadcast(
-      Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-      turbo_frame)
+    # Message::Broadcasts#broadcast_create референса: broadcast_append_to
+    # room, :messages, target: [ room, :messages ], html: … Cable-фрейм —
+    # без хвостового \n (он только в HTTP-ответе create.turbo_stream.erb,
+    # который собирает контроллер).
+    Turbo::StreamsChannel.broadcast_append_to([room, "messages"],
+      target: "messages_#{room.dom_id}",
+      html: ChatLayout.message_dom(message, room, author, attachment, base_url: base_url))
   end
 
   # storeUpload + attachMessage (storage.js/routes.js): файл через

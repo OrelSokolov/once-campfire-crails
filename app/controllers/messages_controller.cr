@@ -171,12 +171,11 @@ class MessagesController < ApplicationController
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
 
-    stream = String.build do |io|
-      io << %(<turbo-stream action="remove" target="message_#{mid}"></turbo-stream>\n)
-    end
-    Campfire.broadcast(
-      Turbo::Streams::StreamName.stream_name_from([room, "messages"]), stream)
-    render(html: stream, content_type: "text/vnd.turbo-stream.html")
+    # messages_controller.rb#destroy: broadcast_remove (cable-фрейм — без
+    # хвостового \n); HTTP-ответ — destroy.turbo_stream.erb (тег + \n файла).
+    broadcast_remove_to([room, "messages"], target: "message_#{mid}")
+    render(html: %(<turbo-stream action="remove" target="message_#{mid}"></turbo-stream>\n),
+      content_type: "text/vnd.turbo-stream.html")
   end
 
   # PATCH /rooms/:id/messages/:message_id — обновление тела: rich text,
@@ -221,12 +220,15 @@ class MessagesController < ApplicationController
 
     message = Message.find?(message.id.not_nil!).not_nil!
     mid = message.id.not_nil!
-    presentation = ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s))
-    stream = %(<turbo-stream action="replace" target="presentation_message_#{mid}" maintain_scroll="true"><template>) +
-      presentation + %(</template></turbo-stream>\n)
-    Campfire.broadcast(
-      Turbo::Streams::StreamName.stream_name_from([room, "messages"]),
-      stream)
+    # messages_controller.rb#update: broadcast_replace_to @room, :messages,
+    # target: [ @message, :presentation ], partial: "messages/presentation",
+    # attributes: { maintain_scroll: true } (attributes — через
+    # broadcast_action_to); presentation_dom уже кончается \n, как
+    # _presentation.html.erb.
+    broadcast_action_to([room, "messages"], :replace,
+      target: "presentation_message_#{mid}",
+      html: ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s)),
+      attributes: {"maintain_scroll" => "true"})
     redirect_to "/rooms/#{room.id.not_nil!}/messages/#{mid}"
   end
 

@@ -7,40 +7,47 @@
 
 ## 1. Turbo-stream бродкасты строками → `broadcast_*_to` (turbo_cr)
 
-`lib/turbo_cr/src/broadcasts.cr`: `broadcast_append_to /
-broadcast_replace_to / broadcast_remove_to / broadcast_prepend_to /
-broadcast_refresh_to(streamables, target:, targets:, content:, html:,
-partial:, attributes:)` — включая `attributes` (maintain_scroll) и
-подпись stream-имени через `stream_name_from` внутри.
+**Сделано** (2026-10-19). `ApplicationController` включает
+`Turbo::Streams::Broadcasts` (как turbo-rails engine.rb в
+ActionController::Base); все 8 ручных `Campfire.broadcast` заменены:
 
-Ручные места (9): `boosts_controller` ×3 (create append, bot_create
-append, destroy remove), `messages_controller` ×4, `rooms_controller`,
-`message_creator`. Сделано: `directs_controller` — `Membership` включает
-`Turbo::Broadcastable`, create зовёт `membership.broadcast_prepend_to
-[user, "rooms"], target: :direct_rooms, partial: "users/sidebars/rooms/
-direct"` (local `membership` Broadcastable подставляет сам); партиал —
-`app/views/users/sidebars/rooms/_direct.html.erb` (ChatERB,
-`compile_partials`), рендер по имени — через `Turbo.partial_renderer`
-(src/app.cr). Транспорт: broadcast turbo_cr идёт через `Turbo.cable`
-— это `CampfireCable` (config/cable.cr), доставляющий локально + в
-шину CableBus, так что замена эквивалентна `Campfire.broadcast`.
+- `boosts_controller` ×2 (create append + maintain_scroll, destroy
+  remove target `boost_<id>`);
+- `messages_controller` ×2 (destroy remove, update replace
+  presentation + maintain_scroll);
+- `messages/by_bots#bot_create` (append message);
+- `messages/boosts/by_bots#bot_create` (append boost);
+- `message_creator.broadcast` (append message,
+  `Turbo::StreamsChannel.broadcast_append_to` — статический контекст);
+- `rooms_controller#broadcast_sidebar_link` (prepend shared_rooms).
 
-До:
-```crystal
-stream = %(<turbo-stream action="append" target="boosts_message_#{mid}" maintain_scroll="true"><template>) +
-  ChatLayout.boost_dom(mid, entry) + %(</template></turbo-stream>\n)
-Campfire.broadcast(Turbo::Streams::StreamName.stream_name_from([room, "messages"]), stream)
-```
-После:
-```crystal
-broadcast_append_to([room, "messages"], target: "boosts_message_#{mid}",
-  html: ChatLayout.boost_dom(mid, entry),
-  attributes: {"maintain_scroll" => "true"})
-```
+Нюансы реализации:
 
-Проверить перед заменой: broadcast-хелпер кладёт в шину тот же транспорт
-(`Campfire.broadcast` / CableBus) и тот же байт-формат тега
-(`attributes` на `<turbo-stream>`, `<template>`-обёртка).
+- `attributes` (maintain_scroll) в turbo_cr пробрасывает только
+  `broadcast_action_to` — вызовы с атрибутами идут через него
+  (`broadcast_action_to(streamables, :append/:replace, ...)`).
+  Кандидат на патч шарда: прокинуть `attributes` в
+  `broadcast_append_to`/`broadcast_replace_to`, как в turbo-rails.
+- Байтовая сверка с оракулом (gem turbo-rails 30cd8fcc,
+  `turbo_stream_action_tag` + ActionView::TagHelper; фиксация вывода —
+  `tmp/verify_broadcast_tags.cr`): новые теги == оракул байт-в-байт.
+  При этом СТАРЫЕ ручные строки расходились с оракулом по двум пунктам
+  — замена их починила:
+  1. порядок атрибутов: гем ставит `**attributes` (maintain_scroll)
+     ПЕРЕД action/target, ручные строки — после;
+  2. хвостовой `\n` после `</turbo-stream>`: в референсе он есть
+     только в HTTP-ответах turbo_stream-шаблонов (перевод строки в
+     конце ERB-файла: create/destroy.turbo_stream.erb), cable-фреймы
+     его не содержат. HTTP-тела (messages create/destroy,
+     by_bots bot_create) оставлены вручную байт-в-байт — это аналоги
+     turbo_stream-шаблонов, не cable-фреймы.
+- В `boosts/by_bots#bot_create` добавлен потерянный `\n` партиала
+  `_boost.html.erb` в template (как в boosts_controller#create).
+- Рантайм-смоук: сервер на копии bf9-БД, подписка на
+  Turbo::StreamsChannel комнаты, POST буста — захваченный ws-фрейм
+  `<turbo-stream maintain_scroll="true" action="append"
+  target="boosts_message_<id>"><template>…boost_dom\n…
+  </template></turbo-stream>` — SMOKE OK (tmp/boost_broadcast_smoke.js).
 
 ## 2. Raw-SQL touch → `belongs_to ..., touch: true`
 
