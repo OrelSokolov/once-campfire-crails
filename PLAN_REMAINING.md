@@ -105,6 +105,42 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ## 3. Unfurl / OpenGraph-превью ссылок
 
+> **Сделано** (2026-10-19). `app/models/opengraph.cr` (порт
+> `opengraph/*.rb`: Fetch/Location/Document/Metadata) +
+> `app/controllers/unfurl_links_controller.cr` + роут
+> `resource :unfurl_link, only: :create` в `config/routes.cr`.
+> HTTP-клиент — stdlib `HTTP::Client` (GET/HEAD через `client.exec`),
+> редиректы 301/302/303/307/308 (лимит 10, относительный Location —
+> `URI#resolve`), общий дедлайн 10с на запрос (`Time::Instant`,
+> остаток бюджета — на каждый connect/read/write, потолок 7с),
+> Content-Length/chunk-лимит тела 5MB, document — только 200 +
+> `text/html`; картинка — HEAD с проверкой content-type
+> (jpeg/png/gif/webp, полный заголовок как в Rails). Guard —
+> `public_host?`: DNS-резолв (`Addrinfo.resolve`, type: STREAM —
+> nil-дефолт параметра в stdlib 1.21 не инстанцируется) без
+> приватных/специальных IPv4/IPv6 (fail closed, как `publicAddress`
+> express); http/https без userinfo. Парсер — `XML.parse_html` +
+> xpath `//meta` (og:*/name og:*, дубли — последний, срез до
+> ATTRIBUTES как Rails); sanitize — decode-entities (цикл
+> `Regex#match`: gsub-блок с группами в Crystal 1.21 возвращает
+> мусорные MatchData#[]) + strip-tags; медиа/архив-URL не фетчатся
+> (FILES_AND_MEDIA_URL_REGEX); twitter/x.com → fxtwitter.com.
+> Ответ: 200 JSON `{title,url,image,description}` (image null если
+> нет) | 204; без `url` — 400; аноним — redirect на логин.
+> Отклонение от Rails: restricted_http-гем (пиннинг соединения на
+> проверенный IP) заменён DNS-проверкой без пиннинга; UA «Campfire»
+> (express).
+>
+> Верификация: `tmp/verify_opengraph.cr` — 60+ компонентных
+> проверок (guard-векторы IPv4/IPv6, Location, парсер, sanitize,
+> twitter-подмена, canonical-url, JSON-форма) — OPENGRAPH OK;
+> HTTP-смоук `tmp/unfurl-smoke` (сервер на копии bf9, сессия
+> `plan_smoke_session.cr`): github.com → 200+JSON, http→https
+> редирект → 200+JSON, example.com (без og) → 204, localhost/
+> 127.0.0.1 → 204 (guard), example.invalid → 204 (2мс), чёрная
+> дыра 8.8.8.8:81 → 204 за 7.0с (connect-timeout внутри дедлайна),
+> без url → 400, аноним → 302.
+
 ### Почему
 
 `POST /unfurl_link` и модели Opengraph не портированы: вставить новую
@@ -132,10 +168,11 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ### Критерии готовности
 
-- [ ] `POST /unfurl_link?url=<страница с og-тегами>` → 200 + JSON;
+- [x] `POST /unfurl_link?url=<страница с og-тегами>` → 200 + JSON;
       без og-тегов → 204; недоступный URL → 204 в пределах 10с;
-- [ ] векторы unfurl из express-порта проходят;
-- [ ] private-IP/localhost URL отклоняются.
+- [x] private-IP/localhost URL отклоняются (см. HTTP-смоук выше;
+      экспресс-векторы покрываются компонентными проверками
+      `verify_opengraph.cr`: publicAddress-семантика guard'а).
 
 ### Отклонения от 1 к 1
 

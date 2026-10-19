@@ -111,6 +111,10 @@ CRails.application.routes.draw do
   get "/rails/active_storage/blobs/redirect/:token/:filename", to: "active_storage#blob"
   get "/rails/active_storage/representations/redirect/:token/:variation/:filename", to: "active_storage#representation"
 
+  # unfurl_link: ресурс только create — og-метаданные вставленной
+  # ссылки (unfurl_controller.js шлёт POST {url}).
+  resource :unfurl_link, only: [:create]
+
   # GET /searches у порта — searches#show (в Rails resources даёт index).
   get "/searches", to: "searches#show"
   post "/searches", to: "searches#create"
