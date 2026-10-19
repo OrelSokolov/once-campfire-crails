@@ -6,4 +6,4 @@
 source "https://rubygems.org"
 
 gem "terminal-table" # таблицы `rake report`
-gem "twinshot", path: "/home/oleg/twinshot" # 1:1-парити артефактов (capybara-tests)
+gem "twinshot"

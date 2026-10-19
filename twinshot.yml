@@ -14,6 +14,30 @@ current:
 png:
   max_diff_ratio: 0.002
 
+# Сравнение исходников: rake code:oracle / code:current копируют файлы дерева
+# (вне .gitignore) в общий формат <имя>.code.txt — построчный diff кода
+# crails против Rails-оригинала (доля совпавших файлов по стилю).
+# env -u …: twinshot активируется через bundler корневого Gemfile и прокидывает
+# RUBYOPT/BUNDLE_* в дочерний rake, где его нет в бандле (как harness_env).
+groups:
+  code:
+    oracle:
+      path: code-artifacts/oracle
+      generate: env -u RUBYOPT -u BUNDLE_GEMFILE -u BUNDLE_BIN_PATH -u BUNDLER_SETUP rake code:oracle
+    current:
+      path: code-artifacts/current
+      generate: env -u RUBYOPT -u BUNDLE_GEMFILE -u BUNDLE_BIN_PATH -u BUNDLER_SETUP rake code:current
+
 soft_check:
   - messaging/test_custom_boost_with_text/custom-boost.png
   - sidebar/test_narrow_viewport_renders_the_mobile_layout/mobile.png
+
+  # Путь в soft_check — относительный путь внутри дерева группы (без префикса
+  # имени группы): артефакты лежат в code-artifacts/<side>/capybara-tests/...,
+  # поэтому пишем "capybara-tests/*", а не "code/capybara-tests/*".
+  - capybara-tests/*
+  - docs/*
+  - test/*
+  - vendor/*
+  - taks/*
+  - db/migrate/*

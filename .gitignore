@@ -34,6 +34,9 @@ db/*.sqlite3-wal
 
 benchmarks/
 
+# Снапшоты исходников для twinshot-группы code (rake code:oracle / code:current)
+/code-artifacts/
+
 once-campfire/
 
 # Локальный override шардов (dev): теги не запушены

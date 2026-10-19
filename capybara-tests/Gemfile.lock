@@ -1,7 +1,7 @@
 PATH
   remote: /home/oleg/twinshot
   specs:
-    twinshot (1.1.0)
+    twinshot (1.2.0)
       colorize (~> 1.1)
       diff-lcs (~> 2.0)
       nokogiri (~> 1.16)

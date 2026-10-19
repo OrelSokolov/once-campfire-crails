@@ -4,6 +4,8 @@ class User < ActiveRecord::Base
   has_many :messages, foreign_key: "creator_id"
   has_many :searches, foreign_key: "user_id", class_name: "Search"
 
+  preloadable_attachment :avatar
+
   # user.rb / user/bot.rb референса: ordered, active (bannable),
   # active_bots (active.where(role: :bot); в порте role=2, status=0).
   scope(:active)     { where("status = 0") }
@@ -23,14 +25,6 @@ class User < ActiveRecord::Base
       return nil
     end
     bcrypt.verify(password) ? user : nil
-  end
-
-  def avatar_blob : ActiveStorageBlob?
-    ActiveStorageAttachment
-      .where("record_type = ? AND record_id = ? AND name = ?", "User", id.not_nil!, "avatar")
-      .take.try do |attachment|
-      ActiveStorageBlob.find(attachment.blob_id.not_nil!)
-    end
   end
 
   # Единственный webhook бота (таблица webhooks; user_id, url).
