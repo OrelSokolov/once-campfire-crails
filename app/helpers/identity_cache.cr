@@ -10,8 +10,8 @@
 module Campfire
   class IdentityCache
     class Entry
-      getter session : Session
-      getter user : User?
+      attr_reader session : Session
+      attr_reader user : User?
 
       def initialize(@session, @user)
       end

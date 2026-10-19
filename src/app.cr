@@ -39,7 +39,7 @@ require "../app/jobs/**"
 # Партиалы — методы JbuilderTemplate без контекста контроллера:
 # origin им недоступен, экшен-шаблон проставляет jb_origin.
 class JbuilderTemplate
-  property jb_origin : String = "http://localhost"
+  attr_accessor jb_origin : String = "http://localhost"
 
   compile_partials({
     "users/user"                 => {path: "app/views/users/_user.json.jbuilder",

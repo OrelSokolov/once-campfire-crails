@@ -24,8 +24,8 @@ module Campfire
 
     # Сокет шины: очередь кадров + writer-фибера + флаг закрытия.
     class Connection
-      getter socket : TCPSocket
-      getter queue : Channel(Tuple(String, String))
+      attr_reader socket : TCPSocket
+      attr_reader queue : Channel(Tuple(String, String))
       @closed = false
 
       def initialize(@socket)

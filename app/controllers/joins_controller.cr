@@ -8,7 +8,7 @@ class JoinsController < ApplicationController
   skip_before_action :require_authentication
 
   # show.html.erb: аккаунт invite-ссылки (имя, join_code в action).
-  getter account : Account?
+  attr_reader account : Account?
 
   def show
     # Known-issue (PLAN.md): роутер декодирует path-сегменты через

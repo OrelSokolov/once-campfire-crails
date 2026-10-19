@@ -20,8 +20,8 @@ class Messages::BoostsController < ApplicationController
   # boosts_dom (BoostsHelpers) читает mid/boosts — геттеры.
   @message : Message?
   @user : User?
-  getter mid : Int64?
-  getter boosts : Array(ChatLayout::BoostEntry) = [] of ChatLayout::BoostEntry
+  attr_reader mid : Int64?
+  attr_reader boosts : Array(ChatLayout::BoostEntry) = [] of ChatLayout::BoostEntry
   # set_message: Current.user.reachable_messages.find(params[:message_id])
   # — сообщение из комнаты, доступной текущему юзеру (membership).
   private def find_reachable_message : Message?

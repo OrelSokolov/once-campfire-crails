@@ -24,8 +24,8 @@ module Campfire
   module WriteQueue
     # Блок + канал пробуждения вызывающей фиберы.
     class Invocation
-      getter wake : Channel(Exception?)
-      getter run : Proc(Nil)
+      attr_reader wake : Channel(Exception?)
+      attr_reader run : Proc(Nil)
 
       def initialize(@wake, &@run : ->)
       end

@@ -14,7 +14,7 @@ class Rooms::DirectsController < ApplicationController
   @direct_title : String = ""
   @direct_members : Array(User) = [] of User
   # Геттер для RoomsHelpers#page_open (модуль не видит @user).
-  getter user
+  attr_reader :user
 
   # GET /rooms/directs/new — форма (подменяет direct_rooms_control в
   # сайдбаре через data-turbo-frame="_self"). Разметка — app/views/

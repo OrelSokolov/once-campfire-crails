@@ -16,7 +16,7 @@ class RoomsController < ApplicationController
   @kind : String = ""
   @user : User?
   # Геттер для RoomsHelpers#page_open (модуль не видит @user).
-  getter user
+  attr_reader :user
   @selected : Set(Int64) = Set(Int64).new
   @is_open : Bool = false
   @can_administer : Bool = false

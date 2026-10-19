@@ -521,12 +521,12 @@ module ChatLayout
 
   # Буст одного сообщения для рендера (boost + booster одним JOIN).
   struct BoostEntry
-    property id : Int64
-    property content : String
-    property booster_id : Int64
-    property booster_name : String
-    property booster_bio : String?
-    property booster_updated_at : Time?
+    attr_accessor id : Int64
+    attr_accessor content : String
+    attr_accessor booster_id : Int64
+    attr_accessor booster_name : String
+    attr_accessor booster_bio : String?
+    attr_accessor booster_updated_at : Time?
 
     def initialize(@id, @content, @booster_id, @booster_name,
                    @booster_bio, @booster_updated_at)
@@ -945,11 +945,11 @@ module ChatLayout
 
   # BUILTIN-звуки: name → текст или картинка (sounds/<file>, WxH).
   class ChatSound
-    getter name : String
-    getter text : String?
-    getter image_name : String?
-    property image_width : Int32 = 0
-    property image_height : Int32 = 0
+    attr_reader name : String
+    attr_reader text : String?
+    attr_reader image_name : String?
+    attr_accessor image_width : Int32 = 0
+    attr_accessor image_height : Int32 = 0
 
     def initialize(@name, @text = nil, @image_name = nil)
     end
@@ -1142,15 +1142,15 @@ module ChatLayout
 
   # Вложение сообщения: blob + имя файла (батч-загрузка одним IN).
   struct Attachment
-    property blob_id : Int64
-    property filename : String
-    property content_type : String
-    property key : String
+    attr_accessor blob_id : Int64
+    attr_accessor filename : String
+    attr_accessor content_type : String
+    attr_accessor key : String
     # width/height из metadata блоба (ImageAnalyzer Rails): Int64 как в
     # JSON-числе, Float64 — если metadata хранит float; nil — картинки
     # без анализа (metadata "{}") и все не-картинки.
-    property width : Int64 | Float64 | Nil = nil
-    property height : Int64 | Float64 | Nil = nil
+    attr_accessor width : Int64 | Float64 | Nil = nil
+    attr_accessor height : Int64 | Float64 | Nil = nil
 
     def initialize(@blob_id, @filename, @content_type, @key)
     end

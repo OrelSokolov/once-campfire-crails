@@ -106,7 +106,7 @@ class MessagesController < ApplicationController
   # подтягивает отрендеренное сообщение.
   # show.html.erb / edit.html.erb
   # Геттеры — для ERB-хелперов MessagesHelpers (модуль не видит ивары).
-  getter room, message, mid, attachment
+  attr_reader :room, :message, :mid, :attachment
   @room : Room?
   @message : Message?
   @mid : Int64?

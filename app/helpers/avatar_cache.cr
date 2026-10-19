@@ -7,9 +7,9 @@
 module Campfire
   class AvatarCache
     class Entry
-      getter bytes : String
-      getter content_type : String
-      property cost : Int32 = 0
+      attr_reader bytes : String
+      attr_reader content_type : String
+      attr_accessor cost : Int32 = 0
 
       def initialize(@bytes : String, @content_type : String)
       end

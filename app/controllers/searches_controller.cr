@@ -8,11 +8,11 @@ class SearchesController < ApplicationController
   # show.html.erb: запрос, выдача (FTS5), недавние запросы, DB-epoch
   # (ERB-хелперы SearchesHelpers читают их через геттеры);
   # @return_room — комната возврата (composer, читается шаблоном напрямую).
-  getter user : User? = nil
-  getter query : String = ""
-  getter messages : Array(Message) = [] of Message
-  getter recents : Array(String) = [] of String
-  getter epoch : String = ""
+  attr_reader user : User? = nil
+  attr_reader query : String = ""
+  attr_reader messages : Array(Message) = [] of Message
+  attr_reader recents : Array(String) = [] of String
+  attr_reader epoch : String = ""
   @return_room : Int64 = 1_i64
 
   # HTML-партиалы nav поиска (search_nav.eta/recent_searches.eta): чип

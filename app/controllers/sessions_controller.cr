@@ -11,8 +11,8 @@ class SessionsController < ApplicationController
 
   skip_before_action :require_authentication
 
-  getter login_alert : Bool = false
-  getter email : String = ""
+  attr_reader login_alert : Bool = false
+  attr_reader email : String = ""
   @account_name : String = ""
   @owner : User? = nil
 

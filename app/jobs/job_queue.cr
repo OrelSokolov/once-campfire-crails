@@ -13,10 +13,10 @@ require "uuid"
 module Campfire
   class JobQueue
     class Job
-      getter id : Int64
-      getter payload : String
-      getter attempts : Int32
-      getter lease_token : String
+      attr_reader id : Int64
+      attr_reader payload : String
+      attr_reader attempts : Int32
+      attr_reader lease_token : String
 
       def initialize(@id, @payload, @attempts, @lease_token)
       end

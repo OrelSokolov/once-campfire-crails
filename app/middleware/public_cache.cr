@@ -18,10 +18,10 @@ module Campfire
     include HTTP::Handler
 
     class Entry
-      getter body : String
-      getter content_type : String
-      getter cache_control : String
-      getter expires_at : Time::Instant
+      attr_reader body : String
+      attr_reader content_type : String
+      attr_reader cache_control : String
+      attr_reader expires_at : Time::Instant
 
       def initialize(@body, @content_type, @cache_control, ttl : Time::Span)
         @expires_at = Time.instant + ttl

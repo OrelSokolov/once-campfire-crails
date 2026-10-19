@@ -99,14 +99,14 @@ class ChatERB
   # ————— users/sidebars/show (сайдбар) —————
 
   class SidebarDirect
-    property room_id : Int64, epoch_ms : Int64, unread : Bool, members : Array(User)
+    attr_accessor room_id : Int64, epoch_ms : Int64, unread : Bool, members : Array(User)
 
     def initialize(@room_id, @epoch_ms, @unread, @members)
     end
   end
 
   class SidebarShared
-    property room : Room, unread : Bool
+    attr_accessor room : Room, unread : Bool
 
     def initialize(@room, @unread)
     end

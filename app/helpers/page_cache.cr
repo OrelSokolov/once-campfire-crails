@@ -10,11 +10,11 @@ require "digest/sha1"
 module Campfire
   class PageCache
     class Page
-      getter bytes : String
-      getter etag : String
-      property gzipped : String?
-      property cost : Int32 = 0
-      property cache_key : String = ""
+      attr_reader bytes : String
+      attr_reader etag : String
+      attr_accessor gzipped : String?
+      attr_accessor cost : Int32 = 0
+      attr_accessor cache_key : String = ""
 
       def initialize(@bytes)
         @etag = %(W/") + Digest::SHA1.hexdigest(@bytes)[0, 24] + %(")

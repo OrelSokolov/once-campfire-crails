@@ -1,6 +1,12 @@
 # ATTR_READER — макросы attr_* в отдельный шард + перевод getter → attr_reader
 
-> СТАТУС: не начат.
+> СТАТУС: выполнен 2026-10-19. Все 6 этапов закрыты: шард attr_reader_cr v0.1.0
+> опубликован; active_support_cr v0.1.6/v0.1.7 (реэкспорт); 56 объявлений в
+> app/+src/ переведены; 11 шардов — action_cable v0.1.3, action_view v0.1.2,
+> active_job v0.1.1, active_record v0.1.10, active_storage v0.1.2, erb v0.1.3,
+> importmap v0.1.1, action_pack v0.2.5, railties v0.1.12, propshaft v0.1.2;
+> верификация: сборка, смоук (главная/логин/комната), docker-образ,
+> twinshot review default 128/129 (единственный диф — soft_check).
 
 Цель, два этапа общей работы:
 
