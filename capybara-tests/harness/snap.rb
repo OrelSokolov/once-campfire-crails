@@ -41,7 +41,35 @@ module Parity
       }))()
     JS
 
+    # Presentation state that can never match across runs: each target boots
+    # on a random free port that leaks into rendered text and input values
+    # (the invite-link banner), and which element holds focus when the shot
+    # lands is a race (the live tests juggle two tabs in one browser).
+    # Pin both to a canonical form before capture so PNGs compare across runs.
+    PIN_JS = <<~JS
+      (() => {
+        if (document.activeElement && document.activeElement !== document.body) {
+          document.activeElement.blur()
+        }
+        const origin = location.origin
+        const pinned = "http://127.0.0.1:__PORT__"
+        const texts = []
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+        while (walker.nextNode()) texts.push(walker.currentNode)
+        for (const node of texts) {
+          if (node.nodeValue.includes(origin)) node.nodeValue = node.nodeValue.split(origin).join(pinned)
+        }
+        for (const field of document.querySelectorAll("input[type=text], textarea")) {
+          if (field.value.includes(origin)) field.value = field.value.split(origin).join(pinned)
+        }
+      })()
+    JS
+
     module_function
+
+    def pin_volatile(page)
+      page.execute_script(PIN_JS)
+    end
 
     def dir_for(test)
       file = underscore(test.class.name)
@@ -52,6 +80,7 @@ module Parity
       dir = dir_for(test)
       FileUtils.mkdir_p(dir)
       html = stable_html(page) { page.evaluate_script("document.documentElement.outerHTML") }
+      pin_volatile(page)
       hide_volatile(page, ["time"]) if mask_times
       page.save_screenshot(File.join(dir, "#{name}.png"), full: true)
       File.write(File.join(dir, "#{name}.html"), html)
@@ -63,6 +92,7 @@ module Parity
       dir = dir_for(test)
       FileUtils.mkdir_p(dir)
       html = stable_html(page) { page.evaluate_script("document.querySelector(#{selector.to_json}).outerHTML") }
+      pin_volatile(page)
       hide_volatile(page, ["time"]) if mask_times
       page.save_screenshot(File.join(dir, "#{name}.png"), full: true)
       File.write(File.join(dir, "#{name}.html"), html)
@@ -76,6 +106,7 @@ module Parity
     def stable_html(page, attempts: 6)
       normalized = nil
       attempts.times do
+        pin_volatile(page)
         quiet(page)
         settled(page)
         candidate = Parity::Normalize.html(yield, Parity.base_url)

@@ -55,6 +55,10 @@ CRails.application.routes.draw do
   patch "/users/me/profile", to: "users/profiles#update"
   get "/users/:token/avatar", to: "users/avatars#show"
   resources :users, only: [:show]
+  # resource :ban внутри resources :users (scope module: "users"):
+  # бан/разбан пользователя — кнопки в users/show.html.erb.
+  post   "/users/:user_id/ban", to: "users/bans#create"
+  delete "/users/:user_id/ban", to: "users/bans#destroy"
 
   get "/autocompletable/users", to: "autocompletable/users#show"
 

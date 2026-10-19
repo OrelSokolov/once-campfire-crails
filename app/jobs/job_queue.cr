@@ -248,6 +248,7 @@ module Campfire
       case kind
       when "push"     then perform_push(data)
       when "webhook"  then perform_webhook(data)
+      when "remove_banned_content" then perform_remove_banned_content(data)
       else                 raise "unknown job #{kind}"
       end
     end
@@ -334,6 +335,38 @@ module Campfire
           raise "push HTTP #{status}"
         end
       end
+    end
+
+    # RemoveBannedContentJob (remove_banned_content_job.rb референса):
+    # User#remove_banned_content — destroy всех сообщений юзера с
+    # broadcast_remove каждого. Шаги удаления — как messages#destroy
+    # порта (ActionText-тело + FTS5-индекс + строка), boosts —
+    # dependent: :destroy референса (express deleteMessage).
+    def self.perform_remove_banned_content(data : JSON::Any) : Nil
+      user_id = data["user_id"]?.try(&.to_s.to_i64?)
+      return unless user_id
+
+      conn = ActiveRecord::Base.connection
+      messages = conn.query_all(
+        "SELECT id, room_id FROM messages WHERE creator_id = ? ORDER BY id", user_id) do |rs|
+        {id: rs.read(Int64), room_id: rs.read(Int64)}
+      end
+
+      messages.each do |message|
+        mid = message[:id]
+        conn.exec("DELETE FROM boosts WHERE message_id = ?", mid)
+        conn.exec(
+          "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
+        conn.exec("DELETE FROM message_search_index WHERE rowid=?", mid)
+        conn.exec("DELETE FROM messages WHERE id = ?", mid)
+        # Message::Broadcasts#broadcast_remove: стрим [room, "messages"],
+        # target — dom_id сообщения (cable-фрейм, без хвостового \n).
+        if (room = Room.find?(message[:room_id]))
+          Turbo::StreamsChannel.broadcast_remove_to([room, "messages"],
+            target: "message_#{mid}")
+        end
+      end
+      Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     end
 
     def self.perform_webhook(data : JSON::Any) : Nil

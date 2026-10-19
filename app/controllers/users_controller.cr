@@ -1,7 +1,8 @@
 # GET /users/:id — публичный профиль пользователя (user.eta): аватар,
 # имя/bio/email (админу), кнопка Ping (POST /rooms/directs?user_ids[]=),
-# transfer-ссылка (админ, transfer_link.eta). Бан не портирован (нет роута).
-# Разметка — app/views/users/show.html.erb (implicit render).
+# transfer-ссылка (админ, transfer_link.eta), Ban/Remove ban (админ,
+# см. Users::BansController). Разметка — app/views/users/show.html.erb
+# (implicit render).
 class UsersController < ApplicationController
   include UsersHelpers
 

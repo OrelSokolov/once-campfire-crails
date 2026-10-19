@@ -177,6 +177,27 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ## 5. Баны пользователей (+ RemoveBannedContentJob)
 
+> **Сделано** (2026-10-19). Роуты `post/delete /users/:user_id/ban` →
+> `Users::BansController#create/destroy` (require_admin, 404 при
+> отсутствии юзера, redirect на профиль). `User#ban` — транзакция через
+> WriteQueue: bans из DISTINCT ip_address сессий (без пустых), DELETE
+> сессий (разлогин), status=2; после commit — enqueue джобы
+> `remove_banned_content` (как forgetUser+enqueue у express).
+> `User#unban` — DELETE bans + status=0. Джоба в `job_queue.cr`:
+> по каждому сообщению юзера — boosts (dependent: :destroy), ActionText,
+> FTS5, строка сообщения + `Turbo::StreamsChannel.broadcast_remove_to`
+> (стрим [room, "messages"], target `message_<id>` — переиспользованный
+> байт-сверенный хелпер), затем PageCache.invalidate!. Вьюха
+> `users/show.html.erb`: ветка «Remove ban» (button_to delete,
+> btn--negative, turbo-confirm) для status=2 вне блока `status == 0`
+> (кнопка Ban уже была). Смоук (tmp/ban-smoke2): аноним — редирект на
+> логин; не-админ — 403; 404 на несуществующего; бан — status=2, bans
+> по обоим IP сессий, сессии удалены, джоба снесла 7 сообщений + FTS +
+> boosts без orphan-строк, cookie жертвы невалидна; unban — status=0,
+> bans=0, Ban-кнопка возвращается. messages_count-критерий неприменим:
+> в схеме порта у rooms нет колонки messages_count (триггеры
+> Room::MessagesCount — только в БД референса).
+
 ### Почему
 
 `POST/DELETE /users/:id/ban` и снос контента забаненного не

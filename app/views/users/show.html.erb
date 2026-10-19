@@ -20,6 +20,13 @@
           <span>Ban <%= subject.name.to_s %></span>
         </button></form>
       </div>
-    <% end %><% end %><% end %></div>
+    <% end %>
+    <% end %>
+    <% if viewer.role == 1 && viewer.id != subject.id && subject.status == 2 %><div class="margin-block-start">
+      <form action="/users/<%= subject.id %>/ban" class="button_to" method="post"><input name="_method" type="hidden" value="delete"><button class="btn btn--negative full-width" data-turbo-confirm="Are you sure you want to remove the ban on this user?" type="submit">
+        <img aria-hidden="true" aria-label="Remove Ban <%= subject.name.to_s %>" src="<%= asset("cancel.svg") %>">
+        <span>Remove ban</span>
+      </button></form>
+    </div><% end %><% end %></div>
 </section>
 <%= page_close %>
