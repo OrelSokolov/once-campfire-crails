@@ -30,3 +30,4 @@ end
 Плоский = без папки. `controllers/<namespace>/my_controller.cr` ok, `controllers/namespace_my_controller.cr` - wrong. 
 
 
+Выполненные планы переноси в plans/completed/
