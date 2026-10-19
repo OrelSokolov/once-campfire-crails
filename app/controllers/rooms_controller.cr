@@ -342,7 +342,7 @@ class RoomsController < ApplicationController
     @selected = selected
     @is_open = kind == "opens"
     @can_administer = room.nil? || user.role == 1 || room.creator_id == user.id
-    @users = User.where("status = 0").to_a.sort_by(&.name.to_s.downcase)
+    @users = User.active.to_a.sort_by(&.name.to_s.downcase)
     if @is_open
       # opens-форма: User.active.ordered — просто LOWER(name), без
       # деления на выбранных/остальных (артефакт room-settings).

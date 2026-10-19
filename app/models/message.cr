@@ -2,7 +2,7 @@
 # mirrored into the FTS5 message_search_index by the reference app;
 # the seed database carries both.
 class Message < ActiveRecord::Base
-  belongs_to :room
+  belongs_to :room, touch: true
   belongs_to :creator, class_name: "User"
   has_many :boosts, foreign_key: "message_id"
 

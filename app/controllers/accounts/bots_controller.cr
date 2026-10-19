@@ -39,8 +39,8 @@ class Accounts::BotsController < ApplicationController
     # createUser эталона (domain.js): новый пользователь (включая бота)
     # получает membership во все Rooms::Open (involvement "mentions").
     # STI-порт пишет короткий type ('Open'), сид хранит полный
-    # ('Rooms::Open') — матчим оба.
-    Room.where("type IN ('Open', 'Rooms::Open')").each do |room|
+    # ('Rooms::Open') — scope opens покрывает оба написания.
+    Room.opens.each do |room|
       Membership.new(room_id: room.id.not_nil!, user_id: bot.id.not_nil!,
         involvement: "mentions", connections: 0,
         created_at: now, updated_at: now).save!
@@ -52,7 +52,9 @@ class Accounts::BotsController < ApplicationController
   # (bots.eta: заголовок с bot+add, аватары, pencil-edit, поля с
   # иконками messages-outlined/attachment и copy-кнопками).
   def index
-    @bots = User.where("role = 2 AND status = 0").order("lower(name)").to_a
+    # _bot: User.active_bots.ordered; scope-чейнинг на Relation в шарде
+    # не поддержан — order явно.
+    @bots = User.active_bots.order("lower(name)").to_a
     @bots.each do |bot|
       bid = bot.id.not_nil!
       bot_key = "#{bid}-#{bot.bot_token.to_s}"
@@ -60,7 +62,7 @@ class Accounts::BotsController < ApplicationController
       # (сид: 'Rooms::Direct', наши: 'Direct'), по LOWER(name).
       rooms = [] of NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String)))
       Room.visible_for(bot)
-        .where("rooms.type NOT IN ('Rooms::Direct', 'Direct')")
+        .where("type NOT IN ('Rooms::Direct', 'Direct')")
         .order("lower(name)").each do |room|
         rid = room.id.not_nil!
         text = "curl -d 'Hello!' #{origin}/rooms/#{rid}/#{bot_key}/messages"

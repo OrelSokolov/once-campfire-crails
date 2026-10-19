@@ -4,10 +4,16 @@ class User < ActiveRecord::Base
   has_many :messages, foreign_key: "creator_id"
   has_many :searches, foreign_key: "user_id", class_name: "Search"
 
+  # user.rb / user/bot.rb референса: ordered, active (bannable),
+  # active_bots (active.where(role: :bot); в порте role=2, status=0).
+  scope(:active)     { where("status = 0") }
+  scope(:active_bots) { active.where("role = 2") }
+  scope(:ordered)    { order("LOWER(name)") }
+
   # Rails: User.active.authenticate_by(email_address:, password:) —
   # bcrypt compare against password_digest (status 0 = active).
   def self.authenticate(email_address : String, password : String) : User?
-    user = where("email_address = ? AND status = 0", email_address).take
+    user = active.where("email_address = ?", email_address).take
     return nil unless user
     digest = user.password_digest.to_s
     return nil if digest.empty?

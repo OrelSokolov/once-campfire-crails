@@ -35,7 +35,7 @@ class Ban < ActiveRecord::Base
 end
 
 class Boost < ActiveRecord::Base
-  belongs_to :message
+  belongs_to :message, touch: true
   belongs_to :booster, class_name: "User"
 end
 

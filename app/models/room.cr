@@ -3,6 +3,16 @@ class Room < ActiveRecord::Base
   has_many :messages, foreign_key: "room_id"
   belongs_to :creator, class_name: "User"
 
+  # room.rb референса: opens/closeds/directs/without_directs/ordered.
+  # Референс — equality по type ('Rooms::Open'); STI-порт хранит два
+  # написания (сид — 'Rooms::Open', создание портом — короткое 'Open'),
+  # поэтому условие расширено до IN обеих форм.
+  scope(:opens)           { where("type IN ('Open', 'Rooms::Open')") }
+  scope(:closeds)         { where("type IN ('Closed', 'Rooms::Closed')") }
+  scope(:directs)         { where("type IN ('Direct', 'Rooms::Direct')") }
+  scope(:without_directs) { where("type NOT IN ('Direct', 'Rooms::Direct')") }
+  scope(:ordered)         { order("LOWER(name)") }
+
   # GlobalID STI-референса: gid строится от класса записи (Rooms::Open/
   # Rooms::Direct/Rooms::Closed), а не от кристалловского Room — иначе
   # расходится signed-stream-name turbo-cable-stream-source. type хранит

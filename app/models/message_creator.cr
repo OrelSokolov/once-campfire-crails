@@ -40,14 +40,14 @@ module MessageCreator
             room_id: room.id.not_nil!,
             creator_id: creator.id.not_nil!,
             client_message_id: client_message_id)
-          record.save!
+          record.save! # belongs_to :room, touch: true трогает rooms.updated_at
           message_id = record.id.not_nil!
 
           conn = ActiveRecord::Base.__session # pinned-коннект транзакции
           conn.exec(
             "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
             "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
-          store_attachment(conn, message_id, attachment, now) if attachment
+          store_attachment(conn, record, attachment, now) if attachment
           # indexMessage: plainText(body) || filename — файл без текста
           # индексируется именем файла.
           conn.exec(
@@ -90,9 +90,11 @@ module MessageCreator
   # Disk-сервис шарда (Blob.create_and_upload!: файл в
   # <root>/<key[0,2]>/<key[2,2]>/<key>, md5-checksum в base64, key —
   # 24 символа [A-Za-z0-9] как в геме), blob-строка + attachment на
-  # Message + touch messages.updated_at.
-  private def self.store_attachment(conn, message_id : Int64,
+  # Message + touch messages.updated_at (record.touch — аналог
+  # belongs_to :record, touch: true у ActiveStorage::Attachment гема).
+  private def self.store_attachment(conn, message : Message,
                                     upload : UploadedFile, now : Time) : Nil
+    message_id = message.id.not_nil!
     filename = File.basename(upload.filename.presence || "file")
     content_type = upload.content_type.presence || "application/octet-stream"
     blob = ActiveStorage::Blob.create_and_upload!(
@@ -113,7 +115,7 @@ module MessageCreator
     conn.exec(
       "INSERT INTO active_storage_attachments (name, record_type, record_id, blob_id, created_at) VALUES ('attachment', 'Message', $1, $2, $3)",
       message_id, blob.id.not_nil!, now)
-    conn.exec("UPDATE messages SET updated_at = $1 WHERE id = $2", now, message_id)
+    message.touch
   end
 
   # Room#receive: unread для участников, отключённых дольше 60 секунд,

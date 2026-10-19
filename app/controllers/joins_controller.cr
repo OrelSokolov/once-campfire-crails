@@ -50,8 +50,9 @@ class JoinsController < ApplicationController
     user.save!
 
     # createUser эталона: membership во все Rooms::Open ("mentions").
-    # STI-порт пишет короткий type ('Open'), сид — полный ('Rooms::Open').
-    Room.where("type IN ('Open', 'Rooms::Open')").each do |room|
+    # STI-порт пишет короткий type ('Open'), сид — полный ('Rooms::Open');
+    # scope opens покрывает оба написания.
+    Room.opens.each do |room|
       Membership.new(room_id: room.id.not_nil!, user_id: user.id.not_nil!,
         involvement: "mentions", connections: 0,
         created_at: now, updated_at: now).save!

@@ -51,46 +51,64 @@ ActionController::Base); все 8 ручных `Campfire.broadcast` замене
 
 ## 2. Raw-SQL touch → `belongs_to ..., touch: true`
 
-`lib/active_record_cr/src/associations.cr:335` — опция `touch:`
-поддержана (рефлексия на линии 464). Ручные места:
+**Сделано** (2026-10-19).
 
-- `boosts_controller` ×2 (`UPDATE messages SET updated_at = ?` в create
-  и bot_create), `boosts_controller#destroy` (touch после удаления);
-- `messages_controller` (touch сообщения);
-- `message_creator` (touch сообщения/комнаты).
+- `Boost belongs_to :message, touch: true` — убраны manual
+  `UPDATE messages SET updated_at` в `boosts_controller` (create,
+  destroy) и `boosts/by_bots#bot_create` (after_save/after_destroy
+  коллбэки шарда);
+- `Message belongs_to :room, touch: true` — раньше порт ВООБЩЕ не трогал
+  rooms.updated_at при создании сообщения (в референсе трогает);
+  touch выполняется внутри WriteQueue (save! зовётся в очереди,
+  коллбэк синхронен) — из-под очереди не уходит;
+- `messages_controller#update`: manual UPDATE → `message.touch`;
+- `message_creator#store_attachment`: manual UPDATE → `record.touch`.
 
-Перенести на декларацию в модели (`Boost belongs_to :message, touch:
-true`) и убрать `UPDATE ... updated_at` из контроллеров. Сверить, что
-touch выполняется в той же очереди/транзакции WriteQueue (сейчас
-UPDATE идёт вручную внутри `WriteQueue.perform` — автотouch не должен
-уйти из-под очереди на запись).
+Верификация: `tmp/verify_touch.cr` (boost save!/destroy трогают
+message, message save! трогает room — TOUCH OK) + e2e-смоук
+(`tmp/boost_broadcast_smoke.js`): реальный POST буста — строка в
+boosts, messages.updated_at обновлён коллбэком, cable-фрейм
+байт-в-байт.
+
+Отклонение от Rails: коллбэк шарда делает `find?(oid).touch`
+(доп. SELECT перед UPDATE; Rails использует загруженную ассоциацию).
+Кандидат на патч шарда.
 
 ## 3. Ручные where-строки → `scope` (base.cr:277)
 
-`macro scope(name, &block)` реализован, в `app/models` не используется.
+**Сделано** (2026-10-19, частично).
 
-Референс (`once-campfire/app/models/room.rb`):
-```ruby
-scope :opens,           -> { where(type: "Rooms::Open") }
-scope :closeds,         -> { where(type: "Rooms::Closed") }
-scope :directs,         -> { where(type: "Rooms::Direct") }
-scope :without_directs, -> { where.not(type: "Rooms::Direct") }
-scope :ordered,         -> { order("LOWER(name)") }
-```
-В порте — `where("type = ?")` / `where(name: nil)` вручную по
-контроллерам и `ChatLayout`. Добавить scopes в `Room` (и `Message`
-`ordered`), заменить вызовы.
+- `Room`: scopes `opens/closeds/directs/without_directs/ordered` —
+  но НЕ equality по type как в референсе: STI-порт хранит два
+  написания type (сид 'Rooms::Open', создание портом 'Open'),
+  условие расширено до `IN` обеих форм;
+- `User`: `active`, `active_bots` (active + role=2), `ordered`
+  (LOWER(name)) — user.rb / user/bot.rb референса.
+
+Замены: `joins_controller` (Room.opens), `accounts/bots_controller`
+(Room.opens, User.active_bots + order, visible_for без Direct),
+`autocompletable/users_controller` (User.active), `rooms_controller`
+(User.active).
+
+Ограничение шарда: scope — только class-level метод, чейнинг на
+Relation (`User.active.ordered`) не работает — в таких местах order
+остаётся явным. Кандидат на патч шарда. Message.ordered/Boost.ordered
+не добавлялись: единственные места сортировки сообщений — DESC+limit
+(index) и подзапросы, scope не ложится.
+
+Верификация: `tmp/verify_scopes.cr` — множества записей scopes ==
+manual where (SCOPES OK).
 
 ## 4. Отсутствие валидаций → `validates` (validations.cr:45)
 
-`macro validates(*columns, presence:, length:, numericality:, ...)`
-и `macro validate` реализованы, модели порта их не используют. Сверить
-валидации референса (`once-campfire/app/models/*.rb`) и перенести:
-`Boost` (длина content ≤ 16), `User` и др. Убедиться, что save! в
-WriteQueue не меняет порядок ошибок валидации против текущего
-поведения (сейчас ограничения проверяются вручную в контроллерах,
-например length ≤ 16 в boosts#create/bot_create — после переноса
-ручные проверки убрать).
+**Проверено — переносить нечего** (2026-10-19). В референсе
+`validates` есть только в непортированных моделях
+(opengraph/metadata.rb, push/subscription.rb). Лимит 16 у
+`boosts.content` — schema-level (`t.string "content", limit: 16`
+в schema.rb), НЕ модельная валидация; ручные проверки в
+контроллерах порта (empty → 422, >16 → 422 у ботов) реализуют
+контракт express-порта и Rails-валидаций не соответствуют.
+Добавлять `validates` сверх референса — расхождение 1:1.
 
 ## 5. Дубли view-хелперов в ChatLayout → helpers из action_view_cr /
    turbo_cr
@@ -115,9 +133,13 @@ framework-аналога (`message_dom`, `boosts_dom`). Перед замено�
 
 ## 6. `where.not` (relation.cr:172)
 
-Реализован, в приложении не используется ни разу; negative-условия —
-SQL-строками (`"name IS NOT NULL"` и т.п.). Применять по ходу других
-пунктов (см. scope `without_directs` в п.3).
+**Проверено — неприменимо пока** (2026-10-19). Негативные условия
+в порте живут внутри raw-SQL подзапросов (`sidebars_controller`,
+`message_creator`, `room.visible_for` — `involvement != 'invisible'`
+внутри IN-подзапроса) — relation-level `where.not` туда не
+подставить. Отдельные NOT IN-условия закрыты scope
+`Room.without_directs` (п.3). Возвращаться при порте
+opengraph/push-моделей (там `where.not` у референса).
 
 ## Верификация
 

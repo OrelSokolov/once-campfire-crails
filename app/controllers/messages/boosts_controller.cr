@@ -71,10 +71,7 @@ class Messages::BoostsController < ApplicationController
     boost = Campfire::WriteQueue.perform do
       record = Boost.new(message_id: mid, booster_id: user.id.not_nil!,
         content: content, created_at: now, updated_at: now)
-      record.save!
-      # belongs_to :message, touch: true —Rails трогает messages.updated_at
-      ActiveRecord::Base.connection.exec(
-        "UPDATE messages SET updated_at = ? WHERE id = ?", now, mid)
+      record.save! # belongs_to :message, touch: true трогает messages.updated_at
       record
     end
 
@@ -111,12 +108,11 @@ class Messages::BoostsController < ApplicationController
     return head(:not_found) unless boost
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    now = Time.utc
     mid = message.id.not_nil!
     Campfire::WriteQueue.perform do
+      # after_destroy коллбэк belongs_to :message, touch: true трогает
+      # messages.updated_at
       boost.not_nil!.destroy
-      ActiveRecord::Base.connection.exec(
-        "UPDATE messages SET updated_at = ? WHERE id = ?", now, mid)
     end
 
     # boosts_controller.rb#broadcast_remove: broadcast_remove_to room,

@@ -215,7 +215,8 @@ class MessagesController < ApplicationController
       conn.exec(
         "INSERT INTO message_search_index (rowid, body) VALUES (?, ?)",
         target.not_nil!.id.not_nil!, plain)
-      conn.exec("UPDATE messages SET updated_at = ? WHERE id = ?", now, target.not_nil!.id.not_nil!)
+      # touch сообщения (аналог AR updated_at при update!)
+      target.not_nil!.touch
     end
 
     message = Message.find?(message.id.not_nil!).not_nil!

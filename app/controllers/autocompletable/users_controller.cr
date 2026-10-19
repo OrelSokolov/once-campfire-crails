@@ -17,7 +17,7 @@ class Autocompletable::UsersController < ApplicationController
                  WHERE me.user_id = ? AND m.room_id = ? AND status = 0)),
                 user.id.not_nil!, room_id)
             else
-              User.where("status = 0")
+              User.active
             end
     @users = scope.order("lower(name)").to_a
       .select { |u| u.name.to_s.downcase.includes?(filter) }

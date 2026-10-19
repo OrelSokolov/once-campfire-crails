@@ -47,10 +47,7 @@ class Messages::Boosts::ByBotsController < ApplicationController
     @boost = Campfire::WriteQueue.perform do
       record = Boost.new(message_id: mid, booster_id: bot.id.not_nil!,
         content: content, created_at: now, updated_at: now)
-      record.save!
-      # belongs_to :message, touch: true
-      ActiveRecord::Base.connection.exec(
-        "UPDATE messages SET updated_at = ? WHERE id = ?", now, mid)
+      record.save! # belongs_to :message, touch: true трогает messages.updated_at
       record
     end
 
