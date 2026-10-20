@@ -257,8 +257,17 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > **4a сделано** (2026-10-20, v0.1.4): `form_with` без блока —
 > открывающий тег + hidden-поля, БЕЗ `</form>` (оракул fw_no_block);
 > заодно `method:` опция form_with (ранее method выводился только из
-> persisted?). **4b не делался** (`model:` без `url:` — polymorphic
-> URL; см. риски), `fields`/`form_for` — тоже.
+> persisted?). **4b-prep сделано** (v0.1.6): конфиг-ручки семантики
+> форм Rails — `form_with_generates_remote_forms` /
+> `form_with_generates_ids` (FormHelper), `default_enforce_utf8`
+> (FormTagHelper) — дефолты гема, приложение ставит load_defaults-8.x
+> значения (локальные формы, ids, без utf8); порядок атрибутов
+> form_with user-opts → enctype → action → accept-charset → method;
+> label с for при ids; nil-value опускается; password без value;
+> size из maxlength (оракул fw_local/fw_ids_model/ff_password/
+> ff_text_nil). Полиморфный `model:` без `url:` (form_url/FormModel)
+> — не сделан, нужен только фазе 5 для model-форм; `fields`/
+> `form_for` — тоже.
 - `form_with` без блока: вернуть открывающий тег + hidden-поля, БЕЗ
   `</form>` (по эталону).
 - `form_with model:` без `url:`: вычисление action из модели —
@@ -269,6 +278,21 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 Критерий: оракул-кейсы + ручной smoke через вьюху приложения.
 
 ### Фаза 5 — интеграция в приложение (once-campfire-crails)
+> **Начата** (2026-10-20). Сделано:
+> - конфиг приложения (config/application.cr): remote_forms=false,
+>   generates_ids=true, enforce_utf8=false — семантика load_defaults
+>   8.x оракула (локальные формы без data-remote/utf8, ids полей);
+> - `sessions/new.html.erb` — форма логина переведена на
+>   `form_with url: + form.email_field / form.password_field /
+>   form.button` (блок с иконкой): login.png байт-в-байт с оракулом,
+>   login/login-error/login-banned.html structure-identical,
+>   логин-POST тестами зелёный; мёртвый `SessionsHelpers#email_value`
+>   удалён (value теперь через `value:` у email_field).
+> Порядок дальнейшего перевода: first_runs/show, users/new+profiles,
+> accounts/edit (+fields_for :settings), accounts/bots, rooms/*,
+> messages/boosts — по странице за проход, полный twinshot после
+> каждой. `ActionController::Base` уже включает
+> `ActionView::Helpers` — include в контроллерах не нужен.
 1. App-хелперы из Rails-исходника: `profile_form_with`,
    `auto_submit_form_with` (once-campfire/app/helpers) — положить в
    `app/helpers/` crails-порта (НЕ в контроллеры — по AGENTS.md).

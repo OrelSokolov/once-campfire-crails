@@ -6,28 +6,28 @@
     <section class="txt-align-center">
       <div class="panel<%= panel_modifier %>">
         <figure class="account-logo avatar center margin-block-end txt-xx-large"><img src="<%= logo_src %>" alt="Account logo" width="300" height="300"></figure>
-        <form class="flex flex-column gap" action="<%= origin %>/session" accept-charset="UTF-8" method="post">
+        <%= form_with url: "#{origin}/session", class: "flex flex-column gap" do |form| %>
           <fieldset class="flex flex-column gap center-block upad">
             <legend class="txt-large txt-align-center"><strong><%= @account_name %></strong></legend>
             <div class="flex align-center gap">
               <%= translation_button("email_address") %>
               <label class="flex align-center gap input input--actor txt-large">
-                <input class="input" type="email" name="email_address" id="email_address" required="required" autofocus="autofocus" autocomplete="username" placeholder="Enter your email address"<%= email_value %>>
+                <%= form.email_field :email_address, required: true, class: "input", autofocus: true, autocomplete: "username", placeholder: "Enter your email address", value: (email.empty? ? nil : email) %>
                 <%= icon("email.svg", 24, "colorize--black") %>
               </label>
             </div>
             <div class="flex align-center gap">
               <%= translation_button("password") %>
               <label class="flex align-center gap input input--actor txt-large">
-                <input class="input" type="password" name="password" id="password" required="required" autocomplete="current-password" placeholder="Enter your password" maxlength="72" size="72">
+                <%= form.password_field :password, required: true, class: "input", autocomplete: "current-password", placeholder: "Enter your password", maxlength: 72 %>
                 <%= icon("password.svg", 24, "colorize--black") %>
               </label>
             </div>
-            <button class="btn btn--reversed center txt-large" type="submit" name="log_in">
+            <%= form.button class: "btn btn--reversed center txt-large", type: "submit", name: "log_in" do %>
               <%= icon("arrow-right.svg", nil) %>
               <span class="for-screen-reader">Go</span>
-          </button>      </fieldset>
-        </form>  </div>
+          <% end %>      </fieldset>
+        <% end %>  </div>
     <% if o = @owner %><div class="txt-align-center margin-block-double full-width">
       <a class="btn center" href="mailto:&quot;<%= o.name.to_s %>&quot; &lt;<%= o.email_address.to_s %>&gt;" title="Email <%= o.name.to_s %>">
         <%= icon("lifebuoy.svg", nil) %>

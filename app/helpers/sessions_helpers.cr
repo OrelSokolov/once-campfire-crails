@@ -1,5 +1,5 @@
 # SessionsHelpers — ERB-хелперы app/views/sessions/new.html.erb:
-# head логина без chat-обвязки, flash/alert, value-атрибут email-инпута,
+# head логина без chat-обвязки, flash/alert,
 # логотип аккаунта, лайтбокс. Включается в SessionsController; общий
 # icon/campfire_icon_src — ViewHelpers.
 module SessionsHelpers
@@ -27,12 +27,6 @@ module SessionsHelpers
   # Логотип аккаунта (logos/app-icon.png, fingerprinted asset).
   def logo_src : String
     ChatLayout.fresh_account_logo_path(Account.take)
-  end
-
-  # value-атрибут email-инпута (пустой, когда параметра нет).
-  def email_value : ERB::SafeString
-    return ERB::SafeString.new("") if email.empty?
-    ERB::SafeString.new(%( value="#{HTML.escape(email)}"))
   end
 
   def translation_button(key : String) : ERB::SafeString

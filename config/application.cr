@@ -11,6 +11,13 @@ ActiveStorage.service = ActiveStorage::DiskService.new(
 # Как референс (Rails 8, дефолт :vips): варианты через libvips.
 ActiveStorage.variant_processor = :vips
 
+# Семантика форм как Rails load_defaults 6.1+/8.x (оракул once-campfire):
+# локальные формы без data-remote, генерация ids полей, без
+# utf8-enrollment (form_with в views/** теперь через ActionView-хелперы).
+ActionView::Helpers::FormHelper.form_with_generates_remote_forms = false
+ActionView::Helpers::FormHelper.form_with_generates_ids = true
+ActionView::Helpers::FormTagHelper.default_enforce_utf8 = false
+
 class Application < CRails::Application
 end
 
