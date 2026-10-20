@@ -99,19 +99,12 @@ module MessageCreator
     content_type = upload.content_type.presence || "application/octet-stream"
     blob = ActiveStorage::Blob.create_and_upload!(
       io: String.new(upload.bytes), filename: filename, content_type: content_type)
-    # Интерим до порта Analyzer (см. ~/myshards/active_storage.cr/
-    # ANALYZER_REMAINING): width/height картинки в metadata блоба тем же
-    # форматом, что пишет Rails (`{"width":W,"height":H,"analyzed":true}`),
-    # откуда их берёт preview_dimensions рендера. Заменить на
-    # blob.analyze!, когда анализатор появится в шарде.
-    if content_type.starts_with?("image/")
-      if dims = ImageDimensions.of(upload.bytes)
-        conn.exec(
-          "UPDATE active_storage_blobs SET metadata = $1 WHERE id = $2",
-          %({"width":#{dims[0]},"height":#{dims[1]},"analyzed":true}),
-          blob.id.not_nil!)
-      end
-    end
+    # Blob#analyze! шарда (порт Analyzable 8.1.4): width/height картинки
+    # в metadata (`{"width":W,"height":H,"analyzed":true}` — формат
+    # Rails), откуда их берёт preview_dimensions рендера; не-картинки —
+    # NullAnalyzer (analyzed:true). Анализ — чтение заголовка через
+    # vips, синхронно внутри production-транзакции.
+    blob.analyze!
     conn.exec(
       "INSERT INTO active_storage_attachments (name, record_type, record_id, blob_id, created_at) VALUES ('attachment', 'Message', $1, $2, $3)",
       message_id, blob.id.not_nil!, now)

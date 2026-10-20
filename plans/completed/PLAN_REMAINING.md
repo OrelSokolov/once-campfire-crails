@@ -28,12 +28,23 @@
 
 ### Осталось
 
-- **Analyzer в шарде** — план: `~/myshards/active_storage.cr/
-  ANALYZER_REMAINING.md` (blob.analyze! → metadata
-  `{"width":…,"height":…,"analyzed":true}`; после — удалить интерим
-  `app/models/image_dimensions.cr` из приложения).
-- тег `v0.1.1` шарда → `version: ~> 0.1.1` в shard.yml, удалить
-  `shard.override.yml`.
+- ~~Analyzer в шарде~~ — **сделано** (2026-10-20): порт
+  `ActiveStorage::Analyzer` 8.1.4 (null/image vips+mini_magick/video/
+  audio + `Blob#analyze/analyze!/analyzed?/analyze_later`, диспетчер
+  `ActiveStorage.analyzers` 1:1 Analyzable). Оракул — 21 кейс с гема
+  (png/jpeg/gif/webp/tiff/avif, EXIF-ротация, truncated, видео с
+  Display-Matrix 90°, аудио) в `oracle/expected_analyzer.yml`, зеркало
+  `spec/analyzer_spec.cr` байт-в-байт (gem-ключ `"identified":true`
+  вырезается при сравнении — порт его не пишет, см. README Deviations).
+  Приложение: `store_attachment` → `blob.analyze!` (синхронно в
+  транзакции), интерим `app/models/image_dimensions.cr` удалён.
+- ~~тег `v0.1.1` шарда~~ — **сделано** как v0.1.3 (0.1.2 уже был
+  опубликован): фан-аут `DiskService#path_for` в шарде, подкласс
+  `CampfireDiskService` удалён из config/application.cr; приложение
+  резолвится `~> 0.1.1` → 0.1.3 без правок shard.yml. Теги marcel
+  v2.1.0 / image_processing v1.14.0 остаются открытыми
+  (shard.override.yml). Подробности: `~/myshards/active_storage.cr/
+  ANALYZER_REMAINING.md`.
 
 ### Сделано (продолжение, 2026-10-20)
 

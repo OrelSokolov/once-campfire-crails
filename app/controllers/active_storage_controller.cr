@@ -58,8 +58,7 @@ class ActiveStorageController < ApplicationController
     render(html: File.read(path), content_type: content_type)
   end
 
-  # Путь файла на Disk-сервисе (раскладка CampfireDiskService из
-  # config/application.cr — фан-аут гема).
+  # Путь файла на Disk-сервисе (fan-аут гема — DiskService#path_for шарда).
   private def disk_path(key : String) : String
     service = ActiveStorage.service
     raise "active storage service is not disk-backed" unless service.is_a?(ActiveStorage::DiskService)

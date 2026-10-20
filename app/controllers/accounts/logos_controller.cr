@@ -73,7 +73,7 @@ class Accounts::LogosController < ApplicationController
   end
 
   # Каталог кеша вариантов блоба: storage/files/<fan-out>/variants/<key>
-  # (раскладка CampfireDiskService.path_for).
+  # (раскладка DiskService#path_for шарда).
   private def variants_dir(key : String) : String
     File.dirname(storage_path("variants/#{key}/x"))
   end
