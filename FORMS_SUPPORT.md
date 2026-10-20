@@ -179,6 +179,16 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 Критерий: все новые `ft_*` кейсы зелёные, старые не меняются. ✅
 
 ### Фаза 2 — FormOptionsHelper (новый файл)
+> **Сделано** (2026-10-20, v0.1.5), кроме time_zone_select (нет
+> `ActiveSupport::TimeZone` в active_support_cr — фиксируется как
+> «не входит в паритет 1:1», приложение не использует). Отклонение:
+> вместо symbol-методов Rails (`:id`, `:name`) коллекции реализуют
+> интерфейсы `ActionView::FormOption` (`option_value`/`option_text`)
+> и `GroupOption` (`group_label`/`group_options`). Tag-уровневые
+> `collection_select_tag`-функции НЕ вводились — их нет в Rails
+> (вместо них `select_tag` + `options_from_collection_for_select`,
+> как у референса); builder-методы — см. фазу 3 п.4.
+
 Файл: `lib/action_view_cr/src/helpers/form_options_helper.cr`.
 - `options_from_collection_for_select`, `grouped_options_for_select`,
   `option_groups_from_collection_for_select`.
@@ -212,6 +222,17 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
    `collection_select`/`grouped_collection_select`/
    `collection_check_boxes`/`collection_radio_buttons` (делегируют в
    FormOptionsHelper).
+> **Сделано** (2026-10-20, v0.1.5) + `weekday_select` (дни с понедельника,
+> значения — имена дней). Уточнения оракула: include_blank →
+> `<option value="" label=" ">` + "\n"; prompt добавляется ТОЛЬКО при
+> пустом значении модели (`prompt: true` → "Please select"); multiple →
+> `name[]` + скрытый `<input name type=hidden value="" autocomplete>`
+> ПЕРЕД select; в `<select>` user-opts до name; у чекбокс-коллекций
+> скрытый companion в начале, id форсируются (type, value, checked,
+> name, id) + `<label for>`. Отклонение: checked-набор чекбоксов —
+> именованным аргументом `checked:` (FormValue не содержит массивов).
+> Rails-блоки-билдеры (b.label { b.checkbox }) не поддержаны —
+> рендер по умолчанию (checkbox + label), приложение не использует.
 5. `button`, `label` с блоком и `for`/id-семантикой, публичный
    `field_id`, порядок атрибутов `hidden_field`.
 Критерий: все `fw_*`/`ff_*` новые кейсы зелёные; сущ. 151 — зелёные. ✅
@@ -306,10 +327,10 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 без блока — они закрывают все текущие формы once-campfire, кроме
 `model:` без `url:`.
 
-> **Статус среза** (2026-10-20): ГОТОВ — фаза 0 (частично: эталоны фаз
-> 1/3/4a), фаза 1 (v0.1.3), фаза 3 п.1–3,5 + фаза 4a (v0.1.4); 193
-> oracle-кейса зелёные, twinshot без регресса. Осталось: фаза 0 хвост
-> (эталоны select/fields), фаза 2 (FormOptionsHelper), фаза 3 п.4
-> (select-билдеры), фаза 4b (polymorphic), фаза 5 (перевод вьюх
-> приложения на хелперы). Опубликованные версии: action_view.cr
-> v0.1.3, v0.1.4 (проект на 0.1.4).
+> **Статус среза** (2026-10-20): ГОТОВ И ПЕРЕВЫПОЛНЕН — фаза 0 (частично:
+> эталоны фаз 1/3/4a/2/3.4), фаза 1 (v0.1.3), фаза 3 п.1–3,5 + фаза 4a
+> (v0.1.4), фаза 2 + фаза 3 п.4 (v0.1.5, кроме time_zone_select);
+> 211 oracle-кейсов зелёные, twinshot без регресса. Осталось: фаза 0
+> хвост (эталоны fields/form_for), фаза 4b (polymorphic `model:` без
+> `url:`), фаза 5 (перевод вьюх приложения на хелперы). Опубликованные
+> версии: action_view.cr v0.1.3–v0.1.5 (проект на 0.1.5).
