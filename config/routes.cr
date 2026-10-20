@@ -47,12 +47,20 @@ CRails.application.routes.draw do
   get "/qr_code/:id", to: "qr_codes#show"
   get "/webmanifest", to: "pwa#manifest"
   get "/webmanifest.json", to: "pwa#manifest"
+  get "/service-worker", to: "pwa#service_worker"
 
   # Литеральные /users/me/* — до resources :users (см. шапку). Аватар
   # ищется по :token, а не :user_id, как в Rails-неймспейсе users.
   get "/users/me/sidebar", to: "users/sidebars#show"
   get "/users/me/profile", to: "users/profiles#show"
   patch "/users/me/profile", to: "users/profiles#update"
+  # scope defaults: { user_id: "me" } внутри resources :users: подписки
+  # текущего пользователя на Web Push (JS-колокол _bell.html.erb).
+  get    "/users/me/push_subscriptions", to: "users/push_subscriptions#index"
+  post   "/users/me/push_subscriptions", to: "users/push_subscriptions#create"
+  delete "/users/me/push_subscriptions/:id", to: "users/push_subscriptions#destroy"
+  post   "/users/me/push_subscriptions/:push_subscription_id/test_notifications",
+    to: "users/push_subscriptions/test_notifications#create"
   get "/users/:token/avatar", to: "users/avatars#show"
   resources :users, only: [:show]
   # resource :ban внутри resources :users (scope module: "users"):

@@ -105,6 +105,7 @@ module Campfire
 
       headers = HTTP::Headers{
         "TTL"               => "2419200",
+        "Urgency"           => "high",
         "Content-Encoding"  => "aes128gcm",
         "Content-Type"      => "application/octet-stream",
         "Authorization"     => authorization,

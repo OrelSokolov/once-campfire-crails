@@ -64,7 +64,3 @@ end
 class Webhook < ActiveRecord::Base
   belongs_to :user
 end
-
-class PushSubscription < ActiveRecord::Base
-  belongs_to :user
-end

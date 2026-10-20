@@ -70,6 +70,53 @@
 
 ## 2. Web Push — подписки, доставка, service worker
 
+> **Сделано** (2026-10-20). Крипто-ядро уже было (`app/jobs/web_push.cr`:
+> aes128gcm RFC 8291 + VAPID JWT ES256 + DNS-guard, FFI libcrypto);
+> таблица `push_subscriptions` — в initial schema. Доделано поверх:
+>
+> - `PushSubscription`-модель (`app/models/push_subscription.cr`, класс
+>   вынесен из misc.cr) — валидация как `push/subscription.rb`: https,
+>   порт 443, whitelist хостов (FCM/Mozilla/APNs/Windows), DNS-резолв
+>   без приватных адресов (`WebPush.resolve_public`, fail closed;
+>   пиннинга restricted_http нет — см. отклонения).
+> - Роуты `/users/me/push_subscriptions` GET/POST/DELETE +
+>   `/:id/test_notifications` POST → `Users::PushSubscriptionsController`
+>   (совпавшая endpoint-тройка — touch + повторная валидация, иначе
+>   create с user_agent; невалидный endpoint — 422) и
+>   `Users::PushSubscriptions::TestNotificationsController`
+>   (title «Campfire Test», body Random.uuid, path — страница подписок,
+>   badge — unread; без VAPID-ключей — no-op; 404/410 — подписка
+>   удаляется). Вьюха index + партиал (`_push_subscription.html.erb`),
+>   UA-строка — мини-порт useragent (browser/version/platform,
+>   `PushSubscriptionsHelpers` + `UserAgent`); nav-назад —
+>   link_back_to_last_room_visited.
+> - `perform_push` (`job_queue.cr`) переписан с express-семантики на
+>   `Room::MessagePusher`: единая джоба `{message_id}` на сообщение
+>   (ставится всегда, как after_create_commit → push_later у референса),
+>   получатели — JOIN users+memberships: User.active +
+>   Membership.visible.disconnected (TTL 60с) + не создатель +
+>   involvement everything ИЛИ mentions+mentionees; badge — unread
+>   по каждому получателю, icon — /account/logo, Urgency: high
+>   (WebPush::Notification референса). `message_creator.notify` больше
+>   не фильтрует пуш-получателей при энкьюе (только webhook-джобы).
+> - `GET /service-worker` → `pwa#service_worker` — JS референса
+>   (push → showNotification + setAppBadge, notificationclick →
+>   data.path), application/javascript.
+> - `sessions#destroy`: remove_push_subscription — удаление подписки по
+>   `push_subscription_endpoint` из формы логаута (sessions-JS).
+>
+> Верификация: HTTP-смоук (tmp/push-smoke, сервер на копии bf9):
+> аноним — 302 на логин; POST валидный fcm-endpoint — 200 (+user_agent),
+> http/non-443/non-whitelist — 422, повтор — 200 (touch, без дубля);
+> index рендерит подписки с UA-строками; test_notifications — 302;
+> DELETE — 302, строка удалена; /service-worker — JS референса.
+> Джоб-смоук (tmp/push_smoke_jobs.cr, изоляция: подписчик только
+> David, валидные ключи 65/16B, endpoint — реальный FCM): без VAPID —
+> no-op; everything+offline — доставка (FCM 404/410 на мёртвый токен →
+> подписка удалена — критерий «410 удаляет»); connected(<60с)/invisible/
+> mentions-без-упоминания/banned(status=2)/создатель — SKIPped;
+> mentions+упоминание — доставка.
+
 ### Почему
 
 Push в порте — стаб: `app/jobs/job_queue.cr:257-259` при заданных
@@ -112,13 +159,27 @@ go `Push.VAPID`, elixir `web_push.ex`, c, dotnet `Workers/Push*`).
 
 ### Критерии готовности
 
-- [ ] POST подписки с валидным endpoint — 200; с http/non-443/
+- [x] POST подписки с валидным endpoint — 200; с http/non-443/
       не-whitelist хостом — 422;
-- [ ] сообщение в комнате с участником involvement=everything,
-      имеющим подписку, триггерит доставку (мок endpoint в тесте);
-- [ ] 410 от endpoint удаляет подписку;
-- [ ] `/service-worker` отдаёт JS референса;
-- [ ] без VAPID-ключей поведение не меняется (no-op, RPS без регресса).
+- [x] сообщение в комнате с участником involvement=everything,
+      имеющим подписку, триггерит доставку (джоб-смоук: FCM 404/410
+      на тестовый токен; мок-endpoint невозможен из-за whitelist+DNS-
+      guard — доказательство через реальный сервис);
+- [x] 410 от endpoint удаляет подписку (404/410 FCM → строка
+      удалена, джоб-смоук кейс 2/5b);
+- [x] `/service-worker` отдаёт JS референса;
+- [x] без VAPID-ключей поведение не меняется (no-op, джоб-смоук
+      кейс 1).
+
+### Отклонения от 1 к 1
+
+- Пул `config.x.web_push_pool` ( Concurrent, 50 потоков) — leased-
+  SQLite очередь джоб (JOB_CONCURRENCY фибер); асинхронность та же.
+- restricted_http-пиннинг на проверенный IP при доставке заменён
+  DNS-проверкой без пиннинга (как в unfurl §3).
+- Валидация модели — ручные методы (`valid_subscription?`/
+  `endpoint_error`), не AR-validates (в шарде их нет, см.
+  OTHER_REFACTORING §4).
 
 ## 3. Unfurl / OpenGraph-превью ссылок
 

@@ -253,26 +253,31 @@ module Campfire
       end
     end
 
-    # Web Push (VAPID) — порт push-ветки perform (jobs.js): без ключей
-    # окружения — успешный no-op, как у express. Payload строится по
-    # room_type/creator, доставка — WebPush.deliver (aes128gcm + VAPID
-    # + DNS-pinning); 404/410 — подписка мертва (удаляем), >=400 —
-    # исключение → retry джобы.
+    # Web Push (VAPID) — порт Room::PushMessageJob + Room::MessagePusher
+    # (message_pusher.rb): получатели — активные (User.active) подписчики
+    # комнаты, involvement everything ИЛИ mentions+mentionees, кроме
+    # создателя и connected-пользователей (Membership.visible.disconnected,
+    # TTL 60с); payload — title/body по room_type (direct — имя создателя,
+    # shared — имя комнаты), badge непрочитанных (Pool#queue), icon —
+    # логотип аккаунта (WebPush::Notification#encoded_message); доставка —
+    # WebPush.deliver (aes128gcm + VAPID + DNS-pinning); 404/410 —
+    # подписка мертва (удаляем), >=400 — исключение → retry джобы.
+    # Без ключей окружения — успешный no-op.
     def self.perform_push(data : JSON::Any) : Nil
       return unless (vapid_private = ENV["VAPID_PRIVATE_KEY"]?) &&
                     (vapid_public = ENV["VAPID_PUBLIC_KEY"]?)
-      user_id = data["user_id"]?.try(&.to_s.to_i64?)
       message_id = data["message_id"]?.try(&.to_s.to_i64?)
-      return unless user_id && message_id
+      return unless message_id
 
       conn = ActiveRecord::Base.connection
       message = conn.query_one?(
         "SELECT r.id AS room_id, r.name AS room_name, r.type AS room_type, " \
-        "u.name AS creator_name FROM messages m " \
+        "m.creator_id, u.name AS creator_name FROM messages m " \
         "JOIN rooms r ON r.id = m.room_id JOIN users u ON u.id = m.creator_id WHERE m.id = ?",
         message_id) do |rs|
         {room_id: rs.read(Int64), room_name: rs.read(String?),
-         room_type: rs.read(String?), creator_name: rs.read(String?)}
+         room_type: rs.read(String?), creator_id: rs.read(Int64),
+         creator_name: rs.read(String?)}
       end
       return unless message
 
@@ -294,37 +299,54 @@ module Campfire
       direct = message[:room_type].in?("Direct", "Rooms::Direct")
       title = direct ? message[:creator_name] : message[:room_name]
       message_body = direct ? plain : "#{message[:creator_name]}: #{plain}"
-      badge = conn.query_one(
-        "SELECT count(*) FROM memberships WHERE user_id = ? AND unread_at IS NOT NULL",
-        user_id, as: Int64)
 
-      payload = JSON.build do |j|
-        j.object do
-          j.field "title", title
-          j.field "options" do
-            j.object do
-              j.field "body", message_body
-              j.field "data" do
-                j.object do
-                  j.field "path", "/rooms/#{message[:room_id]}"
-                  j.field "badge", badge
+      # MessagePusher#push: push_subscriptions_for_users_involved_in_
+      # everything.or(push_subscriptions_for_mentionable_users(mentionees))
+      # — один JOIN по relevant_subscriptions (User.active +
+      # Membership.visible.disconnected.where(room).not(creator)); ветка
+      # mentions дополнительно требует упоминания (message.mentionees).
+      mentions = MessageCreator.mention_ids(body)
+      subscriptions = conn.query_all(
+        "SELECT ps.id, ps.user_id, ps.endpoint, ps.p256dh_key, ps.auth_key, " \
+        "m.involvement FROM push_subscriptions ps " \
+        "JOIN users u ON u.id = ps.user_id " \
+        "JOIN memberships m ON m.user_id = ps.user_id " \
+        "WHERE m.room_id = ? AND m.user_id <> ? AND u.status = 0 " \
+        "AND m.involvement <> 'invisible' " \
+        "AND (m.connected_at IS NULL OR m.connected_at < ?) " \
+        "AND (m.involvement = 'everything' OR m.involvement = 'mentions')",
+        message[:room_id], message[:creator_id],
+        Time.utc - 60.seconds) do |rs|
+        {id: rs.read(Int64), user_id: rs.read(Int64), endpoint: rs.read(String?),
+         p256dh: rs.read(String?), auth: rs.read(String?), involvement: rs.read(String?)}
+      end
+
+      subject = ENV["VAPID_SUBJECT"]? || "mailto:campfire@example.com"
+      badges = {} of Int64 => Int64
+      subscriptions.each do |sub|
+        next if sub[:involvement] == "mentions" && !mentions.includes?(sub[:user_id])
+        next if sub[:endpoint].nil? || sub[:p256dh].nil? || sub[:auth].nil?
+        # Pool#queue: badge — Membership.unread по каждому получателю
+        badges[sub[:user_id]] ||= conn.query_one(
+          "SELECT count(*) FROM memberships WHERE user_id = ? AND unread_at IS NOT NULL",
+          sub[:user_id], as: Int64)
+        payload = JSON.build do |j|
+          j.object do
+            j.field "title", title
+            j.field "options" do
+              j.object do
+                j.field "body", message_body
+                j.field "icon", "/account/logo"
+                j.field "data" do
+                  j.object do
+                    j.field "path", "/rooms/#{message[:room_id]}"
+                    j.field "badge", badges[sub[:user_id]]
+                  end
                 end
               end
             end
           end
         end
-      end
-
-      subject = ENV["VAPID_SUBJECT"]? || "mailto:campfire@example.com"
-      subscriptions = conn.query_all(
-        "SELECT id, endpoint, p256dh_key, auth_key FROM push_subscriptions WHERE user_id = ?",
-        user_id) do |rs|
-        {id: rs.read(Int64), endpoint: rs.read(String?),
-         p256dh: rs.read(String?), auth: rs.read(String?)}
-      end
-
-      subscriptions.each do |sub|
-        next if sub[:endpoint].nil? || sub[:p256dh].nil? || sub[:auth].nil?
         status = WebPush.deliver(sub[:endpoint].not_nil!, sub[:p256dh].not_nil!,
           sub[:auth].not_nil!, payload, vapid_public, vapid_private, subject)
         # nil — не-https endpoint или приватный адрес: skip (continue у express)

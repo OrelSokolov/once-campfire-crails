@@ -33,8 +33,15 @@ class SessionsController < ApplicationController
     end
   end
 
-  # sessions#destroy: terminate_current_session + redirect root_url.
+  # sessions#destroy: remove_push_subscription (endpoint из скрытого
+  # поля формы логаута — sessions-JS отписывает браузер при выходе) +
+  # terminate_current_session + redirect root_url.
   def destroy
+    if (endpoint = params["push_subscription_endpoint"]?.try(&.to_s.presence)) &&
+       (user = current_user)
+      PushSubscription.where("endpoint = ? AND user_id = ?",
+        endpoint, user.id.not_nil!).delete_all
+    end
     raw = cookies.signed["session_token"]?
     token = case raw
             when String then raw

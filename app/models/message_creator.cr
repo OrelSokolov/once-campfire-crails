@@ -137,13 +137,11 @@ module MessageCreator
     jobs = [] of Tuple(String, String)
 
     rows = conn.query_all(
-      "SELECT m.user_id, m.involvement, u.role, u.status, " \
-      "(m.connected_at IS NULL OR m.connected_at < ?) AS offline " \
+      "SELECT m.user_id, u.role, u.status " \
       "FROM memberships m JOIN users u ON u.id = m.user_id " \
       "WHERE m.room_id = ? AND m.user_id <> ?",
-      now - 60.seconds, room.id.not_nil!, creator.id.not_nil!) do |rs|
-      {user_id: rs.read(Int64), involvement: rs.read(String?),
-       role: rs.read(Int32), status: rs.read(Int32), offline: rs.read(Int64)}
+      room.id.not_nil!, creator.id.not_nil!) do |rs|
+      {user_id: rs.read(Int64), role: rs.read(Int32), status: rs.read(Int32)}
     end
 
     rows.each do |row|
@@ -162,18 +160,12 @@ module MessageCreator
           jobs << {"webhook", data}
         end
       end
-      if row[:offline] == 1 &&
-         (row[:involvement] == "everything" ||
-          (row[:involvement] == "mentions" && mentioned))
-        data = JSON.build do |j|
-          j.object do
-            j.field "user_id", row[:user_id]
-            j.field "message_id", message.id.not_nil!
-          end
-        end
-        jobs << {"push", data}
-      end
     end
+
+    # Room::PushMessageJob (message.rb: after_create_commit →
+    # room.push_later): единая push-джоба на сообщение; получатели
+    # (Room::MessagePusher) фильтруются при доставке — perform_push.
+    jobs << {"push", %({"message_id":#{message.id.not_nil!}})}
     jobs
   end
 
