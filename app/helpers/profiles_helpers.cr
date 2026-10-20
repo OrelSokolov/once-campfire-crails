@@ -34,6 +34,15 @@ module ProfilesHelpers
     ERB::SafeString.new(ChatLayout.web_share_button(url))
   end
 
+  # profile_form_with (users/profiles_helper референса): form_with на
+  # user_profile_path, PATCH, scope user (модели FormModel у User нет —
+  # значения полей передаются явным value:).
+  def profile_form_with(**params,
+                        &block : ActionView::Helpers::FormHelper::FormBuilder -> _)
+    form_with **params, url: "/users/me/profile", method: "patch",
+      scope: "user", data: {controller: "form"}, &block
+  end
+
   # copy_button: иконка copy-paste с классом flex-item-no-shrink (артефакты).
   def copy_button(url : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.copy_button(url, "Copy auto-login link",

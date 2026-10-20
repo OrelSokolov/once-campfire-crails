@@ -1,54 +1,54 @@
 <%= page_open(@user.not_nil!) %><section class="panel flex flex-column gap" style="view-transition-name: avatar-<%= @user.not_nil!.id %>">
   <%= install_instructions %>
   <div class="align-center center avatar__form gap" data-controller="upload-preview">
-    <form accept-charset="UTF-8" action="/users/me/profile" class="txt-medium" data-controller="form" enctype="multipart/form-data" method="post"><input name="_method" type="hidden" value="patch">
+    <%= profile_form_with class: "txt-medium" do |form| %>
       <label class="btn input--file">
         <%= icon("camera.svg") %>
-        <input accept="image/*" class="input" data-action="upload-preview#previewImage change-&gt;form#submit" data-upload-preview-target="input" id="file" name="user[avatar]" type="file">
+        <%= form.file_field :avatar, id: "file", class: "input", accept: "image/*", data: {"upload-preview-target": "input", action: "upload-preview#previewImage change->form#submit"} %>
         <span class="for-screen-reader">Upload avatar</span>
       </label>
-    </form>
-    <form accept-charset="UTF-8" action="/users/me/profile" data-controller="form" enctype="multipart/form-data" method="post"><input name="_method" type="hidden" value="patch">
+    <% end %>
+    <%= profile_form_with do |form| %>
       <label class="btn avatar input--file txt-xx-large">
         <img aria-hidden="true" data-upload-preview-target="image" height="300" src="<%= fresh_avatar_path(@user.not_nil!) %>" width="300">
-        <input accept="image/*" class="input" data-action="upload-preview#previewImage change-&gt;form#submit" data-upload-preview-target="input" id="file" name="user[avatar]" type="file">
+        <%= form.file_field :avatar, id: "file", class: "input", accept: "image/*", data: {"upload-preview-target": "input", action: "upload-preview#previewImage change->form#submit"} %>
         <span class="for-screen-reader">Avatar</span>
       </label>
-    </form>
+    <% end %>
   </div>
-  <form accept-charset="UTF-8" action="/users/me/profile" data-controller="form" method="post"><input name="_method" type="hidden" value="patch">
+  <%= profile_form_with do |form| %>
     <div class="flex flex-column gap">
       <div class="flex align-center gap">
         <%= translation_button("user_name") %>
         <label class="flex align-center gap flex-item-grow input input--actor">
-          <input autocomplete="name" autofocus="autofocus" class="input txt-large " data-1p-ignore="true" id="user_name" name="user[name]" placeholder="Enter your name" required="required" type="text" value="<%= @user.not_nil!.name.to_s %>">
+          <%= form.text_field :name, value: @user.not_nil!.name.to_s, class: "input txt-large ", autocomplete: "name", placeholder: "Enter your name", autofocus: true, required: true, data: {"1p-ignore" => true} %>
           <%= icon("person.svg", 24, "colorize--black") %>
         </label>
       </div>
       <div class="flex align-center gap">
         <%= translation_button("email_address") %>
         <label class="flex align-center gap flex-item-grow input input--actor">
-          <input autocomplete="username" class="input txt-large" id="user_email_address" name="user[email_address]" placeholder="Enter your email address" type="email" value="<%= @user.not_nil!.email_address.to_s %>">
+          <%= form.email_field :email_address, value: @user.not_nil!.email_address.to_s, class: "input txt-large", autocomplete: "username", placeholder: "Enter your email address", required: false %>
           <%= icon("email.svg", 24, "colorize--black") %>
         </label>
       </div>
       <div class="flex align-center gap">
         <%= translation_button("update_password") %>
         <label class="flex align-center gap flex-item-grow input input--actor">
-          <input autocomplete="new-password" class="input txt-large" id="user_password" maxlength="72" name="user[password]" placeholder="Change password" size="72" type="password">
+          <%= form.password_field :password, class: "input txt-large", autocomplete: "new-password", placeholder: "Change password", required: false, maxlength: 72 %>
           <%= icon("password.svg", 24, "colorize--black") %>
         </label>
       </div>
       <div class="flex align-start gap">
         <%= translation_button("bio") %>
         <label class="flex align--center gap flex-item--grow input input--actor">
-          <textarea class="input txt-large" id="user_bio" maxlength="200" name="user[bio]" placeholder="A few words about yourself…" rows="3"><%= @user.not_nil!.bio.to_s %></textarea>
+          <%= form.text_area :bio, value: @user.not_nil!.bio.to_s, class: "input txt-large", maxlength: 200, placeholder: "A few words about yourself…", rows: 3 %>
           <%= icon("bio.svg", 24, "colorize--black") %>
         </label>
       </div>
       <button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
     </div>
-  </form>
+  <% end %>
   <div class="margin-block pad-inline pad-block fill-shade border-radius">
     <menu class="flex flex-column gap margin-none pad">
       <% viewer = @user.not_nil! %>

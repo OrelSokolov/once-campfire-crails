@@ -304,7 +304,21 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 >   спека по байтам артефакта rails-оракула). v0.1.8: нормализация
 >   вложенных NamedTuple/Hash опций (`data: {controller: "form"}` из
 >   ERB) в `__av_opts_to_h`/`tag_options` — Symbol-ключи и named
->   tuples flattening'ятся как в Rails.
+>   tuples flattening'ятся как в Rails. v0.1.9: явные `id:`/`for:` в
+>   опциях подавляют автогенерацию (skip_default_ids), text_area
+>   принимает `value:` (oracle ff_textarea_value), порядок атрибутов
+>   opts→name→id.
+> - `accounts/bots/new+edit.html.erb` — форма бота переведена
+>   (`form_with url:, scope: "user"` / `method: "patch"` + `file_field
+>   :avatar`, `text_field :name`, `url_field :webhook_url`); button_to
+>   с блоком (delete/key) и submit-кнопка без name оставлены сырыми.
+>   bot-new.html байт-в-байт с оракулом.
+> - `users/profiles/show.html.erb` — все три формы через новый
+>   `profile_form_with` (app/helpers/profiles_helpers.cr — form_with
+>   PATCH /users/me/profile, scope user): `file_field :avatar` с
+>   явным `id: "file"`, `text_field :name`/`email_field`/
+>   `password_field`/`text_area :bio` с явными `value:`; profile.html
+>   и profile-edited.html байт-в-байт с оракулом.
 > Порядок дальнейшего перевода: first_runs/show, users/new+profiles,
 > accounts/edit (+fields_for :settings), accounts/bots, rooms/*,
 > messages/boosts — по странице за проход, полный twinshot после
@@ -374,4 +388,4 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > 211 oracle-кейсов зелёные, twinshot без регресса. Осталось: фаза 0
 > хвост (эталоны fields/form_for), фаза 4b (polymorphic `model:` без
 > `url:`), фаза 5 (перевод вьюх приложения на хелперы). Опубликованные
-> версии: action_view.cr v0.1.3–v0.1.8 (проект на 0.1.8; 216 oracle-кейсов).
+> версии: action_view.cr v0.1.3–v0.1.9 (проект на 0.1.9; 217 oracle-кейсов).
