@@ -1,33 +1,33 @@
 <%= page_open(@user.not_nil!) %><section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
   <% if @user.not_nil!.role == 1 %>
     <div class="align-center center avatar__form gap" data-controller="upload-preview">
-      <form accept-charset="UTF-8" action="/account.<%= @account.not_nil!.id.not_nil! %>" class="txt--medium" data-controller="form" enctype="multipart/form-data" method="post"><input type="hidden" name="_method" value="patch">
+      <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "txt--medium", data: {controller: "form"} do |form| %>
         <label class="btn input--file">
           <%= icon("camera.svg") %>
-          <input accept="image/*" class="input" data-action="upload-preview#previewImage change-&gt;form#submit" id="account_logo" name="account[logo]" type="file">
+          <%= form.file_field :logo, class: "input", accept: "image/*", data: {action: "upload-preview#previewImage change->form#submit"} %>
           <span class="for-screen-reader">Upload logo</span>
         </label>
-      </form>
-      <form accept-charset="UTF-8" action="/account.<%= @account.not_nil!.id.not_nil! %>" data-controller="form" enctype="multipart/form-data" method="post"><input type="hidden" name="_method" value="patch">
+      <% end %>
+      <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", data: {controller: "form"} do |form| %>
         <label class="btn avatar input--file account-logo txt-xx-large">
           <img data-upload-preview-target="image" role="presentation" src="<%= logo_src %>" width="48" height="48">
-          <input accept="image/*" class="input" data-action="upload-preview#previewImage change-&gt;form#submit" id="account_logo" name="account[logo]" type="file">
+          <%= form.file_field :logo, class: "input", accept: "image/*", data: {action: "upload-preview#previewImage change->form#submit"} %>
           <span class="for-screen-reader">Upload logo</span>
         </label>
-      </form>
+      <% end %>
       <% if @account.not_nil!.logo_attachment %><form action="<%= logo_src %>" class="button_to" method="post"><input type="hidden" name="_method" value="delete"><button class="btn btn--negative txt-small avatar__delete-btn" type="submit"><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span></button></form><% end %>
     </div>
-    <form accept-charset="UTF-8" action="/account.<%= @account.not_nil!.id.not_nil! %>" class="flex flex-column gap" data-controller="form" method="post"><input type="hidden" name="_method" value="patch">
+    <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "flex flex-column gap", data: {controller: "form"} do |form| %>
       <div class="flex align-center gap">
         <%= translation_button("account_name") %>
         <label class="flex align-center gap flex-item-grow">
-          <input name="account[name]" value="<%= @account.not_nil!.name.to_s %>" id="account_name" class="input txt-large" autocomplete="off" placeholder="Name this account" type="text" autofocus="autofocus" data-action="keydown.enter-&gt;form#submit">
+          <%= form.text_field :name, value: @account.not_nil!.name.to_s, id: "account_name", class: "input txt-large", autocomplete: "off", placeholder: "Name this account", autofocus: true, data: {action: "keydown.enter->form#submit"} %>
         </label>
-        <button class="btn btn--reversed center" name="button" type="submit">
+        <%= form.button class: "btn btn--reversed center" do %>
           <%= icon("check.svg") %>
           <span class="for-screen-reader">Save changes</span>
-        </button>      </div>
-    </form>
+        <% end %>      </div>
+    <% end %>
     <div class="margin-block-start pad-block pad-inline-double fill-shade border-radius">
       <form accept-charset="UTF-8" action="/account.<%= @account.not_nil!.id.not_nil! %>" class="flex align-center gap center" data-controller="form" method="post"><input type="hidden" name="_method" value="put">
         <div class="flex-item-grow flex align-center gap txt-align-start">

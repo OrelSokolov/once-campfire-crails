@@ -288,6 +288,23 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 >   login/login-error/login-banned.html structure-identical,
 >   логин-POST тестами зелёный; мёртвый `SessionsHelpers#email_value`
 >   удалён (value теперь через `value:` у email_field).
+> - `accounts/edit.html.erb` — частично: две logo-формы
+>   (`form_with url:, method: "patch", scope: "account"` + `file_field
+>   :logo` с data-action; enctype multipart поднимает file_field сам)
+>   и name-форма (`form_with ... scope: "account"` + `text_field :name`
+>   c явным `value:` — модели нет — и `form.button` блоком);
+>   test_account_settings_page_renders — формы байт-в-байт с оракулом
+>   (единственный diff — био-шум сиута). НЕ переведено: settings-форма
+>   (нужен Settings FormModel для `fields_for :settings`), join_code и
+>   delete-logo `button_to` с блоком (у шарда нет блочной версии),
+>   user-строки (`account_user_row` в accounts_helpers).
+> - action_view.cr v0.1.7: ручка `method_field_autocomplete`
+>   (дефолт on = 8.1.4-гем; приложение ставит false — поведение 8.2
+>   `_method`-hidden без autocomplete="off"; не oracle-кейс, обычная
+>   спека по байтам артефакта rails-оракула). v0.1.8: нормализация
+>   вложенных NamedTuple/Hash опций (`data: {controller: "form"}` из
+>   ERB) в `__av_opts_to_h`/`tag_options` — Symbol-ключи и named
+>   tuples flattening'ятся как в Rails.
 > Порядок дальнейшего перевода: first_runs/show, users/new+profiles,
 > accounts/edit (+fields_for :settings), accounts/bots, rooms/*,
 > messages/boosts — по странице за проход, полный twinshot после
@@ -357,4 +374,4 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > 211 oracle-кейсов зелёные, twinshot без регресса. Осталось: фаза 0
 > хвост (эталоны fields/form_for), фаза 4b (polymorphic `model:` без
 > `url:`), фаза 5 (перевод вьюх приложения на хелперы). Опубликованные
-> версии: action_view.cr v0.1.3–v0.1.5 (проект на 0.1.5).
+> версии: action_view.cr v0.1.3–v0.1.8 (проект на 0.1.8; 216 oracle-кейсов).
