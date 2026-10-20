@@ -1,13 +1,13 @@
 <turbo-frame id="new_boost_message_<%= @mid %>">
   <div class="boost flex-inline postion--relative max-width fill-white" style="--column-gap: var(--inline-space-half)">
-    <form class="boost__form flex align-center gap expanded" data-controller="form scroll-into-view" data-turbo-frame="boosting_message_<%= @mid %>" data-action="keydown.esc-&gt;form#cancel" action="<%= message_boosts_path(@mid) %>" accept-charset="UTF-8" method="post"><label class="boost__form-label flex gap" style="--column-gap: 0.7ch;" role="button" tabindex="0" aria-label="Add a boost">
+    <%= form_with url: message_boosts_path(@mid), scope: "boost", class: "boost__form flex align-center gap expanded", data: {controller: "form scroll-into-view", "turbo-frame": "boosting_message_#{@mid}", action: "keydown.esc->form#cancel"} do |form| %><label class="boost__form-label flex gap" style="--column-gap: 0.7ch;" role="button" tabindex="0" aria-label="Add a boost">
       <figure class="avatar boost__avatar flex-item-no-shrink">
         <a title="<%= ChatLayout.user_title(@user.not_nil!.name, @user.not_nil!.bio) %>" class="btn avatar" data-turbo-frame="_top" href="<%= user_path(@user.not_nil!.id.not_nil!) %>"><img aria-hidden="true" src="<%= ChatLayout.fresh_user_avatar_path(@user.not_nil!.id.not_nil!, @user.not_nil!.updated_at) %>" width="48" height="48"></a><span class="for-screen-reader"><%= @user.not_nil!.name.to_s %></span>
       </figure>
-      <input autofocus="autofocus" autocomplete="off" autocorrect="off" maxlength="16" required="required" pattern="\S+.*" data-boost-form-target="input" class="input input--boost txt-small" size="16" type="text" name="boost[content]">
+      <%= form.text_field :content, id: nil, autofocus: true, autocomplete: "off", autocorrect: "off", maxlength: 16, required: true, pattern: "\\S+.*", data: {"boost-form-target" => "input"}, class: "input input--boost txt-small" %>
     </label>
-      <button name="button" type="submit" class="btn btn--reversed"><%= icon("check.svg") %><span class="for-screen-reader">Submit</span></button>
+      <%= form.button class: "btn btn--reversed" do %><%= icon("check.svg") %><span class="for-screen-reader">Submit</span><% end %>
       <a data-turbo-frame="boosts_message_<%= @mid %>" data-form-target="cancel" class="btn btn--negative" href="<%= message_boosts_path(@mid) %>"><%= icon("minus.svg") %><span class="for-screen-reader">Cancel</span></a>
-    </form>
+    <% end %>
   </div>
 </turbo-frame>

@@ -1,9 +1,9 @@
 <%= page_open(room ? "Edit settings for #{room.try(&.name).to_s}" : "New chat room", room ? "/rooms/#{room.id.not_nil!}" : "/") %><section class="panel txt-align-center" style="view-transition-name: <%= room ? "edit-room-#{room.id.not_nil!}" : "new-room" %>">
-  <form accept-charset="UTF-8" action="/rooms/<%= kind %><%= room ? "/#{room.id.not_nil!}" : "" %>" method="post"><% if room %><input name="_method" type="hidden" value="patch"><% end %>
+  <%= form_with url: "/rooms/#{kind}#{room ? "/#{room.id.not_nil!}" : ""}", method: (room ? "patch" : "post"), scope: "room" do |form| %>
     <div class="flex align-center gap">
       <% if can_administer %><%= translation_button("room_name") %>
         <label class="flex-item-grow txt-large">
-          <input autofocus="autofocus" class="input full-width" data-action="keydown.enter-&gt;form#submit:prevent" data-turbo-permanent="true" id="room_name" name="room[name]" placeholder="Name the room" required="required" type="text" value="<%= room.try(&.name).to_s %>">
+          <%= form.text_field :name, value: room.try(&.name).to_s, class: "input full-width", placeholder: "Name the room", required: true, autofocus: true, data: {action: "keydown.enter->form#submit:prevent", "turbo-permanent": true} %>
           <span class="for-screen-reader">Name this room</span>
         </label>
       <% else %><h1 class="flex-item-grow txt-x-large"><%= room.try(&.name).to_s %></h1><% end %></div>
@@ -47,8 +47,8 @@
           <% end %></div>
       </menu>
     </section>
-    <% if can_administer %><button class="btn btn--reversed txt-large center" name="button" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save</span></button>
-    <% end %></form>
+    <% if can_administer %><%= form.button class: "btn btn--reversed txt-large center" do %><%= icon("check.svg") %><span class="for-screen-reader">Save</span><% end %>
+    <% end %><% end %>
 </section>
 <% if room && can_administer %><section class="panel txt-align-center">
   <form action="<%= origin %>/rooms/<%= room.id.not_nil! %>" class="button_to" method="post"><input name="_method" type="hidden" value="delete"><button aria-label="Delete <%= room.name.to_s %>" class="btn btn--negative max-width" data-turbo-confirm="Are you sure you want to delete this room and all messages in it? This can’t be undone." type="submit"><%= icon("trash.svg") %><span class="overflow-ellipsis"><%= room.name.to_s %></span></button></form>

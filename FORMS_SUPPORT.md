@@ -319,6 +319,17 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 >   явным `id: "file"`, `text_field :name`/`email_field`/
 >   `password_field`/`text_area :bio` с явными `value:`; profile.html
 >   и profile-edited.html байт-в-байт с оракулом.
+> - `messages/boosts/new.html.erb` — форма буста (`form_with url:
+>   message_boosts_path, scope: "boost"` + `text_field :content` с
+>   `id: nil`, pattern строкой, size из maxlength + `form.button`);
+>   форма живёт в turbo-frame и верифицируется DOM-тестами
+>   (custom-boost/quick-boost зелёные).
+> - `rooms/_form.html.erb` — форма комнаты (`form_with url:
+>   "/rooms/#{kind}[/id]", method: patch|post, scope: "room"` +
+>   `text_field :name` + `form.button`); room-settings.html
+>   байт-в-байт. Для этого erb.cr v0.1.4: template_processor матчит
+>   `<% end %>` со стеком конструкций (контрольные блоки, обёртывающие
+>   `<%= expr do %>`, больше не парсятся неверно).
 > Порядок дальнейшего перевода: first_runs/show, users/new+profiles,
 > accounts/edit (+fields_for :settings), accounts/bots, rooms/*,
 > messages/boosts — по странице за проход, полный twinshot после
