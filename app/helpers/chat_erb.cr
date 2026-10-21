@@ -8,6 +8,9 @@ class ChatERB
   # контроллера, и здесь — именованные *_path-хелперы (routes.url_for)
   # должны работать в обоих; route_set назначается railties при буте.
   include CRails::Routes::UrlHelpers
+  # turbo_frame_tag в rooms/involvements/** (bell, show) — блочная
+  # capture-форма шарда turbo_cr.
+  include Turbo::FramesHelper
 
   def initialize(@room : Room? = nil, @footer : String = "", @sidebar : String = "",
                  @origin : String = "", @involvement : String = "mentions",

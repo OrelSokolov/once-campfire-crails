@@ -1,4 +1,4 @@
-<turbo-frame id="new_boost_message_<%= @mid %>">
+<%= turbo_frame_tag("new_boost_message_#{@mid}") do %>
   <div class="boost flex-inline postion--relative max-width fill-white" style="--column-gap: var(--inline-space-half)">
     <%= form_with url: message_boosts_path(@mid), scope: "boost", class: "boost__form flex align-center gap expanded", data: {controller: "form scroll-into-view", "turbo-frame": "boosting_message_#{@mid}", action: "keydown.esc->form#cancel"} do |form| %><label class="boost__form-label flex gap" style="--column-gap: 0.7ch;" role="button" tabindex="0" aria-label="Add a boost">
       <figure class="avatar boost__avatar flex-item-no-shrink">
@@ -10,4 +10,5 @@
       <a data-turbo-frame="boosts_message_<%= @mid %>" data-form-target="cancel" class="btn btn--negative" href="<%= message_boosts_path(@mid) %>"><%= icon("minus.svg") %><span class="for-screen-reader">Cancel</span></a>
     <% end %>
   </div>
-</turbo-frame>
+<% end %>
+

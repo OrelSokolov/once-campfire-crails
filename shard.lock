@@ -11,7 +11,7 @@ shards:
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
-    version: 0.1.13
+    version: 0.1.15
 
   active_job_cr:
     git: https://github.com/orelsokolov/active_job.cr.git
@@ -27,7 +27,7 @@ shards:
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
-    version: 0.1.7
+    version: 0.1.8
 
   attr_reader_cr:
     git: https://github.com/orelsokolov/attr_reader.cr.git
@@ -43,7 +43,7 @@ shards:
 
   erb_cr:
     git: https://github.com/orelsokolov/erb.cr.git
-    version: 0.1.4
+    version: 0.1.5
 
   icr:
     git: https://github.com/orelsokolov/icr.cr.git
@@ -75,7 +75,7 @@ shards:
 
   railties_cr:
     git: https://github.com/orelsokolov/railties.cr.git
-    version: 0.1.14
+    version: 0.1.15
 
   redis:
     git: https://github.com/jgaskins/redis.git
@@ -95,5 +95,5 @@ shards:
 
   turbo_cr:
     git: https://github.com/orelsokolov/turbo.cr.git
-    version: 0.1.4
+    version: 0.1.6
 

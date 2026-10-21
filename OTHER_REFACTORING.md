@@ -113,16 +113,89 @@ manual where (SCOPES OK).
 ## 5. Дубли view-хелперов в ChatLayout → helpers из action_view_cr /
    turbo_cr
 
+> **Сделано** (2026-10-21; form_with-часть была закрыта ранее в
+> `FORMS_SUPPORT.md` — все формы переведены на `form_with`/`button_to`;
+> проход по turbo-frame ERB-шаблонам закрыт тем же днём — см. ниже).
+>
+> - **image_tag ↔ ChatLayout.icon** — сделано: action_view.cr **v0.1.14**
+>   добавляет статик-форму `AssetTagHelper.image_tag(source, opts)`
+>   (байт-идентичную инстанс-методу; для дом-билдеров вне вью-контекста,
+>   как `TagHelper.tag_options`). `ChatLayout.icon` теперь делегирует в
+>   неё (`aria: {hidden}`, `size:`, `class:`). Wire-формат сверен с
+>   живым rails-оракулом (8.2.0.alpha, `rails runner` через view_context):
+>   `<img aria-hidden="true" src="/assets/x.svg" width="20" height="20" />`
+>   — порт теперь совпадает с референсом и на проводе (старая ручная
+>   строка была без self-closing слэша); в артефактах порядок атрибутов
+>   нормализуется (harness/normalize.rb).
+> - **turbo_frame_tag ↔ сырые `<turbo-frame>`** — сделано для сайдбара:
+>   turbo.cr **v0.1.5** — `turbo_frame_tag` принимает доп. атрибуты
+>   (`target`, `class`, `data: {...}` — вставка до loading/id/src, как
+>   порядок ключей в гемe) + статик-форма
+>   `Turbo::FramesHelper.turbo_frame_tag` (для ChatLayout-контекста).
+>   Переведены: `ChatLayout.chat_sidebar_frame` (аналог
+>   users/sidebar_helper.rb#sidebar_turbo_frame_tag) и обе ветки
+>   `users/sidebars_controller` (turbo-frame-ответ и полный layout).
+>   `->` в data-action tag_options экранирует как `-&gt;` — после
+>   HTML-парсинга идентично сырой строке (DOM-нормализация).
+>   **Проход по ERB-шаблонам закрыт** (2026-10-21, turbo.cr **v0.1.6**
+>   + erb.cr **v0.1.5** + action_view.cr **v0.1.15**): сверены ВСЕ сырые
+>   `<turbo-frame>` порта с референсом — хелпер у референса используют
+>   три шаблона, они переведены на инстанс-форму `turbo_frame_tag`:
+>   `rooms/involvements/_bell` (data-controller/action/
+>   turbo-frame-url-param, id — `dom_id("involvement")`),
+>   `rooms/involvements/show` (те же атрибуты, однострочник),
+>   `messages/boosts/new` (`new_boost_message_<mid>`); ChatERB получил
+>   `include Turbo::FramesHelper`. Остальные сырые фреймы (bell-сосед
+>   `direct_rooms_control` в сайдбаре, `rooms/directs/new`,
+>   `rooms/show/_composer`, `messages/edit`, `accounts/edit`) — у
+>   Rails-референса ТОЖЕ сырые, остаются как есть (1:1). Для блочной
+>   формы из ERB инстанс-хелпер переведён на capture-семантику (как
+>   `button_to`): erb.cr 0.1.5 — `capture` возвращает SafeString для
+>   аппендов в буфер (html_safe-семантика Rails CaptureHelper),
+>   plain-строку из блока пропускает как есть → turbo_frame_tag
+>   экранирует её (оракул `helper_turbo_frame_tag_block`), захваченный
+>   вывод идёт raw; tag_builder block-ветка сохраняет экранирование
+>   plain-строк; action_view.cr 0.1.15 — compile-фикс cache-хелпера
+>   под union-тип capture. Переносы сохранены байт-в-байт: Erubi
+>   съедает `\n` после `<% end %>` — компенсировано пустыми строками
+>   (как в ERB референса). Смоук old vs new бинарь: /rooms/:id,
+>   /rooms/:id/involvement, /messages/:mid/boosts/new — IDENTICAL;
+>   спеки: erb.cr 14, action_view.cr 242, turbo.cr 12 — зелёные;
+>   `rake build:crails` REBUILD=1 чистый; twinshot review default —
+>   128/129 (1 soft_check PNG custom-boost.png, как в базлайне).
+> - **dom_id** — фикс шарда сделан (action_view.cr v0.1.14:
+>   namespace-underscore `Rooms::Open` → `rooms_open`, как
+>   `model_name.singular_route_key`; был баг `rooms/open`). Принятие в
+>   приложении заблокировано STI-двойным написанием type ('Open' из
+>   порта / 'Rooms::Open' из сида — active_record_cr не материализует
+>   STI-классы): `Room#dom_id`/`ChatERB#dom_id` остаются
+>   port-специфичной компенсацией. Вернуться при STI-материализации.
+> - **csrf_meta_tags** — строка таблицы устарела: порт (как и оракул
+>   rails-main с lazy-сессиями) НЕ эмитит csrf-meta (защита форм
+>   header_only по Sec-Fetch-Site; CSRF_TOKEN в ChatLayout — только для
+>   file_uploader fetch). Дублирования нет — переносить нечего.
+>
+> Верификация: спеки шардов (action_view.cr 242 green, turbo.cr
+> frames_spec 5 green; turbo_stream_from починен под рекурсивный AttrVal
+> union — компиляция сюита была сломана и до правок); смоук старый vs
+> новый бинарь (6 страниц: сырой диф только self-closing слэш img и
+> экранированный `->` в data-action — оба семантически идентичны после
+> парсинга, подтверждено живым rails-оракулом 8.2.0.alpha); `rake
+> build:crails` REBUILD=1 чистый; **twinshot review default — 128/129**
+> (единственный диф — soft_check custom-boost.png; mobile.png, флaky на
+> 0.2%-пороге в прошлых прогонах, здесь прошёл). Опубликовано:
+> action_view.cr v0.1.14, turbo.cr v0.1.5; проект подтянул обе версии.
+
 Реализовано и не используется:
 
 | Шард | Хелпер | Чем дублируется в приложении |
 |---|---|---|
-| action_view_cr | `image_tag` (`asset_tag_helper.cr:27`) | `ChatLayout.icon` (img + width/height) |
-| action_view_cr | `link_to`, `button_to` (`url_helper.cr`) | сырые `<a>`/`<button_to>`-формы |
-| action_view_cr | `form_with` (`form_helper.cr:31`) | формы руками (`room_form`, `bot_form`, …) |
-| action_view_cr | `dom_id` (`record_identifier.cr:9`) | `ChatERB#dom_id`, строки `boost_#{id}`, `message_#{mid}` в ChatLayout |
-| action_view_cr | `csrf_meta_tags` | вручную в ChatLayout.head |
-| turbo_cr | `turbo_frame_tag` (`helpers.cr:37`) | `%(<turbo-frame id="...">)` строки |
+| action_view_cr | `image_tag` (`asset_tag_helper.cr:27`) | ~~`ChatLayout.icon`~~ — сделано (v0.1.14, делегирует) |
+| action_view_cr | `link_to`, `button_to` (`url_helper.cr`) | `button_to`-блоки переведены (FORMS_SUPPORT); сырые `<a>` в ChatLayout-дом-билдерах (`avatar_link` и т.п.) остаются: билдеры без 1:1, `href`-порядок link_to расходится с точностью шаблонов |
+| action_view_cr | `form_with` (`form_helper.cr:31`) | ~~формы руками~~ — закрыто в FORMS_SUPPORT |
+| action_view_cr | `dom_id` (`record_identifier.cr:9`) | фикс шарда сделан (v0.1.14); принятие в приложении заблокировано STI-двойным type (без материализации классов) — см. выше |
+| action_view_cr | `csrf_meta_tags` | не дублируется: meta не эмитится (lazy-сессии, header_only) |
+| turbo_cr | `turbo_frame_tag` (`helpers.cr:37`) | ~~`chat_sidebar_frame`/sidebars~~ — сделано (v0.1.5); ERB-шаблоны переведены (v0.1.6): bell, involvements/show, boosts/new — у остальных сырых фреймов референс тоже сырой |
 
 Делать совместно с ERB_REFACTORING: новые ERB-шаблоны писать на
 хелперах; `ChatLayout` остаётся только для дом-билдеров без
