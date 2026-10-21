@@ -17,6 +17,15 @@ abstract class ApplicationController < ActionController::Base
   # в URL (не из браузера) защиту отключают.
   protect_from_forgery using: :header_only, with: :exception, unless: :bot_request?
 
+  # Оракул (rails-main, lazy-сессии): protect_against_forgery? в контексте
+  # рендера false → формы НЕ содержат embedded authenticity_token (ни у
+  # анонимов, ни у залогиненных — проверено живым оракулом, /session/new и
+  # /account/edit). Turbo/XHR берут токен из csrf_meta_tags; верификация —
+  # Sec-Fetch-Site (header_only), от поля в форме не зависит.
+  protected def __csrf_token_field(action : String, method : String) : String
+    ""
+  end
+
   def bot_request? : Bool
     params["bot_key"]? != nil
   end

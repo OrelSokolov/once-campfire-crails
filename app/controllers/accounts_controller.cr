@@ -24,11 +24,14 @@ class AccountsController < ApplicationController
   @admins : Array(User) = [] of User
   @members : Array(User) = [] of User
 
-  # HTML-партиал nav аккаунта (account_nav.eta): назад + боты/кастомные
-  # стили для админа; рендерится обёрткой AccountsHelpers#account_nav.
+  # HTML-партиалы: nav аккаунта (account_nav.eta — назад + боты/
+  # кастомные стили для админа) и строка юзера в списке edit (порт
+  # accounts/users/_user.html.erb — форма роли/удаление/«My settings»).
   compile_partials({
     "accounts/nav" => {path: "app/views/accounts/_nav.html.erb",
                        locals: {"user" => User}},
+    "accounts/users/user" => {path: "app/views/accounts/users/_user.html.erb",
+                              locals: {"user" => User}},
   }, dedent: true)
 
   def edit

@@ -294,10 +294,9 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 >   и name-форма (`form_with ... scope: "account"` + `text_field :name`
 >   c явным `value:` — модели нет — и `form.button` блоком);
 >   test_account_settings_page_renders — формы байт-в-байт с оракулом
->   (единственный diff — био-шум сиута). НЕ переведено: settings-форма
->   (нужен Settings FormModel для `fields_for :settings`), join_code и
->   delete-logo `button_to` с блоком (у шарда нет блочной версии),
->   user-строки (`account_user_row` в accounts_helpers).
+>   (единственный diff — био-шум сиута). Хвост переведён (2026-10-21,
+>   см. блок «accounts/edit хвост закрыт» ниже): settings-форма, join_code,
+>   delete-logo button_to с блоком, user-строки.
 > - action_view.cr v0.1.7: ручка `method_field_autocomplete`
 >   (дефолт on = 8.1.4-гем; приложение ставит false — поведение 8.2
 >   `_method`-hidden без autocomplete="off"; не oracle-кейс, обычная
@@ -330,11 +329,82 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 >   байт-в-байт. Для этого erb.cr v0.1.4: template_processor матчит
 >   `<% end %>` со стеком конструкций (контрольные блоки, обёртывающие
 >   `<%= expr do %>`, больше не парсятся неверно).
-> Порядок дальнейшего перевода: first_runs/show, users/new+profiles,
-> accounts/edit (+fields_for :settings), accounts/bots, rooms/*,
-> messages/boosts — по странице за проход, полный twinshot после
+> - `rooms/_form.html.erb` — форма комнаты (`form_with url:
+>   "/rooms/#{kind}[/id]", method: patch|post, scope: "room"` +
+>   `text_field :name` + `form.button`); room-settings.html
+>   байт-в-байт. Для этого erb.cr v0.1.4: template_processor матчит
+>   `<% end %>` со стеком конструкций (контрольные блоки, обёртывающие
+>   `<%= expr do %>`, больше не парсятся неверно).
+> - `first_runs/show.html.erb` + `joins/show.html.erb` (2026-10-20):
+>   обе signup-формы переведены (`form_with url: first_run_path /
+>   "/join/<code>", scope: "user"` + `text_field :name` /
+>   `email_field :email_address` / `password_field :password` +
+>   `form.button` блоком). Смоук: рендер до/после — только ожидаемые
+>   Rails-parity диффы (autofocus/required="…", size="72" из
+>   maxlength, name="button", authenticity_token — как у уже
+>   переведённого login); POST-флоу обеих форм проверен (first_run:
+>   аккаунт+админ+сессия; join: юзер+memberships в opens). Попутно
+>   закрыт баг шарда: action_view.cr **v0.1.10** — Bool в `data:` и
+>   небулевых атрибутах рендерится "true"/"false" по Rails
+>   tag_options (BOOLEAN_ATTRIBUTES → key="key"), oracle-кейсы
+>   tag_data_bool/tag_plain_bool_true (219 примеров зелёные).
+>   Аватар-upload в этих формах не портирован (нет has_secure_*) —
+>   file_field осознанно не добавлялся. Верификация: `rake
+>   build:crails` чистый; twinshot review default (полная
+>   регенерация обеих сторон) — 127/129, оба оставшихся png-диффа
+>   это soft_check-файлы из twinshot.yml (custom-boost, mobile),
+>   регресса нет.
+> Порядок дальнейшего перевода: accounts/edit хвост (settings-форма
+> через fields_for :settings + Settings FormModel, join_code,
+> delete-logo button_to с блоком, account_user_row). Остальные
+> страницы переведены. По странице за проход, полный twinshot после
 > каждой. `ActionController::Base` уже включает
 > `ActionView::Helpers` — include в контроллерах не нужен.
+
+> **accounts/edit хвост закрыт** (2026-10-21). Сделано:
+> - action_view.cr **v0.1.11** (oracle url_button_block*,
+>   fw_check_disabled, ff_hidden_no_ac, fw_check_no_ac):
+>   `button_to` с блоком (html-опции идут в `<button type="submit">`,
+>   форма class→method→action, method: get без _method);
+>   `check_box`: `include_hidden:` (Rails-семантика) вместо старого
+>   `hidden:` — `hidden: true` теперь проходит в input как boolean-атрибут,
+>   `checked:` — явный override (у порта role — Int, а не enum-строка),
+>   `disabled`/`form` срезаются в hidden-companion как в Rails;
+>   конфиг `remove_hidden_field_autocomplete` (аналог
+>   ActionView::Base.remove_hidden_field_autocomplete, load_defaults 8.2)
+>   убирает autocomplete="off" с hidden_field/check_box/select/collection
+>   companions и utf8-enrollment. Приложение ставит его в true.
+> - settings-форма: `form_with url:, method: "put", scope: "account"`
+>   + `form.fields_for :settings` + `hidden_field :restrict_…`
+>   с явным `value:` — Settings FormModel не понадобился (значение
+>   явное, как в шаблоне референса); свитч — сырой `<input>` (tag.input
+>   в шаблоне референса тоже сырой вывод атрибутов).
+> - delete-logo и join_code — `button_to … do` блоки.
+> - user-строки: хелпер `account_user_row` удалён, вместо него партиал
+>   `app/views/accounts/users/_user.html.erb` (порт
+>   accounts/users/_user.html.erb референса): `form_with url:
+>   "/account/users/<id>", method: "patch", scope: "user"` +
+>   `check_box :role` (checked_value/unchecked_value administrator/member,
+>   `hidden: true`, `disabled:` у себя), `button_to … method: "delete"`
+>   с turbo_confirm, `link_to … target: "_top"` «My settings»;
+>   аватар — `ChatLayout.avatar_link` в `ERB::SafeString`.
+>   Нюанс erb_cr (= Erubi): перевод строки сразу после `<% end %>`
+>   съедается — пустые строки в шаблоне расставлены как в ERB
+>   референса, чтобы сохранить переносы вывода (`</form>\n<form…`).
+> - Попутно закрыт пре-существующий (не от этого прохода; HEAD тоже
+>   эмитил) расстрой паритета: порт вставлял `authenticity_token` в
+>   формы (10 HTML-диффов в twinshot), оракул (rails-main, lazy-сессии:
+>   protect_against_forgery? в контексте рендера false) — никогда.
+>   Фикс: `ApplicationController#__csrf_token_field → ""` (мета-токен
+>   csrf_meta_tags и header_only-верификация по Sec-Fetch-Site не
+>   тронуты — проверено на живом оракуле: /session/new и /account/edit
+>   без токена и анонимно, и залогиненным).
+>
+> Верификация: спеки шарда 225 зелёных; сырой /account/edit порта
+> сверен с живым rails-оракулом через harness-нормализацию — секция
+> settings+users совпадает (диффы только браузерной сериализации);
+> `rake build:crails` чистый; **twinshot review default — 127/129**
+> (2 оставшихся — soft_check PNG mobile/custom-boost, как до прохода).
 1. App-хелперы из Rails-исходника: `profile_form_with`,
    `auto_submit_form_with` (once-campfire/app/helpers) — положить в
    `app/helpers/` crails-порта (НЕ в контроллеры — по AGENTS.md).
@@ -393,10 +463,17 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 без блока — они закрывают все текущие формы once-campfire, кроме
 `model:` без `url:`.
 
-> **Статус среза** (2026-10-20): ГОТОВ И ПЕРЕВЫПОЛНЕН — фаза 0 (частично:
+> **Статус среза** (2026-10-21): ГОТОВ И ПЕРЕВЫПОЛНЕН — фаза 0 (частично:
 > эталоны фаз 1/3/4a/2/3.4), фаза 1 (v0.1.3), фаза 3 п.1–3,5 + фаза 4a
 > (v0.1.4), фаза 2 + фаза 3 п.4 (v0.1.5, кроме time_zone_select);
-> 211 oracle-кейсов зелёные, twinshot без регресса. Осталось: фаза 0
-> хвост (эталоны fields/form_for), фаза 4b (polymorphic `model:` без
-> `url:`), фаза 5 (перевод вьюх приложения на хелперы). Опубликованные
-> версии: action_view.cr v0.1.3–v0.1.9 (проект на 0.1.9; 217 oracle-кейсов).
+> фаза 5 хвост accounts/edit закрыт (v0.1.11: блочный button_to,
+> check_box include_hidden/checked, remove_hidden_field_autocomplete;
+> + фикс embedded authenticity_token в ApplicationController).
+> Осталось: фаза 0 хвост (эталоны fields/form_for), фаза 4b
+> (polymorphic `model:` без `url:`). Опубликованные версии:
+> action_view.cr v0.1.3–v0.1.11 (проект на 0.1.11; 225 oracle-кейсов).
+> twinshot review default — 127/129 (2 soft_check PNG, как до прохода).
+> Переведённые страницы: sessions/new, users/profiles, accounts/edit
+> (полностью),
+> accounts/bots (new+edit), rooms/_form, messages/boosts/new,
+> first_runs/show, joins/show.

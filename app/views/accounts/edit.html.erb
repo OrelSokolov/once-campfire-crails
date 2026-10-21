@@ -15,7 +15,7 @@
           <span class="for-screen-reader">Upload logo</span>
         </label>
       <% end %>
-      <% if @account.not_nil!.logo_attachment %><form action="<%= logo_src %>" class="button_to" method="post"><input type="hidden" name="_method" value="delete"><button class="btn btn--negative txt-small avatar__delete-btn" type="submit"><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span></button></form><% end %>
+      <% if @account.not_nil!.logo_attachment %><%= button_to logo_src, method: "delete", class: "btn btn--negative txt-small avatar__delete-btn" do %><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span><% end %><% end %>
     </div>
     <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "flex flex-column gap", data: {controller: "form"} do |form| %>
       <div class="flex align-center gap">
@@ -29,11 +29,12 @@
         <% end %>      </div>
     <% end %>
     <div class="margin-block-start pad-block pad-inline-double fill-shade border-radius">
-      <form accept-charset="UTF-8" action="/account.<%= @account.not_nil!.id.not_nil! %>" class="flex align-center gap center" data-controller="form" method="post"><input type="hidden" name="_method" value="put">
+      <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "put", scope: "account", class: "flex align-center gap center", data: {controller: "form"} do |form| %>
         <div class="flex-item-grow flex align-center gap txt-align-start">
           <%= icon("crown.svg", 18, "colorize--black") %> Must be admin to create new rooms
         </div>
-        <input type="hidden" id="account_settings_restrict_room_creation_to_administrators" name="account[settings][restrict_room_creation_to_administrators]" value="<%= @restrict ? "false" : "true" %>">
+        <% form.fields_for :settings do |settings_form| %><%= settings_form.hidden_field :restrict_room_creation_to_administrators, value: @restrict ? "false" : "true" %><% end %>
+
         <label class="switch">
           <input type="checkbox" class="switch__input"<%= @restrict ? %( checked="checked") : "" %> data-action="change->form#submit">
           <span class="switch__btn round"></span>
@@ -41,7 +42,7 @@
             Must be admin to create new rooms
           </span>
         </label>
-      </form>    </div>
+      <% end %>    </div>
   <% else %><figure class="account-logo avatar txt-xx-large center"><img src="<%= logo_src %>" alt="Account logo" width="300" height="300"></figure>
     <h1 class="flex-item-grow txt-x-large"><%= @account.not_nil!.name.to_s %></h1>
   <% end %>
@@ -64,17 +65,17 @@
           <span class="for-screen-reader">Share join link</span>
           <%= icon("share.svg", 20, "colorize--black") %>
         </button>
-        <% if @user.not_nil!.role == 1 %><form action="/account/join_code" class="button_to" method="post"><button class="btn btn--regenerate" type="submit">
+        <% if @user.not_nil!.role == 1 %><%= button_to "/account/join_code", class: "btn btn--regenerate" do %>
           <%= icon("refresh.svg", 20, "colorize--black") %>
           <span class="for-screen-reader">Regenerate join link</span>
-        </button></form><% end %>  </div>
+        <% end %><% end %>  </div>
     </div>
     <hr class="margin-block separator full-width" style="--border-style: solid">
     <menu class="flex flex-column gap margin-none pad">
       <turbo-frame id="account_users">
-        <% @admins.each do |u| %><%= account_user_row(u) %><% end %>
+        <% @admins.each do |u| %><%= render(partial: "accounts/users/user", locals: {"user" => u}) %><% end %>
 <% if !@admins.empty? && !@members.empty? %><hr class="separator full-width" style="--border-style: solid">
-        <% end %><% @members.each do |u| %><%= account_user_row(u) %><% end %>
+        <% end %><% @members.each do |u| %><%= render(partial: "accounts/users/user", locals: {"user" => u}) %><% end %>
       </turbo-frame></menu></div>
 </section>
 <%= page_close %>

@@ -14,11 +14,14 @@ ActiveStorage.variant_processor = :vips
 # Семантика форм как Rails load_defaults 6.1+/8.x (оракул once-campfire):
 # локальные формы без data-remote, генерация ids полей, без
 # utf8-enrollment (form_with в views/** теперь через ActionView-хелперы);
-# _method-hidden без autocomplete="off" (поведение 8.2, оракул-приложение).
+# _method-hidden и прочие hidden-инпуты без autocomplete="off"
+# (load_defaults 8.2: remove_hidden_field_autocomplete).
 ActionView::Helpers::FormHelper.form_with_generates_remote_forms = false
 ActionView::Helpers::FormHelper.form_with_generates_ids = true
 ActionView::Helpers::FormTagHelper.default_enforce_utf8 = false
 ActionView::Helpers::FormTagHelper.method_field_autocomplete = false
+ActionView::Helpers::FormTagHelper.remove_hidden_field_autocomplete = true
+
 
 class Application < CRails::Application
 end

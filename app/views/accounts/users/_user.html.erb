@@ -1,0 +1,31 @@
+<%# Порт once-campfire/app/views/accounts/users/_user.html.erb: строка
+    юзера в списке accounts/edit — аватар, имя, тумблер роли
+    (check_box с checked/unchecked values, disabled у себя), удаление
+    (button_to DELETE, turbo-confirm) и «My settings» для себя. %>
+<% uid = user.id.not_nil! %>
+<% viewer = @user.not_nil! %>
+<% admin = viewer.role == 1 %>
+<% banned = user.status == 2 %>
+<li class="flex align-center gap margin-none<%= banned ? " banned" : " " %>">
+<figure class="avatar flex-item-no-shrink" style="--avatar-size: 3.75ch;">
+<%= ERB::SafeString.new(ChatLayout.avatar_link(user, "lazy")) %>
+</figure>
+<div class="min-width">
+<div class="overflow-ellipsis fill-shade"><strong><%= user.name.to_s %></strong></div>
+</div>
+<hr class="separator" aria-hidden="true">
+<% if admin && !banned && user.status == 0 %><% unless user.role == 2 %><%= form_with url: "/account/users/#{uid}", method: "patch", scope: "user", data: {controller: "form"} do |form| %>
+<label class="btn txt-small flex-item-no-shrink" for="role_user_<%= uid %>">
+<span class="for-screen-reader">Role: <%= user.role == 1 ? "Administrator" : "Member" %></span>
+<%= icon("crown.svg") %>
+<%= form.check_box :role, checked: user.role == 1, data: {action: "form#submit"}, hidden: true, id: "role_user_#{uid}", disabled: uid == viewer.id, checked_value: "administrator", unchecked_value: "member" %>
+</label>
+<% end %>
+
+<% end %><% if uid != viewer.id %><%= button_to "/account/users/#{uid}", method: "delete", class: "btn txt-small flex-item-no-shrink btn--negative", data: {turbo_confirm: "Are you sure you want to permanently remove this person from the account? This can’t be undone."} do %>
+<%= icon("minus.svg") %>
+<span class="for-screen-reader">Delete <%= user.name.to_s %></span>
+<% end %><% end %><% end %><% if uid == viewer.id %><%= link_to "/users/me/profile", class: "btn txt-small flex-item-no-shrink", target: "_top" do %>
+<%= icon("pencil.svg") %>
+<span class="for-screen-reader">My settings</span>
+<% end %><% end %></li>
