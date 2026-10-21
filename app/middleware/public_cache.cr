@@ -72,8 +72,7 @@ module Campfire
       end
     end
 
-    def self.set(key : String, body : String, content_type : String,
-                 cache_control : String = "public, max-age=1800") : Nil
+    def self.set(key : String, body : String, content_type : String, cache_control : String = "public, max-age=1800") : Nil
       return if budget == 0
       return if body.bytesize > budget // 8 || key.bytesize > 4096
       if (replaced = @@entries.delete(key))

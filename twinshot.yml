@@ -41,3 +41,42 @@ soft_check:
   - vendor/*
   - taks/*
   - db/migrate/*
+
+  - .dockerignore.code.txt
+  - .env.code.txt
+  - .gitattributes.code.txt
+  - .gitignore.code.txt
+  - .pumaenv.code.txt
+  - .rubocop.code.txt
+  - .ruby-version.code.txt
+  - 1to1.code.txt
+  - AGENTS.code.txt
+  - CONTRIBUTING.code.txt
+  - CRAILS_REMAINING.code.txt
+  - Dockerfile-export.code.txt
+  - Dockerfile.code.txt
+  - Dockerfile.github.code.txt
+  - Gemfile.code.txt
+  - Gemfile.lock.code.txt
+  - MIT-LICENSE.code.txt
+  - OTHER_REFACTORING.code.txt
+  - PLAN_REMAINING.code.txt
+  - Procfile.code.txt
+  - README.code.txt
+  - Rakefile.code.txt
+  - SECURITY.code.txt
+  - URL_HELPERS_GENERATOR.code.txt
+  - config.code.txt
+  - crails-icon.code.txt
+  - docker-compose.github.code.txt
+  - environment.code.txt
+  - package-lock.code.txt
+  - shard.code.txt
+  - shard.yml.code.txt
+  - twinshot.code.txt
+  - .github/dependabot.code.txt
+  - .github/ISSUE_TEMPLATE/config.code.txt
+  - .github/ISSUE_TEMPLATE/preapproved.code.txt
+  - .github/workflows/ci.code.txt
+  - .github/workflows/publish-image.code.txt
+
