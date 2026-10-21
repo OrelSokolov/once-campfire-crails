@@ -6,7 +6,7 @@ module SessionsHelpers
   # head без chat-обвязки + turbo-visit-control reload
   # (layouts/application.html.erb логина).
   def login_head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("Sign in", nil, nil, chat: false,
+    ERB::SafeString.new(ChatLayout.head("Sign in", nil, chat: false,
       head_extra: %(<meta name="turbo-visit-control" content="reload">\n)))
   end
 

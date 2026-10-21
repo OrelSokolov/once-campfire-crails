@@ -52,7 +52,6 @@ soft_check:
   - 1to1.code.txt
   - AGENTS.code.txt
   - CONTRIBUTING.code.txt
-  - CRAILS_REMAINING.code.txt
   - Dockerfile-export.code.txt
   - Dockerfile.code.txt
   - Dockerfile.github.code.txt

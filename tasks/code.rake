@@ -35,6 +35,12 @@ def code_snapshot(side, src_dir)
       skipped_binary += 1
       next
     end
+    # git ls-files показывает индекс: файл, удалённый с диска без коммита,
+    # копировать нечем — пропускаем, снапшот отражает рабочее дерево.
+    unless File.exist?(File.join(src_dir, rel))
+      warn "code: skip #{rel} (tracked in git but missing on disk)"
+      next
+    end
     target = File.join(out, ext.empty? ? "#{rel}.code.txt" : "#{rel.delete_suffix(ext)}.code.txt")
     # Коллизия после снятия расширения (Gemfile/Gemfile.lock, Dockerfile/
     # Dockerfile.github): проигравший сохраняет полное имя — Gemfile.lock.code.txt.

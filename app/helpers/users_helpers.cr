@@ -4,7 +4,7 @@
 module UsersHelpers
   # head + body + nav (назад + «Edit my profile» для себя) + main.
   def page_open(viewer : User, subject : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("user", subject.name.to_s, viewer,
+    ERB::SafeString.new(ChatLayout.page_open("user", subject.name.to_s,
       nav_html: user_nav(viewer, subject)))
   end
 

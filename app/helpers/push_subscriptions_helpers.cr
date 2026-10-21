@@ -9,7 +9,7 @@ module PushSubscriptionsHelpers
   # комнате (rooms_helper: link_back_to_last_room_visited).
   def page_open : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("push-subscriptions",
-      "Push notification subscriptions", current_user.not_nil!,
+      "Push notification subscriptions",
       nav_html: ChatLayout.nav_back(last_room_visited_path)))
   end
 

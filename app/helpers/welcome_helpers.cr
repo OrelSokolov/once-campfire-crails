@@ -4,7 +4,7 @@
 module WelcomeHelpers
   # «No rooms yet»: head для пустого message-area-экрана (chat: false).
   def head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("No rooms yet", user.not_nil!, nil, chat: false))
+    ERB::SafeString.new(ChatLayout.head("No rooms yet", nil, chat: false))
   end
 
   def messages_empty_src : String

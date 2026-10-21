@@ -8,7 +8,7 @@ module ProfilesHelpers
 
   # head + body + nav профиля (back + logout) + main (ChatLayout.page_open).
   def page_open(user : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("profile", user.name.to_s, user,
+    ERB::SafeString.new(ChatLayout.page_open("profile", user.name.to_s,
       nav_html: profile_nav))
   end
 
@@ -52,7 +52,7 @@ module ProfilesHelpers
   # room_display_name(room, for_user:) RoomsHelper: обычные комнаты —
   # имя; direct (name NULL) — имена собеседников через to_sentence.
   def profile_display_name(room : Room, viewer : User) : String
-    return room.name.to_s unless room.name.nil?
+    return room.name.to_s unless room.direct?
     others = User.where(
       %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
       room.id.not_nil!, viewer.id.not_nil!)
@@ -98,7 +98,7 @@ module ProfilesHelpers
   # mentions→everything→nothing→invisible, direct — только
   # everything↔nothing (invisible в direct недоступен).
   private def next_involvement(room : Room, current : String) : String
-    return current == "everything" ? "nothing" : "everything" if room.name.nil?
+    return current == "everything" ? "nothing" : "everything" if room.direct?
     case current
     when "mentions"   then "everything"
     when "everything" then "nothing"

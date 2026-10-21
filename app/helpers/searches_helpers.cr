@@ -5,7 +5,7 @@
 module SearchesHelpers
   # head + body.sidebar.searches + nav с чипом запроса и recents.
   def page_open : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("search", "Search", user.not_nil!,
+    ERB::SafeString.new(ChatLayout.page_open("search", "Search",
       body_class: "sidebar searches", nav_html: search_nav(query, messages.size, recents)))
   end
 

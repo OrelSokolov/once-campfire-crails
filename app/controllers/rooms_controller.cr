@@ -45,23 +45,29 @@ class RoomsController < ApplicationController
     room = room.not_nil!
     user = current_user.not_nil!
 
-    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
-    key = PageCache.key("rooms#show", request, user.id)
-    if (cached = PageCache.get(key, epoch))
-      remember_last_room_visited(room)
-      return send_page(cached)
-    end
+    page = cache_page("rooms#show", user.id) { room_page(room, user, find_messages(room)) }
+    # Cookie last_room — на каждом ответе, но ПОСЛЕ решения кэша
+    # (express: writeHead-хук эмитит её и на cache-hit, не блокируя кэш).
+    remember_last_room_visited(room)
+    send_page(page)
+  end
 
-    # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
-    # /rooms/:id/@:message_id — page_around (pagination.rb): 40 до якоря
-    # + якорь + 40 после (first_page), вывод ASC. Сравнение — субзапросом
-    # по id (как в messages#index): литеральный Time-бинд sqlite3-шарда
-    # сериализуется с миллисекундами («…12:50:00.000»), и строка якоря
-    # «…12:50:00» без дроби префиксно меньше её — якорь попадал и в before,
-    # и в [anchor], дублируясь в выдаче.
-    messages = if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
-                   (anchor = Message.where("room_id = ? AND id = ?",
-                     room.id.not_nil!, mid).first?)
+  # TrackedRoomVisit#remember_last_room_visited: cookies.permanent.
+  private def remember_last_room_visited(room : Room) : Nil
+    cookies.permanent["last_room"] = room.id.not_nil!.to_s
+  end
+
+  # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
+  # /rooms/:id/@:message_id — page_around (pagination.rb): 40 до якоря
+  # + якорь + 40 после (first_page), вывод ASC. Сравнение — субзапросом
+  # по id (как в messages#index): литеральный Time-бинд sqlite3-шарда
+  # сериализуется с миллисекундами («…12:50:00.000»), и строка якоря
+  # «…12:50:00» без дроби префиксно меньше её — якорь попадал и в before,
+  # и в [anchor], дублируясь в выдаче.
+  private def find_messages(room : Room) : Array(Message)
+    if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
+       (anchor = Message.where("room_id = ? AND id = ?",
+         room.id.not_nil!, mid).first?)
       before = Message.where(
         "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
         room.id.not_nil!, mid)
@@ -75,64 +81,12 @@ class RoomsController < ApplicationController
       Message.where("room_id = ?", room.id.not_nil!)
         .order("created_at DESC").limit(40).to_a.reverse
     end
-
-    messages_html = invitation_html(room, user) +
-                    ChatLayout.messages_html(messages, epoch, room, origin)
-
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    # rooms/show.html.erb: @page_title = room_display_name(@room) —
-    # direct-комнаты без имени: имена собеседников (to_sentence).
-    title = if (n = room.name)
-              n.to_s
-            else
-              others = User.where(
-                %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
-                room.id.not_nil!, user.id.not_nil!).order("id").map(&.name.to_s)
-              ChatLayout.display_sentence(others, user.name.to_s)
-            end
-    html = String.build do |io|
-      io << ChatLayout.head(title, user, room.id, chat: true)
-      io << ChatLayout.body_open(room, user,
-        ua: request.headers["User-Agent"]?.to_s, origin: origin)
-      io << ChatLayout.message_area(room, messages_html, user, base_url: origin)
-      # Композер — content_for :footer референса (rooms/show/_composer).
-      io << ChatLayout.page_close(ChatERB.new(room: room, origin: origin).composer.to_s,
-        ChatLayout.chat_sidebar_frame)
-    end
-    page = Campfire::PageCache::Page.new(html)
-    # Кэшируем только если БД не менялась за время рендера и ответ чист
-    # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
-    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
-      PageCache.set(key, epoch, page)
-    end
-    # Cookie last_room — на каждом ответе, но ПОСЛЕ решения кэша
-    # (express: writeHead-хук эмитит её и на cache-hit, не блокируя кэш).
-    remember_last_room_visited(room)
-    send_page(page)
-  end
-
-  # TrackedRoomVisit#remember_last_room_visited: cookies.permanent.
-  private def remember_last_room_visited(room : Room) : Nil
-    cookies.permanent["last_room"] = room.id.not_nil!.to_s
-  end
-
-  # rooms/show/_invitation.html.erb: блок «Welcome to Campfire» — только
-  # в исходной комнате (Room.original = первая по created_at) и пока она
-  # не пагинируется (Message::Pagination: paged? = offset(40).exists?).
-  private def invitation_html(room : Room, user : User) : String
-    original = Room.order("created_at").first?
-    return "" unless original && original.id == room.id
-    return "" if Message.where("room_id = ?", room.id.not_nil!)
-      .offset(40).exists?
-    ChatLayout.system_welcome(user, origin)
   end
 
   # GET /rooms/:id/refresh — turbo-stream опрос refresh-room-контроллера
   # (refreshes_controller.rb + show.turbo_stream.erb): сообщения, созданные
   # после since, — append в контейнер сообщений; обновлённые (кроме новых) —
-  # replace по dom_id. Пустой набор рендерится как одиночный "\n" с
-  # Content-Type text/vnd.turbo-stream.html — Turbo рендерит его в DOM,
-  # оставляя text-узел ребёнком <html> после </body> (видно в артефактах).
+  # replace по dom_id. Разметка — refresh_stream (RoomsHelpers).
   def refresh
     room = Room.find?(params["id"].to_s.to_i64)
     unless room
@@ -158,22 +112,8 @@ class RoomsController < ApplicationController
       .order("created_at DESC").limit(40).to_a.reverse
       .reject { |m| new_ids.includes?(m.id.not_nil!) }
 
-    epoch = db_epoch
-    stream = String.build do |io|
-      unless new_messages.empty?
-        io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
-        io << ChatLayout.messages_html(new_messages, epoch, room, origin)
-        io << %(</template></turbo-stream>)
-      end
-      io << '\n'
-      updated_messages.each do |message|
-        io << %(<turbo-stream action="replace" target="message_#{message.id}"><template>)
-        io << ChatLayout.messages_html([message], epoch, room, origin)
-        io << %(</template></turbo-stream>\n)
-      end
-    end
-
-    render(html: stream, content_type: "text/vnd.turbo-stream.html")
+    render(html: refresh_stream(room, new_messages, updated_messages),
+      content_type: "text/vnd.turbo-stream.html")
   end
 
   # GET /rooms/:id/involvement — содержимое turbo-frame колокольчика

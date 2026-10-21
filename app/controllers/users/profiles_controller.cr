@@ -27,7 +27,7 @@ class Users::ProfilesController < ApplicationController
       .to_a.index_by(&.id.not_nil!)
     user.memberships.each do |membership|
       next unless room = rooms[membership.room_id.not_nil!]?
-      if room.name.nil?
+      if room.direct?
         @direct_memberships << {room, membership}
       else
         @shared_memberships << {room, membership}

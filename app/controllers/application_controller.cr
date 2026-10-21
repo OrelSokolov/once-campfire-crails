@@ -9,6 +9,7 @@ abstract class ApplicationController < ActionController::Base
   @identity_entry : Campfire::IdentityCache::Entry? = nil
   @identity_checked : Bool = false
 
+  before_action :set_current_request
   before_action :require_authentication
 
   # Campfire authentication.rb: protect_from_forgery using: :header_only,
@@ -40,6 +41,10 @@ abstract class ApplicationController < ActionController::Base
     return nil unless token
     @identity_checked = true
     @identity_entry = Campfire::IdentityCache.lookup(token, db_epoch)
+    # concerns/authentication.rb#authenticated_as: Current.session = session
+    # (writer Current.session= в референсе заодно проставляет user).
+    Current.session = @identity_entry.try(&.session)
+    Current.user = @identity_entry.try(&.user)
     @identity_entry.try(&.session)
   end
 
@@ -48,11 +53,36 @@ abstract class ApplicationController < ActionController::Base
     @identity_entry.try(&.user)
   end
 
+  # concerns/set_current_request.rb: Current.request = request.
+  def set_current_request : Nil
+    Current.request = request
+    nil
+  end
+
   # DB-epoch запроса (PRAGMA data_version, см. PageCache): мемо на время
   # запроса — аутентификация и page-cache видят одну эпоху, PRAGMA
   # выполняется один раз.
   def db_epoch : String
     @db_epoch ||= PageCache.epoch
+  end
+
+  # Whole-page response cache (аналог around_action :cache_read_response
+  # референса): hit → закэшированная страница; иначе блок строит Page, сет —
+  # только если БД не менялась за время рендера и ответ чист (200, без
+  # Set-Cookie) — иначе старые чтения получат новый epoch. Вызывающий делает
+  # hit-специфичную работу (rooms#show: last_room-cookie) между cache_page
+  # и send_page — на hit и miss одинаково.
+  def cache_page(name : String, user_id : Int64?, & : -> Campfire::PageCache::Page) : Campfire::PageCache::Page
+    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
+    key = PageCache.key(name, request, user_id)
+    if (cached = PageCache.get(key, epoch))
+      return cached
+    end
+    page = yield
+    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
+      PageCache.set(key, epoch, page)
+    end
+    page
   end
 
   def require_authentication : Nil
@@ -72,6 +102,10 @@ abstract class ApplicationController < ActionController::Base
   # first_runs#create).
   def start_new_session_for(user : User) : Nil
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
+    # authenticated_as(session): Current.session/user видны хелперам и
+    # моделям до конца запроса (между запросами сбрасываются диспетчером).
+    Current.session = session
+    Current.user = user
     cookies.signed.set("session_token", session.token.not_nil!,
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
   end

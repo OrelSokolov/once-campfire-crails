@@ -2,6 +2,13 @@
 # DOM сообщения, presentation вложения, путь сообщения, страница истории.
 # Включается в MessagesController; общий icon — ViewHelpers.
 module MessagesHelpers
+  # create.turbo_stream.erb: append DOM сообщения в контейнер комнаты
+  # (тег + хвостовой \n файла).
+  def append_message_stream(room : Room, message_html : String) : String
+    %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>) +
+      message_html + %(</template></turbo-stream>\n)
+  end
+
   # show.html.erb: DOM сообщения (тот же message_dom, что в комнате).
   def message_dom : ERB::SafeString
     message = self.message.not_nil!

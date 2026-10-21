@@ -9,7 +9,7 @@ module JoinsHelpers
     nav = %(<div class="flex-item-justify-end"><a href="#{new_session_path}" class="btn flex-item-justify-end">) +
       ChatLayout.icon("login-keys.svg") +
       %(<span class="for-screen-reader">Sign in</span></a></div>)
-    ERB::SafeString.new(ChatLayout.page_open("join", "Join #{account.name}", nil,
+    ERB::SafeString.new(ChatLayout.page_open("join", "Join #{account.name}",
       body_class: "signup", nav_html: nav))
   end
 end

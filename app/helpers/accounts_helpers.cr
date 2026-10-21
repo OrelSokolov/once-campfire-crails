@@ -4,7 +4,7 @@
 module AccountsHelpers
   # head + body + nav аккаунта (боты/кастомные стили для админа) + main.
   def page_open(user : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("account", "Account settings", user,
+    ERB::SafeString.new(ChatLayout.page_open("account", "Account settings",
       nav_html: account_nav(user)))
   end
 

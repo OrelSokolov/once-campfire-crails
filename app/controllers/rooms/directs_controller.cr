@@ -68,7 +68,7 @@ class Rooms::DirectsController < ApplicationController
   # GET /rooms/directs/new — head для формы (chat: false). Имя не `head`:
   # перекрыл бы фреймворковый head(status) (404 в edit).
   private def page_head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("New ping", @user.not_nil!, nil, chat: false))
+    ERB::SafeString.new(ChatLayout.head("New ping", nil, chat: false))
   end
 
   # Форма шлёт повторяющиеся user_ids[]: парсер кладёт их в

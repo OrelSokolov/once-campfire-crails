@@ -4,6 +4,8 @@ require "uuid"
 # messages/by_bots_controller.rb + routes.js). Аутентификация по
 # "<id>-<bot_token>" в пути, не по сессии.
 class Messages::ByBotsController < ApplicationController
+  include MessagesHelpers
+
   skip_before_action :require_authentication
 
   # jbuilder-вьюхи bots-API (bot_index/bot_show)
@@ -102,9 +104,8 @@ class Messages::ByBotsController < ApplicationController
     message_html = ChatLayout.message_dom(message, room, bot, base_url: origin)
     broadcast_append_to([room, "messages"],
       target: "messages_#{room.dom_id}", html: message_html)
-    turbo_frame = %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>) +
-      message_html + %(</template></turbo-stream>\n)
-    render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
+    render(html: append_message_stream(room, message_html),
+      content_type: "text/vnd.turbo-stream.html")
   end
 
   # PATCH/PUT /rooms/:id/:bot_key/messages/:message_id — правка своего

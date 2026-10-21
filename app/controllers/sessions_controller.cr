@@ -50,6 +50,10 @@ class SessionsController < ApplicationController
             end
     Session.where("token = ?", token).delete_all if token
     cookies.delete("session_token")
+    # terminate_current_session референса: Current.session&.destroy! +
+    # сброс атрибутов (user больше не текущий в этом запросе).
+    Current.session = nil
+    Current.user = nil
     redirect_to root_path
   end
 

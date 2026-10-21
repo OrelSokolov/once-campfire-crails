@@ -3,7 +3,7 @@
 # Включается в CustomStylesController; общий icon/page_close — ViewHelpers.
 module CustomStylesHelpers
   def page_open(user : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("custom-styles", "Custom CSS", user,
+    ERB::SafeString.new(ChatLayout.page_open("custom-styles", "Custom CSS",
       nav_html: ChatLayout.nav_back(edit_account_path)))
   end
 

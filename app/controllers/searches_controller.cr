@@ -29,56 +29,46 @@ class SearchesController < ApplicationController
   def show
     user = current_user.not_nil!
 
-    # Whole-page response cache (как rooms#show): ключ включает query
+    # Whole-page cache (как rooms#show): ключ включает query
     # (?q=...), инвалидация — общий DB-epoch (FTS-индекс и сообщения
     # меняются только write'ами, все сбрасывают PageCache.invalidate!).
-    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
-    key = PageCache.key("searches#show", request, user.id)
-    if (cached = PageCache.get(key, epoch))
-      return send_page(cached)
-    end
+    page = cache_page("searches#show", user.id) do
+      query = params["q"]?.to_s.strip
 
-    query = params["q"]?.to_s.strip
+      messages = if query.empty?
+        [] of Message
+      else
+        # Same shape as the harness's seed SQL: messages visible to the user,
+        # newest 100 matches by id, displayed in id order.
+        Message.where(
+          %(id IN (SELECT m.id FROM messages m
+                   JOIN message_search_index idx ON idx.rowid = m.id
+                   JOIN memberships mm ON mm.room_id = m.room_id
+                   WHERE mm.user_id = ? AND message_search_index MATCH ?
+                   ORDER BY m.id DESC LIMIT 100)),
+          user.id.not_nil!, query)
+          .order("id ASC").to_a
+      end
 
-    messages = if query.empty?
-      [] of Message
-    else
-      # Same shape as the harness's seed SQL: messages visible to the user,
-      # newest 100 matches by id, displayed in id order.
-      Message.where(
-        %(id IN (SELECT m.id FROM messages m
-                 JOIN message_search_index idx ON idx.rowid = m.id
-                 JOIN memberships mm ON mm.room_id = m.room_id
-                 WHERE mm.user_id = ? AND message_search_index MATCH ?
-                 ORDER BY m.id DESC LIMIT 100)),
-        user.id.not_nil!, query)
-        .order("id ASC").to_a
-    end
+      # Recent searches (search.eta/search_nav.eta): 10 последних запросов.
+      recents = ActiveRecord::Base.connection.query_all(
+        "SELECT query FROM searches WHERE user_id = ? ORDER BY updated_at DESC LIMIT 10",
+        args: [user.id.not_nil!], as: String)
 
-    # Recent searches (search.eta/search_nav.eta): 10 последних запросов.
-    recents = ActiveRecord::Base.connection.query_all(
-      "SELECT query FROM searches WHERE user_id = ? ORDER BY updated_at DESC LIMIT 10",
-      args: [user.id.not_nil!], as: String)
+      # Комната возврата (composer в show.html.erb: стрелка «Exit search»).
+      return_room = (user.memberships.map(&.room_id.not_nil!).min? ||
+                    Room.visible_for(user).order("id").first.try(&.id.not_nil!) || 1).to_i64
 
-    # Комната возврата (composer в show.html.erb: стрелка «Exit search»).
-    return_room = (user.memberships.map(&.room_id.not_nil!).min? ||
-                  Room.visible_for(user).order("id").first.try(&.id.not_nil!) || 1).to_i64
-
-    # Список — через fragment-кэш (было Room.find?/User.find?/rich_text
-    # на каждое сообщение, до 100 результатов): хиты без SQL, комнаты и
-    # авторы промахов — по одному IN-запросу на сущность.
-    @user = user
-    @query = query
-    @messages = messages
-    @recents = recents
-    @return_room = return_room
-    @epoch = epoch
-
-    page = Campfire::PageCache::Page.new(__render_view("show").to_s)
-    # Кэшируем только если БД не менялась за время рендера и ответ чист
-    # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
-    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
-      PageCache.set(key, epoch, page)
+      # Список — через fragment-кэш (было Room.find?/User.find?/rich_text
+      # на каждое сообщение, до 100 результатов): хиты без SQL, комнаты и
+      # авторы промахов — по одному IN-запросу на сущность.
+      @user = user
+      @query = query
+      @messages = messages
+      @recents = recents
+      @return_room = return_room
+      @epoch = db_epoch
+      Campfire::PageCache::Page.new(__render_view("show").to_s)
     end
     send_page(page)
   end

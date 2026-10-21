@@ -77,8 +77,11 @@ module ChatLayout
     query.empty? ? "/account/logo" : "/account/logo?#{query.join("&")}"
   end
 
-  def self.head(title : String, user : User?, room_id : Int64?, chat : Bool,
+  # user — Current.user (ApplicationController проставляет до рендера;
+  # между запросами сбрасывается диспетчером, как в Rails).
+  def self.head(title : String, room_id : Int64?, chat : Bool,
                 head_extra : String = "") : String
+    user = Current.user
     String.build do |io|
       io << "<!DOCTYPE html>\n<html>\n<head>\n<title>" << HTML.escape(title) << "</title>\n"
       io << %(<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, interactive-widget=resizes-content">\n)
@@ -126,8 +129,9 @@ module ChatLayout
   # комнаты (btn--reversed room--current), кнопка настроек с иконкой
   # menu-dots-horizontal, колокольчик вовлечённости. Direct-комнаты
   # (name NULL): room_display_name — имена остальных участников.
-  def self.body_open(room : Room? = nil, viewer : User? = nil,
+  def self.body_open(room : Room? = nil,
                      ua : String = "", origin : String = "") : String
+    viewer = Current.user
     String.build do |io|
       cls = viewer && viewer.role == 1 ? "sidebar admin" : "sidebar"
       io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
@@ -207,11 +211,20 @@ module ChatLayout
   # ===== Страничный layout не-chat экранов (layout_start.eta/layout_end.eta)
 
   # <img>-иконка из пребилда ассетов референса. size=nil — без
-  # width/height (Rails image_tag без size).
+  # width/height (Rails image_tag без size). Делегирует в
+  # AssetTagHelper.image_tag (статик-форма): байты на проводе —
+  # `<img src width height aria-hidden class />` (порядок атрибутов и
+  # self-closing слэш нормализуются браузерной сериализацией артефактов,
+  # см. harness/normalize.rb — DOM-эквивалент прежней строки).
   def self.icon(name : String, size : Int32? = 20, cls : String? = nil) : String
-    c = cls ? %( class="#{cls}") : ""
-    dims = size ? %( width="#{size}" height="#{size}") : ""
-    %(<img src="#{asset(name)}" aria-hidden="true"#{dims}#{c}>)
+    # Object-union: вложенный aria-Hash — Hash(String, String), в
+    # Hash(String, AttrVal) не присваивается (инвариантность генериков);
+    # статик-форма image_tag нормализует значения сама.
+    opts = {} of String => String | Hash(String, String)
+    opts["aria"] = {"hidden" => "true"}
+    opts["size"] = "#{size}x#{size}" if size
+    opts["class"] = cls if cls
+    ::ActionView::Helpers::AssetTagHelper.image_tag(asset(name), opts).to_s
   end
 
   # nav-кнопка «Go Back» (layout_start.eta: form-экраны). Переносы строк —
@@ -226,9 +239,10 @@ module ChatLayout
   # form/account/profile/bots/... экранов. @body_class референса задают
   # только отдельные страницы (rooms/show: sidebar, searches: sidebar
   # searches, signup-экраны: signup) — остальных классов нет.
-  def self.page_open(screen : String, title : String, user : User?,
+  def self.page_open(screen : String, title : String,
                      body_class : String? = nil, nav_html : String = "",
                      head_extra : String = "") : String
+    user = Current.user
     cls = body_class.to_s
     # body_classes референса: [body_class, admin].compact.join(" ") —
     # без ведущего пробела, когда body_class пуст.
@@ -236,7 +250,7 @@ module ChatLayout
       cls = cls.empty? ? "admin" : "#{cls} admin"
     end
     String.build do |io|
-      io << head(title, user, nil, chat: false, head_extra: head_extra)
+      io << head(title, nil, chat: false, head_extra: head_extra)
       io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
       io << %(<a href="#main-content" class="skip-navigation btn">Skip to main content</a>\n)
       io << %(<nav id="nav">\n) << nav_html << %(\n</nav>\n)
@@ -375,7 +389,9 @@ module ChatLayout
   # пока сообщений в ней не больше PAGE_SIZE): логотип аккаунта, перевод
   # invite_message, поле invite-ссылки с QR/копированием/sharing и
   # регенерацией join-кода у администратора.
-  def self.system_welcome(user : User, origin : String) : String
+  def self.system_welcome(origin : String) : String
+    user = Current.user
+    return "" unless user
     account = Account.take
     join_url = "#{origin}/join/#{account.try(&.join_code).to_s}"
     qr_path = "/qr_code/" + Base64.urlsafe_encode(join_url, padding: false)
@@ -458,10 +474,20 @@ module ChatLayout
 
   # footer + sidebar (turbo-frame user_sidebar) + app-logo —
   # layouts/_body_close.html.erb (было body_close/chat-ветка).
+  # users/sidebar_helper.rb#sidebar_turbo_frame_tag: turbo_frame_tag
+  # :user_sidebar с target/data-опциями (статик-форма FramesHelper).
+  # `->` в data-action tag_options экранирует как `-&gt;` — после
+  # HTML-парсинга идентично прежней сырой строке (DOM-нормализация).
   def self.chat_sidebar_frame : String
-    %(<turbo-frame id="user_sidebar" src="/users/me/sidebar" data-turbo-permanent="true" target="_top" ) +
-      %(data-controller="rooms-list read-rooms turbo-frame" data-rooms-list-unread-class="unread" ) +
-      %(data-action="presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload"></turbo-frame>)
+    ::Turbo::FramesHelper.turbo_frame_tag("user_sidebar", "/users/me/sidebar", nil, {
+      "target" => "_top",
+      "data"   => {
+        "turbo_permanent"         => true,
+        "controller"              => "rooms-list read-rooms turbo-frame",
+        "rooms_list_unread_class" => "unread",
+        "action"                  => "presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload",
+      },
+    }).to_s
   end
 
   # Быстрые реакции (EmojiHelper::REACTIONS референса) — форма на каждую.
@@ -503,7 +529,7 @@ module ChatLayout
   # room_display_name(room, for_user: nil) RoomsHelper: обычные комнаты —
   # имя; direct (name NULL) — имена всех участников через запятую.
   def self.room_display_name(room : Room) : String
-    if room.name.nil?
+    if room.direct?
       members = User.where(
         %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), room.id.not_nil!)
         .order("id").map(&.name.to_s)
@@ -1498,8 +1524,9 @@ module ChatLayout
   # message-area целиком (optimistic-шаблон + .messages + стрим-источник
   # + composer) — room.eta + optimistic.eta. Optimistic-template нужен
   # messages-контроллеру как target "template".
-  def self.message_area(room : Room, messages_html : String, user : User,
+  def self.message_area(room : Room, messages_html : String,
                         base_url : String = "") : String
+    user = Current.user.not_nil!
     signed_name = HTML.escape(Turbo::Streams::StreamName.signed_stream_name([room, "messages"]))
     # messages_helper.rb:16 — messages_page_url_value: room_messages_url(room)
     # (абсолютный URL: JS-пагинатор делает new URL(value) без базы).

@@ -31,10 +31,20 @@ class Room < ActiveRecord::Base
     "rooms_#{sti}_#{id.not_nil!}"
   end
 
+  # Direct-комната (ping): name IS NULL. Детект по имени, а не type —
+  # type хранит два написания ('Rooms::Direct' сид, 'Direct' создание
+  # портом), все SQL-запросы порта фильтруют так же (WHERE r.name IS NULL).
+  def direct? : Bool
+    name.nil?
+  end
+
   # Visible rooms for a user, involvement-filtered (sidebar listing).
-  def self.visible_for(user : User)
-    Room.where(
-      %(id IN (SELECT room_id FROM memberships WHERE user_id = ? AND involvement != 'invisible')),
+  scope(:visible, ->(user) {
+    where(%(id IN (SELECT room_id FROM memberships WHERE user_id = ? AND involvement != 'invisible')),
       user.id.not_nil!)
+  })
+
+  def self.visible_for(user : User)
+    visible(user)
   end
 end

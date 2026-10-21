@@ -81,7 +81,7 @@ class ChatERB
   # direct: everything→nothing; остальные: mentions→everything→nothing→
   # invisible (RoomsHelper#next_involvement_for).
   def next_involvement : String
-    choices = room.name.nil? ? %w[everything nothing] : %w[mentions everything nothing invisible]
+    choices = room.direct? ? %w[everything nothing] : %w[mentions everything nothing invisible]
     idx = choices.index(involvement) || -1
     choices[(idx + 1) % choices.size]
   end
@@ -92,7 +92,7 @@ class ChatERB
 
   # Ping для direct-комнат, иначе room (bell SR-текст).
   def noun : String
-    room.name.nil? ? "Ping" : "room"
+    room.direct? ? "Ping" : "room"
   end
 
   # dom_id референса: STI route_key (Rooms::Open → rooms_open). type бывает

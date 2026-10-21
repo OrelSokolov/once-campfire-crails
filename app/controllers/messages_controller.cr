@@ -16,17 +16,25 @@ class MessagesController < ApplicationController
     room = room.not_nil!
     user = current_user.not_nil!
 
-    # Whole-page response cache (как rooms#show): ключ включает query
+    # Whole-page cache (как rooms#show): ключ включает query
     # (?before=...), инвалидация — общий DB-epoch.
-    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
-    key = PageCache.key("messages#index", request, user.id)
-    if (cached = PageCache.get(key, epoch))
-      return send_page(cached)
+    page = cache_page("messages#index", user.id) do
+      messages = find_messages(room)
+      # Rails messages#index: пустая страница → 204 No Content (пагинатор
+      # по нему понимает, что история дочитана). Rails: head :no_content —
+      # без тела и без Content-Type (не кэшируется).
+      return head(:no_content) if messages.empty?
+      Campfire::PageCache::Page.new(messages_page_html(room, messages, db_epoch))
     end
+    send_page(page)
+  end
 
+  # messages#index: before → 40 строго до anchor по created_at (вывод ASC),
+  # after → 40 строго после (ASC), без anchor — последние 40 ASC.
+  private def find_messages(room : Room) : Array(Message)
     anchor = params["before"]?
     after_anchor = params["after"]?
-    messages = if anchor && (anchor_id = anchor.to_s.to_i64?)
+    if anchor && (anchor_id = anchor.to_s.to_i64?)
       Message.where(
         "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
         room.id.not_nil!, anchor_id)
@@ -40,21 +48,6 @@ class MessagesController < ApplicationController
       Message.where("room_id = ?", room.id.not_nil!)
         .order("created_at DESC").limit(40).to_a.reverse
     end
-
-    # Rails messages#index: пустая страница → 204 No Content (пагинатор
-    # по нему понимает, что история дочитана). Rails: head :no_content —
-    # без тела и без Content-Type.
-    if messages.empty?
-      return head(:no_content)
-    end
-
-    page = Campfire::PageCache::Page.new(messages_page_html(room, messages, epoch))
-    # Кэшируем только если БД не менялась за время рендера и ответ чист
-    # (200, без Set-Cookie) — иначе старые чтения получат новый epoch.
-    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
-      PageCache.set(key, epoch, page)
-    end
-    send_page(page)
   end
 
   def create
@@ -88,13 +81,9 @@ class MessagesController < ApplicationController
       attachment: upload, base_url: origin)
 
     attachment = upload ? ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]? : nil
-    turbo_frame = String.build do |io|
-      io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
-      io << ChatLayout.message_dom(message, room, user, attachment, base_url: origin)
-      io << %(</template></turbo-stream>\n)
-    end
-
-    render(html: turbo_frame, content_type: "text/vnd.turbo-stream.html")
+    message_html = ChatLayout.message_dom(message, room, user, attachment, base_url: origin)
+    render(html: append_message_stream(room, message_html),
+      content_type: "text/vnd.turbo-stream.html")
   end
 
   # Bot-API (/rooms/:id/:bot_key/messages/**) — Messages::ByBotsController

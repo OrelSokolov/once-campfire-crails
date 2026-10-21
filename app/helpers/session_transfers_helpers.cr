@@ -4,6 +4,6 @@
 # Sessions::TransfersController; page_close — ViewHelpers.
 module SessionTransfersHelpers
   def page_open : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("transfer", "Campfire", nil))
+    ERB::SafeString.new(ChatLayout.page_open("transfer", "Campfire"))
   end
 end

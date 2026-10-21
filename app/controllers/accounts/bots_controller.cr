@@ -52,18 +52,15 @@ class Accounts::BotsController < ApplicationController
   # (bots.eta: заголовок с bot+add, аватары, pencil-edit, поля с
   # иконками messages-outlined/attachment и copy-кнопками).
   def index
-    # _bot: User.active_bots.ordered; scope-чейнинг на Relation в шарде
-    # не поддержан — order явно.
-    @bots = User.active_bots.order("lower(name)").to_a
+    # _bot: User.active_bots.ordered.
+    @bots = User.active_bots.ordered.to_a
     @bots.each do |bot|
       bid = bot.id.not_nil!
       bot_key = "#{bid}-#{bot.bot_token.to_s}"
       # _bot.html.erb: bot.rooms.without_directs.ordered — без Direct
       # (сид: 'Rooms::Direct', наши: 'Direct'), по LOWER(name).
       rooms = [] of NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String)))
-      Room.visible_for(bot)
-        .where("type NOT IN ('Rooms::Direct', 'Direct')")
-        .order("lower(name)").each do |room|
+      Room.visible_for(bot).without_directs.ordered.each do |room|
         rid = room.id.not_nil!
         text = "curl -d 'Hello!' #{origin}/rooms/#{rid}/#{bot_key}/messages"
         upload = %{curl -F "attachment=@/path/to/file" #{origin}/rooms/#{rid}/#{bot_key}/messages}

@@ -39,6 +39,53 @@
 
 ## 2. `Current` attributes (`Current.user`)
 
+> **Сделано** (2026-10-21) — порт `ActiveSupport::CurrentAttributes` в
+> active_support.cr **v0.1.8**: `class Current < AS::CurrentAttributes`
+> с типизированными атрибутами (`attribute user: User?` — Crystal
+> требует типов; nilable обязательно, `reset` пишет nil),
+> класс-уровневыми аксессорами и `reset`/`reset_all` (реестр подклассов
+> compile-time через `macro inherited`, `reset_all` генерируется
+> top-level `macro finished` — та же идиома, что `ActionController::
+> REGISTRY`). Отклонения: без instance-API/`set{}`/before_reset-
+> колбэков (референс не использует); хранилище — процесс-глобальные
+> class vars, НЕ fiber-изолированные (как и прочие глобальные кэши
+> порта; безопасно при одном диспетче за раз).
+>
+> railties.cr **v0.1.15**: `ActiveSupport::CurrentAttributes.reset_all`
+> в начале диспетчеризации запроса (семантика Executor) — значения не
+> протекают между запросами; интеграционная спека (set → read в двух
+> диспетчах). README active_support.cr поправлен (строка врала про
+> fiber-locals до реализации).
+>
+> В приложении: `app/models/current.cr` (session/user/request +
+> `request_host`/`request_protocol`/`account`, как current.rb
+> референса); `ApplicationController` — `before_action
+> :set_current_request`, `current_session`/`current_user`/
+> `start_new_session_for` заполняют Current, `sessions#destroy`
+> сбрасывает (terminate_current_session). ChatLayout: сигнатуры
+> `head`/`page_open`/`body_open`/`system_welcome`/`message_area`
+> больше не принимают текущего юзера — внутри `Current.user`
+> (19 мест вызова обновлено); `avatar_link` и прочие произвольные
+> юзеры — параметром, как в референсе. Верификация: спеки шардов
+> (active_support 325 green, railties 45 с 1 предсуществующим фейлом
+> оракула get_with_params), смоук на seed-БД (аноним — без
+> current-user-id; комната/аккаунт/профиль — meta+admin body class+
+> composer data-user-id; сброс admin→аноним без утечек);
+> `rake build:crails` REBUILD=1; twinshot review default.
+> Не портировано: `belongs_to ..., default: -> { Current.user }`
+> (active_record_cr не поддерживает proc-дефолты) — контроллеры
+> задают creator/booster явно, на вывод не влияет; вернуться при
+> порте соответствующих фич.
+>
+> Итоговая верификация: спеки active_support.cr 325 green;
+> railties.cr 45 примеров (1 фейл — предсуществующий оракул
+> get_with_params, воспроизводится и без правки); `rake build:crails`
+> REBUILD=1 чистый; capybara crails-сьют 72/72 (0 failures/errors);
+> twinshot review default — 127/129, оба диффа soft_check PNG
+> (custom-boost.png, mobile.png 0.299% при пороге 0.2% — DOM того же
+> теста байт-идентичен, рендер-шум; в истории базлайна 127/129 и
+> 128/129 чередуются на этих же файлах).
+
 **Статус в CRails**: отсутствует — в `railties_cr`/`action_pack_cr`
 нет аналога `ActiveSupport::CurrentAttributes`.
 

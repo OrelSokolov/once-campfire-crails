@@ -4,7 +4,7 @@
 module FirstRunsHelpers
   # head + body.signup + пустой nav + main (без user).
   def page_open : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("first-run", "Set up Campfire", nil,
+    ERB::SafeString.new(ChatLayout.page_open("first-run", "Set up Campfire",
       body_class: "signup"))
   end
 end
