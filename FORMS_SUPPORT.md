@@ -277,7 +277,16 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > Array(FormModel) (в Crystal массив разных моделей — с `of
 > ActionView::FormModel`). Опубликовано: action_view.cr v0.1.12 +
 > v0.2.10-fix action_pack.cr (инференс `&.`-шорткэта в proc-контексте)
-> + railties.cr v0.1.14. `fields`/`form_for` — остались несделанными.
+> + railties.cr v0.1.14. **`fields`/`form_for` сделаны** (2026-10-21,
+> v0.1.13): оракул fields_*/ffor_* (8 кейсов); `fields` — билдер
+> form_with без тега формы (ids по form_with_generates_ids, `model:`
+> массивы — scope от последней модели, `url:` принимается и
+> игнорируется); `form_for` — legacy-обёртка (ids всегда, dom-класс/id
+> от последней модели `edit_post`/`edit_post_7`/`new_post`,
+> пользовательский `html:` class заменяет dom-класс, порядок
+> class/id/[html-опции]/enctype/action/accept-charset/method,
+> capture-first multipart). Фаза 0 хвост закрыт — эталоны
+> fields/form_for сняты.
 - `form_with` без блока: вернуть открывающий тег + hidden-поля, БЕЗ
   `</form>` (по эталону).
 - `form_with model:` без `url:`: вычисление action из модели —
@@ -482,9 +491,11 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > фаза 4b закрыта (2026-10-21: polymorphic `model:` без `url:` —
 > action_view.cr v0.1.12 + action_pack.cr v0.2.10 + railties.cr
 > v0.1.14, оракул fw_poly_*, smoke через boot приложения
-> tmp/poly_form_smoke.cr). Осталось: фаза 0 хвост (эталоны
-> fields/form_for), `fields`/`form_for`. Опубликованные версии:
-> action_view.cr v0.1.3–v0.1.12 (проект на 0.1.12; 229 oracle-кейсов).
+> tmp/poly_form_smoke.cr); `fields`/`form_for` + эталоны фазы 0
+> закрыты (v0.1.13, оракул fields_*/ffor_*). Незакрытым остался
+> только time_zone_select (нет таймзон-данных). Опубликованные
+> версии: action_view.cr v0.1.3–v0.1.13 (проект на 0.1.13; 237
+> oracle-кейсов).
 > twinshot review default — 128/129 (1 soft_check PNG
 > custom-boost.png; до прохода было 127/129 с двумя). Переведённые страницы: sessions/new,
 > users/profiles, accounts/edit (полностью),
