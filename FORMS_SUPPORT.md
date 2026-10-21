@@ -265,9 +265,19 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > form_with user-opts → enctype → action → accept-charset → method;
 > label с for при ids; nil-value опускается; password без value;
 > size из maxlength (оракул fw_local/fw_ids_model/ff_password/
-> ff_text_nil). Полиморфный `model:` без `url:` (form_url/FormModel)
-> — не сделан, нужен только фазе 5 для model-форм; `fields`/
-> `form_for` — тоже.
+> ff_text_nil). **4b сделано** (2026-10-21): полиморфный `model:` без
+> `url:` — оракул fw_poly_* (4 кейса: new → collection-путь,
+> persisted → member + _method patch, `[user, post]` → вложенный
+> `/users/:id/posts(:id)`, scope всегда от ПОСЛЕДНЕЙ модели — как в
+> Rails); FormModel += `form_model_name`; FormHelper.polymorphic_path
+> (хук-прок, вайрится railties на boot — action_view не видит route
+> set); UrlHelpers.polymorphic_path (action_pack_cr): имена моделей →
+> route name (persisted → `room_message_path`, new →
+> `room_messages_path`), значения из `to_param`; `model:` принимает
+> Array(FormModel) (в Crystal массив разных моделей — с `of
+> ActionView::FormModel`). Опубликовано: action_view.cr v0.1.12 +
+> v0.2.10-fix action_pack.cr (инференс `&.`-шорткэта в proc-контексте)
+> + railties.cr v0.1.14. `fields`/`form_for` — остались несделанными.
 - `form_with` без блока: вернуть открывающий тег + hidden-поля, БЕЗ
   `</form>` (по эталону).
 - `form_with model:` без `url:`: вычисление action из модели —
@@ -468,12 +478,15 @@ f.button (дефолт) → <button name="button" type="submit">Update User</but
 > (v0.1.4), фаза 2 + фаза 3 п.4 (v0.1.5, кроме time_zone_select);
 > фаза 5 хвост accounts/edit закрыт (v0.1.11: блочный button_to,
 > check_box include_hidden/checked, remove_hidden_field_autocomplete;
-> + фикс embedded authenticity_token в ApplicationController).
-> Осталось: фаза 0 хвост (эталоны fields/form_for), фаза 4b
-> (polymorphic `model:` без `url:`). Опубликованные версии:
-> action_view.cr v0.1.3–v0.1.11 (проект на 0.1.11; 225 oracle-кейсов).
-> twinshot review default — 127/129 (2 soft_check PNG, как до прохода).
-> Переведённые страницы: sessions/new, users/profiles, accounts/edit
-> (полностью),
+> + фикс embedded authenticity_token в ApplicationController);
+> фаза 4b закрыта (2026-10-21: polymorphic `model:` без `url:` —
+> action_view.cr v0.1.12 + action_pack.cr v0.2.10 + railties.cr
+> v0.1.14, оракул fw_poly_*, smoke через boot приложения
+> tmp/poly_form_smoke.cr). Осталось: фаза 0 хвост (эталоны
+> fields/form_for), `fields`/`form_for`. Опубликованные версии:
+> action_view.cr v0.1.3–v0.1.12 (проект на 0.1.12; 229 oracle-кейсов).
+> twinshot review default — 128/129 (1 soft_check PNG
+> custom-boost.png; до прохода было 127/129 с двумя). Переведённые страницы: sessions/new,
+> users/profiles, accounts/edit (полностью),
 > accounts/bots (new+edit), rooms/_form, messages/boosts/new,
 > first_runs/show, joins/show.

@@ -7,11 +7,11 @@ shards:
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.8
+    version: 0.2.10
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
-    version: 0.1.11
+    version: 0.1.12
 
   active_job_cr:
     git: https://github.com/orelsokolov/active_job.cr.git
@@ -75,7 +75,7 @@ shards:
 
   railties_cr:
     git: https://github.com/orelsokolov/railties.cr.git
-    version: 0.1.13
+    version: 0.1.14
 
   redis:
     git: https://github.com/jgaskins/redis.git
