@@ -62,7 +62,7 @@ class AccountsController < ApplicationController
       account.restrict_room_creation_to_administrators = value.to_s == "true"
     end
     account.save!
-    redirect_to edit_account_path
+    redirect_to edit_account_url
   end
 
   private def set_account : Account
@@ -72,7 +72,7 @@ class AccountsController < ApplicationController
 
   # Strong Parameters (Rails account_params): имя + restrict-свитч.
   private def account_params : ActionController::Parameters
-    params.require("account")
+    params.require(:account)
       .permit("name", {"settings" => ["restrict_room_creation_to_administrators"]})
   end
 end

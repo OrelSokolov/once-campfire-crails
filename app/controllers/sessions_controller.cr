@@ -19,14 +19,14 @@ class SessionsController < ApplicationController
   def new
     # sessions_controller.rb:27 референса — на чистой установке логин
     # редиректит на first_run.
-    return redirect_to first_run_path if User.count == 0
+    return redirect_to first_run_url if User.count == 0
     prepare_login
   end
 
   def create
     if (user = User.authenticate(params["email_address"].to_s, params["password"].to_s))
       start_new_session_for user
-      redirect_to root_path
+      redirect_to root_url
     else
       prepare_login(alert: true)
       render(html: __render_view("new").to_s, status: :unauthorized)
@@ -54,7 +54,7 @@ class SessionsController < ApplicationController
     # сброс атрибутов (user больше не текущий в этом запросе).
     Current.session = nil
     Current.user = nil
-    redirect_to root_path
+    redirect_to root_url
   end
 
   # Данные для sessions/new.html.erb: имя аккаунта в легенде, владелец

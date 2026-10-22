@@ -44,7 +44,7 @@ module Authentication
   end
 
   def require_authentication : Nil
-    redirect_to new_session_path unless current_user
+    redirect_to new_session_url unless current_user
   end
 
   # Rails authentication: start_new_session_for — создаёт сессию и

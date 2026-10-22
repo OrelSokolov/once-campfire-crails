@@ -59,7 +59,7 @@ class Users::PushSubscriptionsController < ApplicationController
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     PushSubscription.where("user_id = ? AND id = ?",
       current_user.not_nil!.id.not_nil!, params["id"].to_s).delete_all
-    redirect_to "/users/me/push_subscriptions"
+    redirect_to user_push_subscriptions_url
   end
 
   private def nested(key : String) : String

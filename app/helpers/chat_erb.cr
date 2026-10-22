@@ -216,7 +216,7 @@ class ChatERB
   compile_template "composer", "app/views/rooms/show/_composer.html.erb"
   compile_template "body_close", "app/views/layouts/_body_close.html.erb", dedent: true
   compile_template "bell", "app/views/rooms/involvements/_bell.html.erb"
-  compile_template "involvement_show", "app/views/rooms/involvements/show.html.erb", dedent: true
+  compile_template "involvement_show", "app/views/rooms/involvements/_show.html.erb", dedent: true
 
   # Вложенные партиалы — через render(): compile_template-методы
   # переключают общий @__erb_buf, вложенный вызов затёр бы буфер

@@ -84,7 +84,7 @@ class SearchesController < ApplicationController
         created_at: now, updated_at: now).save!
       Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     end
-    redirect_to "/searches?q=" + URI.encode_www_form(query)
+    redirect_to searches_url(q: query)
   end
 
   # DELETE /searches/clear — очистить recents пользователя.
@@ -93,6 +93,6 @@ class SearchesController < ApplicationController
     ActiveRecord::Base.connection.exec(
       "DELETE FROM searches WHERE user_id = ?", user.id.not_nil!)
     Campfire::PageCache.invalidate!
-    redirect_to "/searches"
+    redirect_to searches_url
   end
 end

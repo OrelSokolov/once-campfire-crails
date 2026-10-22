@@ -10,11 +10,11 @@ class Accounts::UsersController < ApplicationController
   # role_params: presence_in(member/administrator) || member.
   def update
     find_target
-    role = params.require("user").permit("role")["role"]?.to_s
+    role = params.require(:user).permit(:role)["role"]?.to_s
     target = @target.not_nil!
     target.role = role == "administrator" ? 1 : 0
     target.save!
-    redirect_to edit_account_path
+    redirect_to edit_account_url
   end
 
   # User#deactivate: статус deactivated + удаление сессий (разлогин).
@@ -24,7 +24,7 @@ class Accounts::UsersController < ApplicationController
     target.status = 1
     target.save!
     Session.where("user_id = ?", target.id.not_nil!).delete_all
-    redirect_to edit_account_path
+    redirect_to edit_account_url
   end
 
   # set_user: User.active.find (деактивированных/забаненных менять нельзя).

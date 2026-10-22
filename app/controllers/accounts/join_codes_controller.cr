@@ -10,7 +10,7 @@ class Accounts::JoinCodesController < ApplicationController
     account = Account.take.not_nil!
     account.join_code = generate_join_code
     account.save!
-    redirect_to edit_account_path
+    redirect_to edit_account_url
   end
 
   private def generate_join_code : String

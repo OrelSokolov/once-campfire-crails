@@ -18,21 +18,21 @@ class FirstRunsController < ApplicationController
     user = FirstRun.create!(user_params)
     start_new_session_for user
 
-    redirect_to root_path
+    redirect_to root_url
   rescue ActiveRecord::RecordNotUnique
-    redirect_to root_path
+    redirect_to root_url
   rescue ActiveRecord::RecordInvalid | ActionController::ParameterMissing
     # render(plain:) сбрасывает response.status — передаём аргументом
     render(plain: "invalid first run parameters", status: :unprocessable_entity)
   end
 
   private def prevent_repeats
-    redirect_to root_path if Account.any?
+    redirect_to root_url if Account.any?
   end
 
   # avatar в permit-списке — паритет референса; загрузка аватара
   # (has_secure_*) не портирована, FirstRun поле игнорирует.
   private def user_params : ActionController::Parameters
-    params.require("user").permit("name", "avatar", "email_address", "password")
+    params.require(:user).permit(:name, :avatar, :email_address, :password)
   end
 end

@@ -52,7 +52,7 @@ class Users::ProfilesController < ApplicationController
     end
     user.updated_at = Time.utc
     user.save!
-    redirect_to "/users/me/profile"
+    redirect_to user_profile_url
   end
 
   # 4 часа действия, как в референсе (routes.js: 4 * 3600000).

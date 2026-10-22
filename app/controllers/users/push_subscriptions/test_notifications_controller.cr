@@ -14,7 +14,7 @@ class Users::PushSubscriptions::TestNotificationsController < ApplicationControl
        (vapid_public = ENV["VAPID_PUBLIC_KEY"]?)
       deliver(user, subscription, vapid_public, vapid_private)
     end
-    redirect_to "/users/me/push_subscriptions"
+    redirect_to user_push_subscriptions_url
   end
 
   # WebPush::Pool#deliver + invalid_subscription_handler: 404/410

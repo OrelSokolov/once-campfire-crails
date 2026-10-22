@@ -68,7 +68,7 @@ class Messages::BoostsController < ApplicationController
           attributes: {"maintain_scroll" => "true"})
       end
     end
-    redirect_to message_boosts_path(mid)
+    redirect_to message_boosts_url(mid)
   end
 
   # DELETE /messages/:message_id/boosts/:id — удаление своего буста,
@@ -116,6 +116,6 @@ class Messages::BoostsController < ApplicationController
   end
 
   private def boost_params
-    params.require("boost").permit("content")
+    params.require(:boost).permit(:content)
   end
 end

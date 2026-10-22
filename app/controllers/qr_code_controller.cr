@@ -1,7 +1,7 @@
 # GET /qr_code/:id — QR-код ссылки (референс: campfire-express
 # src/public.js /qr_code/:id): :id — base64url значения (<=4096 UTF-8
 # символов), отдаётся PNG через rqrcode_cr (порт rqrcode 2.2.0).
-class QrCodesController < ApplicationController
+class QrCodeController < ApplicationController
   skip_before_action :require_authentication
 
   def show

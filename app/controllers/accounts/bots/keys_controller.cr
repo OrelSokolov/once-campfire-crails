@@ -15,6 +15,6 @@ class Accounts::Bots::KeysController < ApplicationController
     bot.bot_token = Random::Secure.hex(6)
     bot.updated_at = Time.utc
     bot.save!
-    redirect_to account_bots_path
+    redirect_to account_bots_url
   end
 end

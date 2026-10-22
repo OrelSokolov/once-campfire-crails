@@ -62,7 +62,7 @@ class Rooms::DirectsController < ApplicationController
       end
       broadcast_direct_link(room)
     end
-    redirect_to room_path(room.id)
+    redirect_to room_url(room.id)
   end
 
   # GET /rooms/directs/new — head для формы (chat: false). Имя не `head`:

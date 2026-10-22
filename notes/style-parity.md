@@ -38,6 +38,24 @@
 - **Комментарии-шапки на русском** — в оракуле их нет; контрактные
   пояснения (PageCache/IdentityCache, byte-parity ловушки) оставлены —
   их удаление без переноса куда-либо потеряло бы контекст порта.
+- **`_show.html.erb` вместо `show.html.erb`** (`rooms/involvements`,
+  ранее `users/sidebars`) — implicit-scan `action_pack_cr` компилирует
+  `app/views/<dir>/<action>.html.erb` в контексте контроллера, где локалов
+  ChatERB нет; префикс-подчёркивание выводит файл из скана (шаблон живёт
+  только в ChatERB#compile_template).
+- **`redirect_to root_url` вместо `post_authenticating_url`**
+  (sessions, sessions/transfers) — stored-location механика аутентификации
+  Rails не портирована; редирект всегда на корень.
+- **`Users::AvatarsController#destroy` отсутствует** — оракул после
+  удаления аватара делает `redirect_to user_profile_url`; у порта нет
+  DELETE-роута аватара (смена аватара — через profiles#update).
+- **users#new/create живут в `JoinsController`** (`/join/:code`) —
+  оракул держит их в `UsersController`; структура порта отражает express-
+  референс. `redirect_to new_session_url(email_address:)` из rescue-ветки
+  оракула не портирован (join при дубле email — 422).
+- **`rooms/settings` — алиас `rooms/involvements#show`** — в express
+  (routes.js:597) общий handler; оракул рисует отдельный
+  `resource :settings` без контроллера в дереве.
 
 ## Выравнивания поведения (сделано, отличалось от оракула)
 

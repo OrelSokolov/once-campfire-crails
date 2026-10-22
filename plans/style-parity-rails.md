@@ -1,13 +1,22 @@
 # План: выравнивание стиля кода с Rails-оракула (группа `code`)
 
-> **Статус (2026-10-22):** Фазы 1–3 выполнены (миграции, rooms/messages/
+> **Статус (2026-10-22, вечер):** Фазы 1–3 выполнены (миграции, rooms/messages/
 > by_bots/boosts/opens/closeds контроллеры, ApplicationController →
 > concerns, User#administrator?/#can_administer?). Фаза 5 — исследована,
 > замены `icon→image_tag` и `form_with model:` небезопасны для
 > byte-parity (см. `notes/style-parity.md`). Фазы 4 (Room-доменные
-> методы), 5–7 — не начаты. Смоук-прогон сервера зелёный;
-> `twinshot review default` — 127/129, остались только 2 известных
-> soft_check png; `review code` — 196 pass / 407 fail (базлайн 194/410).
+> методы), 5–7 — не начаты. Доп. выравнивание (2026-10-22): `redirect_to
+> *_url` вместо `*_path` (15+ файлов, `*_url`-хелперы шарда),
+> `params.require(:sym).permit(:sym)` вместо строк, ренейм
+> `qr_codes→qr_code`, `Rooms::Involvements/RefreshesController` вынесены
+> из RoomsController (+ роуты `scope module:` как в оракуле,
+> `searches`/`user_profile`/`user_push_subscriptions` получили имена).
+> Попутно восстановлен случайно удалённый в фазе 3 оверрайд
+> `__csrf_token_field → ""` (a8cfcf4) — формы снова без embedded
+> authenticity_token, как в оракуле. `twinshot review default` —
+> 128/129 (1 warn, известный soft_check png); `review code` — 196 pass /
+> 409 fail (структурные missing сократились: involvements/refreshes/
+> qr_code теперь существуют, отличия только построчные).
 
 Базлайн `twinshot review code` (2026-10-22): **852 файла, 194 passed / 248 warn / 410 fail**.
 Цель — сократить fail за счёт стилевых расхождений, устранимых на Crystal.

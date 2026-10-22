@@ -44,7 +44,7 @@ CRails.application.routes.draw do
 
   get "/join/:code", to: "joins#show"
   post "/join/:code", to: "joins#create"
-  get "/qr_code/:id", to: "qr_codes#show"
+  get "/qr_code/:id", to: "qr_code#show"
   get "/webmanifest", to: "pwa#manifest"
   get "/webmanifest.json", to: "pwa#manifest"
   get "/service-worker", to: "pwa#service_worker"
@@ -52,11 +52,12 @@ CRails.application.routes.draw do
   # Литеральные /users/me/* — до resources :users (см. шапку). Аватар
   # ищется по :token, а не :user_id, как в Rails-неймспейсе users.
   get "/users/me/sidebar", to: "users/sidebars#show"
-  get "/users/me/profile", to: "users/profiles#show"
+  get "/users/me/profile", to: "users/profiles#show", as: "user_profile"
   patch "/users/me/profile", to: "users/profiles#update"
   # scope defaults: { user_id: "me" } внутри resources :users: подписки
   # текущего пользователя на Web Push (JS-колокол _bell.html.erb).
-  get    "/users/me/push_subscriptions", to: "users/push_subscriptions#index"
+  get    "/users/me/push_subscriptions", to: "users/push_subscriptions#index",
+    as: "user_push_subscriptions"
   post   "/users/me/push_subscriptions", to: "users/push_subscriptions#create"
   delete "/users/me/push_subscriptions/:id", to: "users/push_subscriptions#destroy"
   post   "/users/me/push_subscriptions/:push_subscription_id/test_notifications",
@@ -85,13 +86,16 @@ CRails.application.routes.draw do
 
   resources :rooms, only: [:show, :destroy] do
     resources :messages, except: [:new], param: :message_id
-    get "refresh", to: "rooms#refresh"
-    get "involvement", to: "rooms#involvement"
+    # scope module: "rooms" как в Rails: Rooms::RefreshesController и
+    # Rooms::InvolvementsController (resource :refresh/:involvement).
+    scope module: "rooms" do
+      resource :refresh, only: [:show]
+      resource :involvement, only: [:show, :update]
+    end
     # resource :settings, only: :show — в express общий handler для
     # /rooms/:id/settings и /rooms/:id/involvement (routes.js:597):
-    # алиас GET-ветки rooms#involvement.
-    get "settings", to: "rooms#involvement"
-    put "involvement", to: "rooms#update_involvement"
+    # алиас GET-ветки involvements#show.
+    get "settings", to: "rooms/involvements#show"
     get "@:message_id", to: "rooms#show", as: :at_message
 
     # Bot-API: /rooms/:id/:bot_key/messages (в Rails — scope path:
@@ -124,7 +128,7 @@ CRails.application.routes.draw do
   resource :unfurl_link, only: [:create]
 
   # GET /searches у порта — searches#show (в Rails resources даёт index).
-  get "/searches", to: "searches#show"
+  get "/searches", to: "searches#show", as: "searches"
   post "/searches", to: "searches#create"
   delete "/searches/clear", to: "searches#clear"
   post "/searches/clear", to: "searches#clear"

@@ -41,75 +41,9 @@ class RoomsController < ApplicationController
     send_page(page)
   end
 
-  # GET /rooms/:id/refresh — turbo-stream опрос refresh-room-контроллера:
-  # сообщения, созданные после since, — append в контейнер сообщений;
-  # обновлённые (кроме новых) — replace по dom_id. Разметка —
-  # refresh_stream (RoomsHelpers).
-  def refresh
-    room = Room.find?(params["id"].to_s.to_i64)
-    unless room
-      response.status = :not_found
-      return render(plain: "Room not found")
-    end
-    room = room.not_nil!
-
-    # since — мс-эпоха (refresh_room_controller: loaded-at / message
-    # updated-at), пустое/невалидное — Time.at(0).
-    since = Time.unix_ms(params["since"]?.try(&.to_s.to_i64?) || 0_i64)
-
-    # page_created_since: created_at > since, первая страница (40 ASC).
-    new_messages = Message.where(
-      "room_id = ? AND created_at > ?", room.id.not_nil!, since)
-      .order("created_at ASC").limit(40).to_a
-
-    # page_updated_since + without(new): updated_at > since, последняя
-    # страница сортировки по created_at (DESC limit 40 → ASC), минус новые.
-    new_ids = Set.new(new_messages.map(&.id.not_nil!))
-    updated_messages = Message.where(
-      "room_id = ? AND updated_at > ?", room.id.not_nil!, since)
-      .order("created_at DESC").limit(40).to_a.reverse
-      .reject { |m| new_ids.includes?(m.id.not_nil!) }
-
-    render(html: refresh_stream(room, new_messages, updated_messages),
-      content_type: "text/vnd.turbo-stream.html")
-  end
-
-  # GET /rooms/:id/involvement — содержимое turbo-frame колокольчика
-  # (button_to PUT со следующим состоянием вовлечённости).
-  def involvement
-    room = Room.find?(params["id"].to_s.to_i64)
-    user = current_user
-    unless room && user
-      response.status = :not_found
-      return render(plain: "Room not found")
-    end
-    membership = Membership.where(
-      "room_id = ? AND user_id = ?", room.id.not_nil!, user.id.not_nil!).take
-    return render(plain: "Room not found", status: :not_found) unless membership
-    involvement = membership.involvement.to_s.presence || "mentions"
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    render(html: ChatERB.new(room: room, involvement: involvement,
-      origin: origin).involvement_show.to_s)
-  end
-
-  # PUT /rooms/:id/involvement — смена вовлечённости (цикл
-  # RoomsHelper#next_involvement_for), редирект на show фрейма.
-  def update_involvement
-    room = Room.find?(params["id"].to_s.to_i64)
-    user = current_user
-    unless room && user
-      response.status = :not_found
-      return render(plain: "Room not found")
-    end
-    membership = Membership.where(
-      "room_id = ? AND user_id = ?", room.id.not_nil!, user.id.not_nil!).take
-    return render(plain: "Room not found", status: :not_found) unless membership
-    value = params["involvement"].to_s
-    if %w[mentions everything nothing invisible].includes?(value)
-      membership.update({"involvement" => value})
-    end
-    redirect_to "/rooms/#{room.id}/involvement"
-  end
+  # GET /rooms/:id/refresh и /rooms/:id/involvement — Rooms::Refreshes-
+  # Controller и Rooms::InvolvementsController (app/controllers/rooms/),
+  # как в Rails rooms_controller.rb.
 
   # DELETE /rooms/:id — удаление комнаты (room_form.eta delete-панель).
   def destroy
@@ -119,7 +53,7 @@ class RoomsController < ApplicationController
     Membership.where("room_id = ?", rid).delete_all
     Message.where("room_id = ?", rid).delete_all
     room.destroy
-    redirect_to root_path
+    redirect_to root_url
   end
 
   private def set_room
@@ -127,7 +61,7 @@ class RoomsController < ApplicationController
     if room
       @room = room
     else
-      redirect_to root_path, alert: "Room not found or inaccessible"
+      redirect_to root_url, alert: "Room not found or inaccessible"
     end
   end
 
@@ -154,7 +88,7 @@ class RoomsController < ApplicationController
   end
 
   def room_params
-    params.require("room").permit("name")
+    params.require(:room).permit(:name)
   end
 
   # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
@@ -209,7 +143,7 @@ class RoomsController < ApplicationController
     end
 
     broadcast_sidebar_link(room)
-    redirect_to room_path(room.id)
+    redirect_to room_url(room.id)
   end
 
   # Общее update Rooms::Opens/Closeds: переименование + sync memberships по
@@ -244,7 +178,7 @@ class RoomsController < ApplicationController
     end
 
     broadcast_sidebar_link(room)
-    redirect_to room_path(room.id)
+    redirect_to room_url(room.id)
   end
 
   # user_ids[] из формы (формат action_pack: Scalar/Array/Parameters).
