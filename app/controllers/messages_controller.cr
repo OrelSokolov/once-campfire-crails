@@ -81,7 +81,10 @@ class MessagesController < ApplicationController
       attachment: upload, base_url: origin)
 
     attachment = upload ? ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]? : nil
-    message_html = ChatLayout.message_dom(message, room, user, attachment, base_url: origin)
+    # Без хвостового \n: у Rails @message_html = render_to_string партиала
+    # (Erubi глотает переводы после <% end %>), Turbo не должен аппендить
+    # текстовый узел-пробел после сообщения в контейнер.
+    message_html = ChatLayout.message_dom(message, room, user, attachment, base_url: origin).chomp
     render(html: append_message_stream(room, message_html),
       content_type: "text/vnd.turbo-stream.html")
   end

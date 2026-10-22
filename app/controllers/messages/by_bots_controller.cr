@@ -99,11 +99,12 @@ class Messages::ByBotsController < ApplicationController
     message = MessageCreator.create!(room, bot, body_html, client_message_id,
       base_url: origin)
 
-    # broadcast_create референса: append в [room, :messages] (cable-фрейм —
-    # без хвостового \n); HTTP-ответ — create.turbo_stream.erb-аналог (тег + \n).
-    message_html = ChatLayout.message_dom(message, room, bot, base_url: origin)
-    broadcast_append_to([room, "messages"],
-      target: "messages_#{room.dom_id}", html: message_html)
+    # broadcast_create референса выполняется внутри MessageCreator.create!
+    # (один append в [room, :messages], как MessagesController#create →
+    # super у Rails); HTTP-ответ — create.turbo_stream.erb-аналог (тег + \n),
+    # html без хвостового \n — render_to_string партиала у Rails кончается
+    # ровно </div> (Erubi глотает переводы после <% end %>).
+    message_html = ChatLayout.message_dom(message, room, bot, base_url: origin).chomp
     render(html: append_message_stream(room, message_html),
       content_type: "text/vnd.turbo-stream.html")
   end

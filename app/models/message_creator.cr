@@ -80,10 +80,14 @@ module MessageCreator
     # Message::Broadcasts#broadcast_create референса: broadcast_append_to
     # room, :messages, target: [ room, :messages ], html: … Cable-фрейм —
     # без хвостового \n (он только в HTTP-ответе create.turbo_stream.erb,
-    # который собирает контроллер).
+    # который собирает контроллер). Хвостовой \n message_dom срезаем:
+    # у Rails html = render_to_string партиала, а Erubi глотает переводы
+    # строк после <% end %> — партиал кончается ровно </div>. Иначе Turbo
+    # аппендит в контейнер текстовый узел-пробел после сообщения (видно
+    # в браузерном DOM: </div></div> склеены у оракула, у нас с переносом).
     Turbo::StreamsChannel.broadcast_append_to([room, "messages"],
       target: "messages_#{room.dom_id}",
-      html: ChatLayout.message_dom(message, room, author, attachment, base_url: base_url))
+      html: ChatLayout.message_dom(message, room, author, attachment, base_url: base_url).chomp)
   end
 
   # storeUpload + attachMessage (storage.js/routes.js): файл через

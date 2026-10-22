@@ -116,7 +116,7 @@ module ProfilesHelpers
       io << %(<form accept-charset="UTF-8" action="/session" data-controller="sessions" method="post"><input name="_method" type="hidden" value="delete">\n)
       io << %(<input data-sessions-target="pushSubscriptionEndpoint" id="push_subscription_endpoint" name="push_subscription_endpoint" type="hidden">\n)
       io << %(<button class="btn" data-action="sessions#logout:prevent">\n)
-      io << ChatLayout.icon("logout.svg", nil)
+      io << ChatLayout.icon("logout.svg", nil) << "\n"
       io << %(<span class="for-screen-reader">Log out</span>\n</button>\n)
       io << %(</form>  </div>)
     end

@@ -8,6 +8,7 @@
         <span class="for-screen-reader">Upload avatar</span>
       </label>
     <% end %>
+
     <%= profile_form_with do |form| %>
       <label class="btn avatar input--file txt-xx-large">
         <img aria-hidden="true" data-upload-preview-target="image" height="300" src="<%= fresh_avatar_path(@user.not_nil!) %>" width="300">
@@ -15,7 +16,9 @@
         <span class="for-screen-reader">Avatar</span>
       </label>
     <% end %>
+
   </div>
+
   <%= profile_form_with do |form| %>
     <div class="flex flex-column gap">
       <div class="flex align-center gap">
@@ -49,6 +52,7 @@
       <button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
     </div>
   <% end %>
+
   <div class="margin-block pad-inline pad-block fill-shade border-radius">
     <menu class="flex flex-column gap margin-none pad">
       <% viewer = @user.not_nil! %>

@@ -8,6 +8,7 @@
           <span class="for-screen-reader">Upload logo</span>
         </label>
       <% end %>
+
       <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", data: {controller: "form"} do |form| %>
         <label class="btn avatar input--file account-logo txt-xx-large">
           <img data-upload-preview-target="image" role="presentation" src="<%= logo_src %>" width="48" height="48">
@@ -15,8 +16,10 @@
           <span class="for-screen-reader">Upload logo</span>
         </label>
       <% end %>
+
       <% if @account.not_nil!.logo_attachment %><%= button_to logo_src, method: "delete", class: "btn btn--negative txt-small avatar__delete-btn" do %><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span><% end %><% end %>
     </div>
+
     <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "flex flex-column gap", data: {controller: "form"} do |form| %>
       <div class="flex align-center gap">
         <%= translation_button("account_name") %>
@@ -28,6 +31,7 @@
           <span class="for-screen-reader">Save changes</span>
         <% end %>      </div>
     <% end %>
+
     <div class="margin-block-start pad-block pad-inline-double fill-shade border-radius">
       <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "put", scope: "account", class: "flex align-center gap center", data: {controller: "form"} do |form| %>
         <div class="flex-item-grow flex align-center gap txt-align-start">
@@ -76,6 +80,8 @@
         <% @admins.each do |u| %><%= render(partial: "accounts/users/user", locals: {"user" => u}) %><% end %>
 <% if !@admins.empty? && !@members.empty? %><hr class="separator full-width" style="--border-style: solid">
         <% end %><% @members.each do |u| %><%= render(partial: "accounts/users/user", locals: {"user" => u}) %><% end %>
-      </turbo-frame></menu></div>
+      </turbo-frame>
+    </menu>
+  </div>
 </section>
 <%= page_close %>
