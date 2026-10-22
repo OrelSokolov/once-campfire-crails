@@ -3,6 +3,10 @@
 # Membership при создании — выбранные user_ids[] + создатель.
 class Rooms::ClosedsController < RoomsController
   before_action :set_room, only: [:edit, :update]
+  # closeds_controller.rb:3 оракула: update (переименование + смена
+  # состава) — только создатель/админ, иначе участник мог бы выкинуть
+  # всех из комнаты.
+  before_action :ensure_can_administer, only: [:update]
   before_action :ensure_permission_to_create_rooms, only: [:new, :create]
 
   # Open and closed rooms convert into each other, so both are in reach here. Direct

@@ -7,6 +7,12 @@ require "uuid"
 class MessagesController < ApplicationController
   include MessagesHelpers
 
+  # Верхний лимит тела запроса (сообщение с вложением уходит одним
+  # multipart-POST'ом): без него участник комнаты кладёт в память
+  # multipart-тело произвольного размера (DoS). С запасом над
+  # проверяемыми форматами вложений.
+  MAX_UPLOAD_BYTES = 100 * 1024 * 1024
+
   before_action :set_room, except: [:create]
   before_action :set_message, only: [:show, :edit, :update, :destroy]
   before_action :ensure_can_administer, only: [:edit, :update, :destroy]
@@ -36,6 +42,7 @@ class MessagesController < ApplicationController
   end
 
   def create
+    return head(:payload_too_large) if upload_too_large?
     set_room
     return if @room.nil?
     room = @room.not_nil!
@@ -157,8 +164,16 @@ class MessagesController < ApplicationController
   # Bot-API (/rooms/:id/:bot_key/messages/**) — Messages::ByBotsController
   # и Messages::Boosts::ByBotsController (см. app/controllers/messages/).
 
+  # messages_controller.rb RoomScoped#set_room: комната ищется ВНУТРИ
+  # членства текущего юзера (Current.user.memberships.find_by!) —
+  # не-участник получает 404 и на чтение, и на запись (create зовёт
+  # set_room вручную). Голый Room.find? здесь открывал бы любые комнаты
+  # и чужие DM.
   private def set_room
-    if room = Room.find?(params["id"].to_s.to_i64)
+    if room = Room.where(
+         "id IN (SELECT room_id FROM memberships WHERE user_id = ?)",
+         current_user.not_nil!.id.not_nil!)
+         .where(id: params["id"].to_s.to_i64).first
       @room = room
     else
       response.status = :not_found
@@ -222,6 +237,14 @@ class MessagesController < ApplicationController
   # ActiveStorage direct uploads. action_pack_cr парсит только json и
   # form-urlencoded, поэтому multipart разбираем здесь: поля без
   # filename — строки, с filename — UploadedFile (байты + content-type).
+  private def upload_too_large? : Bool
+    if (length = request.headers["Content-Length"]?.try(&.to_i64?)) &&
+       length > MAX_UPLOAD_BYTES
+      return true
+    end
+    false
+  end
+
   private def parse_multipart_form : Hash(String, String | MessageCreator::UploadedFile)?
     content_type = request.headers["Content-Type"]?
     return nil unless content_type.try(&.includes?("multipart/form-data"))

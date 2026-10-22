@@ -50,6 +50,13 @@ class Users::AvatarsController < ApplicationController
     # avatar_variant референса: variant :square (webp, 512×512) для
     # variable-картинок (send_webp_blob_file), оригинал — остальному.
     content_type = blob.not_nil!.content_type.to_s
+    # Опасные content-types форсируются в octet-stream/attachment (как
+    # ActiveStorageController#serving_attributes): SVG/HTML-аватар на
+    # публичном пути — stored XSS.
+    if ActiveStorageController::BINARY_TYPES.includes?(content_type.split(';').first.to_s)
+      content_type = "application/octet-stream"
+      response.headers["Content-Disposition"] = "attachment"
+    end
     if (variant = avatar_square_variant(blob.not_nil!, path))
       path, content_type = variant
     end

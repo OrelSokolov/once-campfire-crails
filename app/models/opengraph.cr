@@ -6,11 +6,11 @@ require "xml"
 # парсер og-тегов (document.rb) и Metadata с валидацией (metadata.rb +
 # metadata/fetching.rb, включая fxtwitter-подмену для twitter/x.com).
 #
-# Отклонения от Rails-оракула: restricted_http-гем (резолв IP с
-# пиннингом соединения) заменён DNS-проверкой без пиннинга (как
-# publicAddress в express-порту: все адреса хоста обязаны быть
-# публичными, fail closed); санитайз — decode-entities + strip-tags
-# вместо Loofah. JSON-контракт — express opengraph.js.
+# Отклонения от Rails-оракула: restricted_http-гем заменён DNS-резолвом
+# с пиннингом соединения (все адреса хоста обязаны быть публичными,
+# fail closed; коннект — к проверенному IP, TLS/SNI — по имени хоста);
+# санитайз — decode-entities + strip-tags вместо Loofah. JSON-контракт —
+# express opengraph.js.
 module Opengraph
   # express opengraph.js publicAddress: публичный IPv4/IPv6?
   # (fail closed: всё, что не глобально-уникальный адрес — приватно).
@@ -142,7 +142,7 @@ module Opengraph
         return nil unless {"http", "https"}.includes?(current.scheme.to_s)
         return nil if current.user || current.password
         host = current.host
-        return nil unless host && Opengraph.public_host?(host)
+        return nil unless host && !host.empty?
 
         remaining = deadline ? deadline - Time.instant : nil
         return nil if remaining && remaining.total_seconds <= 0
@@ -150,20 +150,55 @@ module Opengraph
 
         tls = current.scheme == "https"
         port = current.port || (tls ? 443 : 80)
-        client = HTTP::Client.new(host, port, tls)
-        client.connect_timeout = timeout
-        client.read_timeout = timeout
-        client.write_timeout = timeout
+        # DNS-пиннинг (restricted_http оракула): один резолв на hop —
+        # все адреса обязаны быть публичными, соединение открывается к
+        # проверенному IP. Повторного резолва внутри HTTP::Client нет,
+        # значит DNS-rebinding (валидация → публичный, коннект →
+        # приватный) закрыт; TLS: SNI/верификация по имени хоста.
+        begin
+          addrs = Socket::Addrinfo.resolve(host, port, type: Socket::Type::STREAM)
+        rescue ex
+          return nil
+        end
+        return nil if addrs.empty? ||
+                      !addrs.all? { |a| Opengraph.public_ip?(a.ip_address.address) }
+        ip = addrs.first.ip_address.address
+
+        begin
+          socket = TCPSocket.new(ip, port, connect_timeout: timeout.total_seconds)
+        rescue ex
+          return nil
+        end
+        begin
+          socket.read_timeout = timeout.total_seconds
+          socket.write_timeout = timeout.total_seconds
+          client = if tls
+            context = OpenSSL::SSL::Context::Client.new
+            tls_socket = OpenSSL::SSL::Socket::Client.new(socket,
+              context: context, sync_close: true, hostname: host)
+            HTTP::Client.new(tls_socket, host, port)
+          else
+            HTTP::Client.new(socket, host, port)
+          end
+        rescue ex
+          socket.close rescue nil
+          return nil
+        end
+
         path = current.request_target
         result = nil : String?
         redirect_to : URI? = nil
-        client.exec(method == :head ? "HEAD" : "GET", path) do |response|
-          if REDIRECT_STATUSES.includes?(response.status_code) &&
-             (location = response.headers["Location"]?)
-            redirect_to = current.resolve(URI.parse(location))
-          else
-            result = yield response
+        begin
+          client.exec(method == :head ? "HEAD" : "GET", path) do |response|
+            if REDIRECT_STATUSES.includes?(response.status_code) &&
+               (location = response.headers["Location"]?)
+              redirect_to = current.resolve(URI.parse(location))
+            else
+              result = yield response
+            end
           end
+        ensure
+          client.close
         end
         return result unless result.nil?
         if next_url = redirect_to

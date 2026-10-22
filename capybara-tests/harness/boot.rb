@@ -156,6 +156,8 @@ module Parity
       env = {
         "CRAILS_ENV" => "production",
         "SECRET_KEY_BASE" => Parity.seed_env.fetch("SECRET_KEY_BASE"),
+        # Как у rails-стороны: прогон по plain http, force_ssl отключён.
+        "DISABLE_SSL" => "true",
         "DATABASE_URL" => "sqlite3://#{File.join(data_dir, 'db', 'production.sqlite3')}",
         "CAMPFIRE_STORAGE_ROOT" => File.join(data_dir, "files"),
         "CAMPFIRE_JOBS_DB" => File.join(data_dir, "db", "jobs.sqlite3"),

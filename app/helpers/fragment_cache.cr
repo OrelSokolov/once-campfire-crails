@@ -25,10 +25,14 @@ module Campfire
     @@epoch = ""
 
     # cache_key_with_version: "messages/<id>-<updated_at_ms>" (Rails:
-    # "messages/1-20240601120000000123").
+    # "messages/1-20240601120000000123"). Версия рендера в ключе: смена
+    # пайплайна (например подключение HtmlSanitizer) сбрасывает кэш,
+    # чтобы отравленные допатчные фрагменты не доживали свой epoch.
+    RENDER_VERSION = "s1"
+
     def self.key(m : Message) : String
       updated = m.updated_at || m.created_at || Time.utc
-      "messages/#{m.id.not_nil!}-#{updated.to_unix_ms}"
+      "messages/#{m.id.not_nil!}-#{updated.to_unix_ms}-#{RENDER_VERSION}"
     end
 
     def self.get(key : String, epoch : String) : String?

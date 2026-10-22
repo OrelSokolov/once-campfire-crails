@@ -46,7 +46,7 @@ class SearchesController < ApplicationController
                    JOIN memberships mm ON mm.room_id = m.room_id
                    WHERE mm.user_id = ? AND message_search_index MATCH ?
                    ORDER BY m.id DESC LIMIT 100)),
-          user.id.not_nil!, query)
+          user.id.not_nil!, match_terms(query))
           .order("id ASC").to_a
       end
 
@@ -94,5 +94,13 @@ class SearchesController < ApplicationController
       "DELETE FROM searches WHERE user_id = ?", user.id.not_nil!)
     Campfire::PageCache.invalidate!
     redirect_to searches_url
+  end
+
+  # message/searchable.rb#match_terms: каждое слово запроса берётся в
+  # кавычки FTS5 (двойные внутри удваиваются) — иначе запрос из
+  # операторов ("AND", "salt AND", незакрытая кавычка) даёт синтаксическую
+  # ошибку FTS5 и 500 вместо выдачи.
+  private def match_terms(query : String) : String
+    query.split.map { |word| %("#{word.gsub('"', %q(""))}") }.join(" ")
   end
 end

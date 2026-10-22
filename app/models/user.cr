@@ -26,19 +26,51 @@ class User < ActiveRecord::Base
     administrator? || message.try(&.creator) == self || message.try(&.new_record?) == true
   end
 
+  # SecureRandom.alphanumeric(12) Rails (user/bot.rb generate_bot_token):
+  # [A-Za-z0-9]{12} ≈ 71 бит энтропии (hex(6) давал 48).
+  BOT_TOKEN_CHARSET = ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
+
+  def self.generate_bot_token : String
+    String.build(12) do |io|
+      12.times { io << BOT_TOKEN_CHARSET[Random::Secure.rand(BOT_TOKEN_CHARSET.size)] }
+    end
+  end
+
+  # User.authenticate_bot оракула: "<id>-<token>" → активный бот.
+  # Токен сравнивается constant-time (Crypto::Subtle), не SQL-строкой.
+  def self.authenticate_bot(bot_key : String) : User?
+    dash = bot_key.index('-')
+    return nil unless dash && (bot_id = bot_key[0, dash].to_i64?)
+    bot = where("id = ? AND role = 2 AND status = 0", bot_id).take
+    return nil unless bot
+    token = bot.bot_token.to_s
+    return nil if token.empty?
+    Crypto::Subtle.constant_time_compare(token, bot_key[(dash + 1)..]) ? bot : nil
+  end
+
   # Rails: User.active.authenticate_by(email_address:, password:) —
   # bcrypt compare against password_digest (status 0 = active).
+  # authenticate_by при ненайденном юзере всё равно хеширует пароль
+  # (secure_password.rb: "helps mitigate timing-based enumeration") —
+  # порт делает тот же dummy-bcrypt, чтобы ответ на несуществующий
+  # email не отличался по времени от неверного пароля.
+  DUMMY_BCRYPT = Crypto::Bcrypt::Password.create("campfire-timing-guard", cost: 10).to_s
+
   def self.authenticate(email_address : String, password : String) : User?
     user = active.where("email_address = ?", email_address).take
-    return nil unless user
-    digest = user.password_digest.to_s
-    return nil if digest.empty?
+    digest = user ? user.password_digest.to_s : DUMMY_BCRYPT
+    if digest.empty?
+      # пустой digest (бот без пароля): bcrypt по ветке nil-user уже
+      # отработал выше только для nil-юзера; здесь дожимаем время
+      # dummy-хешем для одинаковой формы ответа
+      digest = DUMMY_BCRYPT
+    end
     begin
       bcrypt = Crypto::Bcrypt::Password.new(digest)
     rescue Crypto::Bcrypt::Error
-      return nil
+      bcrypt = Crypto::Bcrypt::Password.new(DUMMY_BCRYPT)
     end
-    bcrypt.verify(password) ? user : nil
+    bcrypt.verify(password) && user ? user : nil
   end
 
   # Единственный webhook бота (таблица webhooks; user_id, url).

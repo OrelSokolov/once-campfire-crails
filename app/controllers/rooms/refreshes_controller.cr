@@ -6,7 +6,13 @@ class Rooms::RefreshesController < ApplicationController
   include RoomsHelpers
 
   def show
-    room = Room.find?(params["id"].to_s.to_i64)
+    # Rooms::RefreshesController оракула включает RoomScoped: комната —
+    # только внутри членства текущего юзера (иначе /rooms/:id/refresh
+    # отдаёт turbo-stream с чужой историей, включая DM).
+    room = Room.where(
+      "id IN (SELECT room_id FROM memberships WHERE user_id = ?)",
+      current_user.not_nil!.id.not_nil!)
+      .where(id: params["id"].to_s.to_i64).first
     unless room
       response.status = :not_found
       return render(plain: "Room not found")

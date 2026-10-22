@@ -64,6 +64,7 @@ class Messages::ByBotsController < ApplicationController
   # (routes.js: botKey = "<id>-<bot_token>", plain body). Аутентификация
   # по боту, не по сессии.
   def bot_create
+    return head(:payload_too_large) if upload_too_large?
     room = Room.find?(params["id"].to_s.to_i64)
     unless room
       response.status = :not_found
@@ -161,6 +162,18 @@ class Messages::ByBotsController < ApplicationController
     render(plain: "Unauthorized", status: :unauthorized) unless bot_from_key
   end
 
+  # Лимит тела бот-запроса (как в MessagesController): raw body читается
+  # в память целиком.
+  MAX_UPLOAD_BYTES = MessagesController::MAX_UPLOAD_BYTES
+
+  private def upload_too_large? : Bool
+    if (length = request.headers["Content-Length"]?.try(&.to_i64?)) &&
+       length > MAX_UPLOAD_BYTES
+      return true
+    end
+    false
+  end
+
   # by_bots set_room: комната + membership бота (roomForUser эталона).
   private def set_room
     if room = bot_room(bot_from_key.not_nil!)
@@ -186,14 +199,9 @@ class Messages::ByBotsController < ApplicationController
   end
 
   # botUser(req) эталона: "<id>-<token>" → User (role=2, активный).
+  # Сравнение токена — User.authenticate_bot (constant-time).
   private def bot_from_key : User?
-    bot_key = params["bot_key"].to_s
-    dash = bot_key.index('-')
-    if dash && (bot_id = bot_key[0, dash].to_i64?)
-      User.where(
-        "id = ? AND bot_token = ? AND role = 2 AND status = 0",
-        bot_id, bot_key[(dash + 1)..]).take
-    end
+    User.authenticate_bot(params["bot_key"].to_s)
   end
 
   # roomForUser(bot, id) эталона: комната с membership бота.

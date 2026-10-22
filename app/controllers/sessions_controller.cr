@@ -11,6 +11,11 @@ class SessionsController < ApplicationController
 
   skip_before_action :require_authentication
 
+  # sessions_controller.rb:3 оракула: rate_limit to: 10, within:
+  # 3.minutes on create — брутфорс пароля. Over-limit → тот же
+  # render_rejection (429 + форма логина с flash).
+  rate_limit to: 10, within: 3.minutes, only: [:create], with: :render_rejection
+
   attr_reader login_alert : Bool = false
   attr_reader email : String = ""
   @account_name : String = ""
@@ -65,5 +70,12 @@ class SessionsController < ApplicationController
     @account_name = account.try(&.name).to_s
     @owner = User.where("role = ?", 1).order("id").take
     @email = params["email_address"]?.try(&.to_s).to_s
+  end
+
+  # render_rejection оракула: flash + та же форма логина со статусом
+  # (429 от rate_limit / 401 от неудачного входа).
+  private def render_rejection : Nil
+    prepare_login(alert: true)
+    render(html: __render_view("new").to_s, status: :too_many_requests)
   end
 end

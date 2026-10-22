@@ -7,6 +7,7 @@ require "serverx"
 
 require "../config/application"
 require "../app/models/**"
+require "../app/helpers/html_sanitizer"
 require "../app/helpers/chat_layout"
 require "../app/helpers/chat_erb"
 require "../app/helpers/platform_agent"

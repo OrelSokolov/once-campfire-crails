@@ -7,9 +7,11 @@ module Authentication
 
   # Campfire authentication.rb: protect_from_forgery using: :header_only,
   # with: :exception, unless: -> { authenticated_by.bot_key? } —
-  # бот-ключи в URL (не из браузера) защиту отключают.
+  # защиту отключает ТОЛЬКО успешно аутентифицированный бот-ключ
+  # (наличие параметра bot_key ничего не отключает).
   def bot_request? : Bool
-    params["bot_key"]? != nil
+    return false unless key = params["bot_key"]?
+    !User.authenticate_bot(key.to_s).nil?
   end
 
   # Оракул (rails-main, lazy-сессии): protect_against_forgery? в контексте
@@ -60,9 +62,28 @@ module Authentication
       expires: Time.utc + 20.years, httponly: true, same_site: :lax)
   end
 
+  # request.remote_ip Rails: клиентский IP. Записям X-Forwarded-For
+  # верим, только когда сокет-адрес — доверенный прокси (loopback/
+  # private-диапазоны); иначе клиент может вписать в сессии и баны
+  # произвольный IP (ActionDispatch::RemoteIp так же отбрасывает
+  # клиентский XFF от недоверенных пиров).
   def remote_ip : String?
-    request.headers["X-Forwarded-For"]?.try(&.split(',').first?.try(&.strip)) ||
-      request.headers["Remote-Addr"]? || "127.0.0.1"
+    socket_ip = case addr = request.remote_address
+                when Socket::IPAddress then addr.address.to_s
+                else nil
+                end
+    if (fwd = request.headers["X-Forwarded-For"]?) &&
+       (client = fwd.split(',').first?.try(&.strip)) && !client.empty? &&
+       socket_ip.try { |ip| trusted_proxy?(ip) }
+      return client
+    end
+    socket_ip || request.headers["Remote-Addr"]? || "127.0.0.1"
+  end
+
+  private def trusted_proxy?(ip : String) : Bool
+    # loopback и private/link-local/CGNAT — всё, что Opengraph.public_ip?
+    # считает непубличным (fail closed на мусорных значениях).
+    !Opengraph.public_ip?(ip)
   end
 
   # Rails signed_id: generate/verify через MessageVerifier с ключом
@@ -89,9 +110,13 @@ module Authentication
     nil
   end
 
-  # origin(req) референса: схема://host — для session transfer / invite URL.
+  # origin(req) референса: схема://host — для session transfer / invite
+  # URL. Схема — как req.protocol express-оракула (за прокси это
+  # X-Forwarded-Proto), а не хардкод http://.
   def origin : String
     host = request.headers["Host"]? || "localhost"
-    "http://#{host}"
+    scheme = request.headers["X-Forwarded-Proto"]?
+      .try(&.split(',').first?.try(&.strip)) || "http"
+    "#{scheme}://#{host}"
   end
 end

@@ -6,13 +6,13 @@ class Accounts::Bots::KeysController < ApplicationController
   before_action :require_admin
 
   # User::Bot#reset_bot_key: bot_token = generate_bot_token — та же
-  # генерация, что при создании бота в bots_controller (hex(6)).
+  # генерация, что при создании бота (alphanumeric(12), как Rails).
   def update
     bot = User.where("id = ? AND role = 2 AND status = 0",
       params["bot_id"].to_s.to_i64).take
     return head(:not_found) unless bot
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    bot.bot_token = Random::Secure.hex(6)
+    bot.bot_token = User.generate_bot_token
     bot.updated_at = Time.utc
     bot.save!
     redirect_to account_bots_url

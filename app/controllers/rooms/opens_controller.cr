@@ -3,6 +3,9 @@
 # Membership при создании — все активные юзеры аккаунта.
 class Rooms::OpensController < RoomsController
   before_action :set_room, only: [:edit, :update]
+  # opens_controller.rb:3 оракула: update — только создатель/админ
+  # (ensure_can_administer); edit доступен участникам (страница настроек).
+  before_action :ensure_can_administer, only: [:update]
   before_action :ensure_permission_to_create_rooms, only: [:new, :create]
 
   # Open and closed rooms convert into each other, so both are in reach here. Direct

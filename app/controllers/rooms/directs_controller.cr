@@ -25,9 +25,14 @@ class Rooms::DirectsController < ApplicationController
 
   # GET /rooms/directs/:room_id/edit — настройки direct-комнаты
   # (rooms/directs/edit.html.erb: ссылка "Settings for this room").
+  # Oracle rooms/directs_controller.rb: room_scope → Current.user.rooms
+  # .directs — без членства настройки DM чужой комнаты не отдаются.
   def edit
     user = current_user.not_nil!
-    room = Room.find?(params["room_id"].to_s.to_i64)
+    room = Room.where(
+      "id IN (SELECT room_id FROM memberships WHERE user_id = ?) AND type IN ('Direct', 'Rooms::Direct')",
+      user.id.not_nil!)
+      .where(id: params["room_id"].to_s.to_i64).first
     return head(:not_found) unless room
     @user = user
     @room = room

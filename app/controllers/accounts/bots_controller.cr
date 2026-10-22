@@ -32,7 +32,7 @@ class Accounts::BotsController < ApplicationController
       name: name,
       role: 2,
       status: 0,
-      bot_token: Random::Secure.hex(6),
+      bot_token: User.generate_bot_token,
       created_at: now, updated_at: now)
     bot.save!
     sync_webhook(bot.id.not_nil!, nested("webhook_url"))

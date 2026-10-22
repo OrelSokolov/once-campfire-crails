@@ -6,6 +6,7 @@ abstract class ApplicationController < ActionController::Base
   include SetCurrentRequest
   include TrackedRoomVisit
   include CachedResponses
+  include BlockBannedRequests
 
   # turbo-rails engine.rb подключает Turbo::Streams::Broadcasts в
   # ActionController::Base — контроллеры зовут broadcast_*_to напрямую
@@ -13,6 +14,7 @@ abstract class ApplicationController < ActionController::Base
   include Turbo::Streams::Broadcasts
 
   before_action :set_current_request
+  before_action :reject_banned_ip
   before_action :require_authentication
 
   # Campfire authentication.rb: protect_from_forgery using: :header_only,

@@ -194,46 +194,17 @@ module MessageCreator
     raise Exception.new("unreachable") # исключает Nil из типа возврата
   end
 
-  # ————— Упоминания (порт mentionIds + unverifiedUserGid, richtext.js) —————
+  # ————— Упоминания (порт mentionIds, richtext.js) —————
+  # sgid проверяется подписью в ChatLayout.mention_user (Rails
+  # to_signed_gid): неподписанный конверт mention'ом не считается.
 
   def self.mention_ids(body : String) : Set(Int64)
     ids = Set(Int64).new
     body.scan(/<action-text-attachment\b[^>]*\bsgid=["']([^"']+)/) do |match|
-      if (gid = match[1]?) && (user_id = unverified_user_gid(gid))
-        ids << user_id
+      if (gid = match[1]?) && (user = ChatLayout.mention_user(gid))
+        ids << user.id.not_nil!
       end
     end
     ids
-  end
-
-  # sgid без проверки подписи: base64-конверт Rails-конверта `_rails`,
-  # gid-URL вида gid://<app>/User/<id>.
-  def self.unverified_user_gid(raw : String) : Int64?
-    envelope_raw = raw[0...(raw.rindex("--") || return)]
-    json = decode_base64_lenient(envelope_raw) || return nil
-    envelope = JSON.parse(json)
-    message = envelope["_rails"]?
-    return nil unless message.is_a?(JSON::Any)
-    value = message["data"]?
-    if value.nil? || (value.to_s.empty? && message["message"]?)
-      decoded = decode_base64_lenient(message["message"].to_s) || return nil
-      gid = decoded[/gid:\/\/[^\s]+\/\d+/]?
-      return nil unless gid
-      return gid[/\/User\/(\d+)$/, 1]?.try(&.to_i64?)
-    end
-    value = value.to_s
-    value = decode_base64_lenient(value) || return nil unless value.starts_with?("gid:")
-    if (match = value.match(/\/User\/(\d+)$/)) && value.starts_with?("gid://")
-      match[1].to_i64?
-    end
-  end
-
-  # Base64 (возможно urlsafe, без паддинга) — lenient, как Buffer.from.
-  def self.decode_base64_lenient(text : String) : String?
-    sanitized = text.tr("-_", "+/").gsub(/\s+/, "")
-    sanitized += "=" * ((4 - sanitized.size % 4) % 4)
-    Base64.decode_string(sanitized)
-  rescue
-    nil
   end
 end

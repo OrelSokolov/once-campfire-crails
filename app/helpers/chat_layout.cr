@@ -599,18 +599,20 @@ module ChatLayout
   end
 
   # Текстовая presentation сообщения: рендер action-text-attachment
-  # (OG-embed из content-атрибута, mention по sgid) + autolink URL/email
-  # (rails_autolink) + снятие figure-обёртки таблиц (в DOM референса
-  # таблицы идут без lexxy-content__table-wrapper). См.
-  # MessagesHelper#message_presentation.
+  # (OG-embed из content-атрибута, mention по sgid) + SANITIZE
+  # (HtmlSanitizer — порт финального sanitize оракула перед auto_link:
+  # allowlist тегов/атрибутов, срез event-handler'ов и javascript:-URL)
+  # + autolink URL/email (rails_autolink) + снятие figure-обёртки таблиц
+  # (в DOM референса таблицы идут без lexxy-content__table-wrapper).
+  # См. MessagesHelper#message_presentation / auto_link_text.
   def self.text_presentation(body : String?) : String
-    auto_link(render_embeds(body.to_s)
+    auto_link(HtmlSanitizer.sanitize(render_embeds(body.to_s)
       # Живой редактор lexxy кладёт в сериализацию кода data-highlight-
       # language, когда hljs уже загружен (race на моменте постинга);
       # в базлайне атрибута нет — срезаем для детерминированного паритета.
       .gsub(/ data-highlight-language="[^"]*"/, "")
       .gsub(%q{<figure class="lexxy-content__table-wrapper">}, "")
-      .gsub("</figure>", ""))
+      .gsub("</figure>", "")))
   end
 
   # <action-text-attachment> → итоговая разметка:
@@ -849,7 +851,12 @@ module ChatLayout
   # sgid → User: конверт _rails. attachable-sgid бывает в двух формах
   # (AS MessageVerifier): новая — {"data": <gid|b64>}, legacy (сид) —
   # {"message": <strict_b64 полезной нагрузки>} с exp/pur рядом.
-  private def self.mention_user(sgid : String) : User?
+  # СНАЧАЛА проверяется подпись (тот же verifier, что в attachable_sgid,
+  # Rails to_signed_gid): неподписанный/перековерканный sgid → nil —
+  # иначе можно было бы рендерить mention-чипы и слать push-уведомления
+  # произвольным юзерам, подделав конверт.
+  def self.mention_user(sgid : String) : User?
+    return nil unless sgid_signature_valid?(sgid)
     sep = sgid.rindex("--") || return nil
     json = decode_base64_lenient(sgid[0...sep]) || return nil
     envelope = JSON.parse(json)
@@ -871,6 +878,21 @@ module ChatLayout
     gid = decode_base64_lenient(gid) || return nil unless gid.starts_with?("gid:")
     id = gid[/\/User\/(\d+)/, 1]?.try(&.to_i64?)
     id.try { |i| User.find?(i) }
+  end
+
+  # Подпись sgid: verifier "signed_global_ids" с purpose "attachable"
+  # (тот же, что генерирует attachable_sgid; Rails Signed::GlobalID
+  # верифицирует ровно так же).
+  private def self.sgid_signature_valid?(sgid : String) : Bool
+    secret = ENV["SECRET_KEY_BASE"]? ||
+             raise RuntimeError.new("SECRET_KEY_BASE is not configured")
+    key = ActiveSupport::CachingKeyGenerator.new(
+      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha1))
+      .generate_key("signed_global_ids")
+    verifier = ActiveSupport::MessageVerifier.new(key, url_safe: true, digest: :sha1)
+    !verifier.verified_any(sgid, purpose: "attachable").nil?
+  rescue ex
+    false
   end
 
   private def self.decode_base64_lenient(text : String) : String?
