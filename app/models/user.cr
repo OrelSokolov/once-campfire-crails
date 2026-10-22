@@ -104,6 +104,10 @@ class User < ActiveRecord::Base
         conn.exec("UPDATE users SET status = 2, updated_at = ? WHERE id = ?", now, uid)
       end
     end
+    # apply_ban референса: close_remote_connections — рвём live-сокеты
+    # забаненного ПОСЛЕ commit (рано закрытый сокет реконнектнится и
+    # перечитает ещё живую сессию).
+    close_remote_connections
     Campfire::JobQueue.enqueue_batch([{"remove_banned_content", %({"user_id":#{uid}})}])
   end
 
@@ -116,5 +120,19 @@ class User < ActiveRecord::Base
       conn.exec("DELETE FROM bans WHERE user_id = ?", uid)
       conn.exec("UPDATE users SET status = 0, updated_at = ? WHERE id = ?", now, uid)
     end
+  end
+
+  # user.rb:48-49 + 71-72 референса: reset/close_remote_connections —
+  # живые cable-сокеты юзера закрываются через internal channel
+  # (ActionCable::RemoteConnections в шарде action_cable_cr; CableBus
+  # доставляет disconnect во все fork-воркеры). reconnect: true — клиент
+  # перезапустит /cable (логаут), false — не должен (бан/деактивация).
+  def reset_remote_connections : Nil
+    close_remote_connections reconnect: true
+  end
+
+  def close_remote_connections(reconnect : Bool = false) : Nil
+    ActionCable.server.remote_connections
+      .where(current_user: id.not_nil!.to_s).disconnect(reconnect: reconnect)
   end
 end

@@ -17,13 +17,16 @@ class Accounts::UsersController < ApplicationController
     redirect_to edit_account_url
   end
 
-  # User#deactivate: статус deactivated + удаление сессий (разлогин).
+  # User#deactivate: статус deactivated + удаление сессий (разлогин)
+  # + close_remote_connections (user.rb:37 референса) — деактивированный
+  # не продолжает слушать комнаты в открытом табе.
   def destroy
     find_target
     target = @target.not_nil!
     target.status = 1
     target.save!
     Session.where("user_id = ?", target.id.not_nil!).delete_all
+    target.close_remote_connections
     redirect_to edit_account_url
   end
 

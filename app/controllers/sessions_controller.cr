@@ -9,7 +9,10 @@
 class SessionsController < ApplicationController
   include SessionsHelpers
 
-  skip_before_action :require_authentication
+  # sessions_controller.rb:2 оракула: allow_unauthenticated_access
+  # ONLY new/create — destroy требует авторизации (Current.user обязан
+  # быть установлен до удаления сессии, иначе теряем, кого дисконнектить).
+  skip_before_action :require_authentication, only: [:new, :create]
 
   # sessions_controller.rb:3 оракула: rate_limit to: 10, within:
   # 3.minutes on create — брутфорс пароля. Over-limit → тот же
@@ -55,6 +58,10 @@ class SessionsController < ApplicationController
             end
     Session.where("token = ?", token).delete_all if token
     cookies.delete("session_token")
+    # disconnect_remote_connections референса (terminate_current_
+    # session): live-сокеты текущего юзера закрываются, reconnect: true —
+    # клиент вернётся уже неавторизованным и уйдёт на логин.
+    current_user.try(&.reset_remote_connections)
     # terminate_current_session референса: Current.session&.destroy! +
     # сброс атрибутов (user больше не текущий в этом запросе).
     Current.session = nil
