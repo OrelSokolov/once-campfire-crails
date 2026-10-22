@@ -1,10 +1,17 @@
 # /rooms/closeds — закрытые комнаты (референс: rooms/closeds_controller.rb):
-# new/create/edit/update; общая логика — в базовом RoomsController, как в
-# Rails. Membership при создании — выбранные user_ids[] + создатель.
+# new/create/edit/update; общая логика — в базовом RoomsController.
+# Membership при создании — выбранные user_ids[] + создатель.
 class Rooms::ClosedsController < RoomsController
-  # Rails rooms/closeds_controller.rb: ensure_permission_to_create_rooms
-  # на new/create.
+  before_action :set_room, only: [:edit, :update]
   before_action :ensure_permission_to_create_rooms, only: [:new, :create]
+
+  # Open and closed rooms convert into each other, so both are in reach here. Direct
+  # rooms never are: promoting one would republish its history to the whole account.
+  private def room_scope
+    Room.where(
+      "id IN (SELECT room_id FROM memberships WHERE user_id = ?) AND type NOT IN ('Direct', 'Rooms::Direct')",
+      Current.user.not_nil!.id.not_nil!)
+  end
 
   # GET /rooms/closeds/new — форма новой комнаты (rooms/closeds/new.html.erb
   # → общий _form.html.erb; данные готовит prepare_room_form).
@@ -24,10 +31,7 @@ class Rooms::ClosedsController < RoomsController
   # GET /rooms/closeds/:room_id/edit — форма с текущим именем и списком
   # доступа (выбранные первыми — делит divider в _form).
   def edit
-    user = current_user.not_nil!
-    room = Room.find?(params["room_id"].to_s.to_i64)
-    return head(:not_found) unless room
-    prepare_room_form(room, "closeds", user)
+    prepare_room_form(@room, "closeds", current_user.not_nil!)
   end
 
   # PATCH /rooms/closeds/:room_id — переименование + sync memberships по

@@ -7,55 +7,38 @@ require "uuid"
 class MessagesController < ApplicationController
   include MessagesHelpers
 
+  before_action :set_room, except: [:create]
+  before_action :set_message, only: [:show, :edit, :update, :destroy]
+  before_action :ensure_can_administer, only: [:edit, :update, :destroy]
+
+  # show.html.erb / edit.html.erb
+  # Геттеры — для ERB-хелперов MessagesHelpers (модуль не видит ивары).
+  attr_reader :room, :message, :mid, :attachment
+  @room : Room?
+  @message : Message?
+  @mid : Int64?
+  @attachment : ChatLayout::Attachment?
+
   def index
-    room = Room.find?(params["id"].to_s.to_i64)
-    unless room
-      response.status = :not_found
-      return render(plain: "Room not found")
-    end
-    room = room.not_nil!
     user = current_user.not_nil!
 
     # Whole-page cache (как rooms#show): ключ включает query
     # (?before=...), инвалидация — общий DB-epoch.
     page = cache_page("messages#index", user.id) do
-      messages = find_messages(room)
+      messages = find_messages
       # Rails messages#index: пустая страница → 204 No Content (пагинатор
       # по нему понимает, что история дочитана). Rails: head :no_content —
       # без тела и без Content-Type (не кэшируется).
       return head(:no_content) if messages.empty?
-      Campfire::PageCache::Page.new(messages_page_html(room, messages, db_epoch))
+      Campfire::PageCache::Page.new(messages_page_html(@room.not_nil!, messages, db_epoch))
     end
     send_page(page)
   end
 
-  # messages#index: before → 40 строго до anchor по created_at (вывод ASC),
-  # after → 40 строго после (ASC), без anchor — последние 40 ASC.
-  private def find_messages(room : Room) : Array(Message)
-    anchor = params["before"]?
-    after_anchor = params["after"]?
-    if anchor && (anchor_id = anchor.to_s.to_i64?)
-      Message.where(
-        "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, anchor_id)
-        .order("created_at DESC").limit(40).to_a.reverse
-    elsif after_anchor && (after_id = after_anchor.to_s.to_i64?)
-      Message.where(
-        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, after_id)
-        .order("created_at ASC").limit(40).to_a
-    else
-      Message.where("room_id = ?", room.id.not_nil!)
-        .order("created_at DESC").limit(40).to_a.reverse
-    end
-  end
-
   def create
-    room = Room.find?(params["id"].to_s.to_i64)
-    unless room
-      response.status = :not_found
-      return render(plain: "Room not found")
-    end
+    set_room
+    return if @room.nil?
+    room = @room.not_nil!
     user = current_user.not_nil!
 
     body_html = message_body_param
@@ -89,105 +72,29 @@ class MessagesController < ApplicationController
       content_type: "text/vnd.turbo-stream.html")
   end
 
-  # Bot-API (/rooms/:id/:bot_key/messages/**) — Messages::ByBotsController
-  # и Messages::Boosts::ByBotsController (см. app/controllers/messages/).
-
   # show.html.erb (render @message): страница с DOM сообщения. Turbo
   # извлекает из ответа фрейм edit_message_<id> — это завершает навигацию
   # фрейма после редиректа update (фрейм получает [complete]) и
   # подтягивает отрендеренное сообщение.
-  # show.html.erb / edit.html.erb
-  # Геттеры — для ERB-хелперов MessagesHelpers (модуль не видит ивары).
-  attr_reader :room, :message, :mid, :attachment
-  @room : Room?
-  @message : Message?
-  @mid : Int64?
-  @attachment : ChatLayout::Attachment?
-
   def show
-    room = Room.find?(params["id"].to_s.to_i64)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    unless room && message && message.room_id == room.id
-      response.status = :not_found
-      return render(plain: "Message not found")
-    end
-    @room = room
-    @message = message
   end
 
   # GET /rooms/:id/messages/:message_id/edit — форма редактирования в
   # turbo-frame edit_message_<id> (edit.html.erb).
   def edit
-    room = Room.find?(params["id"].to_s.to_i64)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    user = current_user.not_nil!
-    unless room && message && message.room_id == room.id
-      response.status = :not_found
-      return render(plain: "Message not found")
-    end
-    room = room.not_nil!
-    message = message.not_nil!
-    if message.creator_id != user.id && user.role != 1
-      response.status = :forbidden
-      return render(plain: "Cannot edit this message")
-    end
-
-    @room = room
-    @message = message
+    message = @message.not_nil!
     @mid = message.id.not_nil!
     @attachment = ChatLayout.attachments_for([@mid.not_nil!])[@mid.not_nil!]?
   end
 
-  # DELETE /rooms/:id/messages/:message_id — удаление сообщения
-  # (edit_message.eta: turbo-stream remove + инвалидация кэшей).
-  def destroy
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    room = Room.find?(params["id"].to_s.to_i64)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    user = current_user.not_nil!
-    unless room && message && message.room_id == room.id
-      response.status = :not_found
-      return render(plain: "Message not found")
-    end
-    if message.creator_id != user.id
-      response.status = :forbidden
-      return render(plain: "Cannot delete this message")
-    end
-
-    mid = message.id.not_nil!
-    ActiveRecord::Base.connection.exec(
-      "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
-    ActiveRecord::Base.connection.exec(
-      "DELETE FROM message_search_index WHERE rowid=?", mid)
-    message.destroy
-
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-
-    # messages_controller.rb#destroy: broadcast_remove (cable-фрейм — без
-    # хвостового \n); HTTP-ответ — destroy.turbo_stream.erb (тег + \n файла).
-    broadcast_remove_to([room, "messages"], target: "message_#{mid}")
-    render(html: %(<turbo-stream action="remove" target="message_#{mid}"></turbo-stream>\n),
-      content_type: "text/vnd.turbo-stream.html")
-  end
-
   # PATCH /rooms/:id/messages/:message_id — обновление тела: rich text,
-  # FTS5-индекс, updated_at (messages_controller.rb#update): broadcast
-  # turbo-stream replace presentation-дива (maintain_scroll, как Rails
-  # attributes: { maintain_scroll: true }), HTTP-ответ — редирект на
+  # FTS5-индекс, updated_at: broadcast turbo-stream replace
+  # presentation-дива (maintain_scroll), HTTP-ответ — редирект на
   # message show; Turbo проводит редирект внутри edit-фрейма и
   # перерисовывает сообщение (фрейм становится complete).
   def update
-    room = Room.find?(params["id"].to_s.to_i64)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    user = current_user.not_nil!
-    unless room && message && message.room_id == room.id
-      response.status = :not_found
-      return render(plain: "Message not found")
-    end
-    if message.creator_id != user.id
-      response.status = :forbidden
-      return render(plain: "Cannot edit this message")
-    end
+    message = @message.not_nil!
+    room = @room.not_nil!
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
 
@@ -215,9 +122,8 @@ class MessagesController < ApplicationController
     mid = message.id.not_nil!
     # messages_controller.rb#update: broadcast_replace_to @room, :messages,
     # target: [ @message, :presentation ], partial: "messages/presentation",
-    # attributes: { maintain_scroll: true } (attributes — через
-    # broadcast_action_to); presentation_dom уже кончается \n, как
-    # _presentation.html.erb.
+    # attributes: { maintain_scroll: true }; presentation_dom уже
+    # кончается \n, как _presentation.html.erb.
     broadcast_action_to([room, "messages"], :replace,
       target: "presentation_message_#{mid}",
       html: ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s)),
@@ -225,14 +131,90 @@ class MessagesController < ApplicationController
     redirect_to room_message_path(room.id.not_nil!, mid)
   end
 
+  # DELETE /rooms/:id/messages/:message_id — удаление сообщения
+  # (edit_message.eta: turbo-stream remove + инвалидация кэшей).
+  def destroy
+    message = @message.not_nil!
+    room = @room.not_nil!
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    mid = message.id.not_nil!
+    ActiveRecord::Base.connection.exec(
+      "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
+    ActiveRecord::Base.connection.exec(
+      "DELETE FROM message_search_index WHERE rowid=?", mid)
+    message.destroy
+
+    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+
+    # messages_controller.rb#destroy: broadcast_remove (cable-фрейм — без
+    # хвостового \n); HTTP-ответ — destroy.turbo_stream.erb (тег + \n файла).
+    broadcast_remove_to([room, "messages"], target: "message_#{mid}")
+    render(html: %(<turbo-stream action="remove" target="message_#{mid}"></turbo-stream>\n),
+      content_type: "text/vnd.turbo-stream.html")
+  end
+
+  # Bot-API (/rooms/:id/:bot_key/messages/**) — Messages::ByBotsController
+  # и Messages::Boosts::ByBotsController (см. app/controllers/messages/).
+
+  private def set_room
+    if room = Room.find?(params["id"].to_s.to_i64)
+      @room = room
+    else
+      response.status = :not_found
+      render(plain: "Room not found")
+    end
+  end
+
+  private def set_message
+    if (message = Message.find?(params["message_id"].to_s.to_i64)) &&
+       message.room_id == @room.try(&.id)
+      @message = message
+    else
+      response.status = :not_found
+      render(plain: "Message not found")
+    end
+  end
+
+  private def ensure_can_administer
+    head :forbidden unless Current.user.not_nil!.can_administer?(@message)
+  end
+
+  # messages#index: before → 40 строго до anchor по created_at (вывод ASC),
+  # after → 40 строго после (ASC), без anchor — последние 40 ASC.
+  private def find_messages : Array(Message)
+    room = @room.not_nil!
+    anchor = params["before"]?
+    after_anchor = params["after"]?
+    if anchor && (anchor_id = anchor.to_s.to_i64?)
+      Message.where(
+        "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, anchor_id)
+        .order("created_at DESC").limit(40).to_a.reverse
+    elsif after_anchor && (after_id = after_anchor.to_s.to_i64?)
+      Message.where(
+        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, after_id)
+        .order("created_at ASC").limit(40).to_a
+    else
+      Message.where("room_id = ?", room.id.not_nil!)
+        .order("created_at DESC").limit(40).to_a.reverse
+    end
+  end
+
+  private def message_params
+    params.require("message").permit("body", "attachment", "client_message_id")
+  end
+
   private def message_body_param : String
-    nested = params["message"]?
-    value = case nested
-            when ActionController::Parameters then nested["body"]?
-            else nested ? nested : nil
-            end
+    value = message_params["body"]?
     # loadgen шлёт form-encoded message[body] (HTML от trix) или plain text
     value.to_s
+  end
+
+  private def message_client_id_param : String?
+    v = message_params["client_message_id"]?
+    v.nil? || v.to_s.empty? ? nil : v.to_s
   end
 
   # multipart/form-data от file_uploader.js: файл идёт напрямую в POST
@@ -273,17 +255,6 @@ class MessagesController < ApplicationController
       end
     end
     form
-  end
-
-  private def message_client_id_param : String?
-    nested = params["message"]?
-    case nested
-    when ActionController::Parameters
-      v = nested["client_message_id"]?
-      v.nil? || v.to_s.empty? ? nil : v.to_s
-    else
-      nil
-    end
   end
 
   # Грубое html→text для FTS5-индекса: контракту достаточно вхождения

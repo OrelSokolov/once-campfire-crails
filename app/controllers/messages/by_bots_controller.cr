@@ -8,24 +8,22 @@ class Messages::ByBotsController < ApplicationController
 
   skip_before_action :require_authentication
 
+  before_action :require_bot, except: [:bot_create]
+  before_action :set_room, only: [:bot_index, :bot_show, :bot_update, :bot_destroy]
+  before_action :set_message, only: [:bot_update, :bot_destroy]
+  before_action :ensure_can_administer, only: [:bot_update, :bot_destroy]
+
   # jbuilder-вьюхи bots-API (bot_index/bot_show)
   @messages : Array(Message) = [] of Message
   @message : Message?
+  @room : Room?
 
   # GET /rooms/:id/:bot_key/messages — by_bots index референса: страница
   # истории (before/after по anchor-сообщению, 40 шт, вывод ASC), заголовки
   # X-Total-Count/Link. Разметка — messages/by_bots/bot_index.json.jbuilder
   # (+ _message/_user партиалы).
   def bot_index
-    bot = bot_from_key
-    unless bot
-      return render(plain: "Unauthorized", status: :unauthorized)
-    end
-    room = bot_room(bot)
-    unless room
-      return render(plain: "Not Found", status: :not_found)
-    end
-    room = room.not_nil!
+    room = @room.not_nil!
 
     @messages = bot_messages_page(room)
     return if @performed # anchor вне комнаты → уже отрендерен 404
@@ -59,16 +57,6 @@ class Messages::ByBotsController < ApplicationController
   # GET /rooms/:id/:bot_key/messages/:message_id — by_bots show: одно
   # сообщение. Разметка — messages/by_bots/bot_show.json.jbuilder.
   def bot_show
-    bot = bot_from_key
-    unless bot
-      return render(plain: "Unauthorized", status: :unauthorized)
-    end
-    room = bot_room(bot)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    unless message && room && message.room_id == room.id.not_nil!
-      return render(plain: "Not Found", status: :not_found)
-    end
-    @message = message.not_nil!
     render(template: "messages/by_bots/bot_show")
   end
 
@@ -81,13 +69,8 @@ class Messages::ByBotsController < ApplicationController
       response.status = :not_found
       return render(plain: "Room not found")
     end
-    bot_key = params["bot_key"].to_s
-    dash = bot_key.index('-')
-    return render(plain: "invalid bot key", status: 404) unless dash
-    bot_id = bot_key[0, dash].to_i64?
-    token = bot_key[(dash + 1)..]
-    bot = bot_id && User.where(
-      "id = ? AND bot_token = ? AND role = 2 AND status = 0", bot_id, token).take
+    room = room.not_nil!
+    bot = bot_from_key
     return render(plain: "invalid bot key", status: 404) unless bot
 
     plain = request.body.try(&.gets_to_end).to_s
@@ -115,19 +98,9 @@ class Messages::ByBotsController < ApplicationController
   # FTS5 + touch, broadcast replace presentation (maintain_scroll);
   # ответ — bot_show JSON (format :json роута).
   def bot_update
-    bot = bot_from_key
-    unless bot
-      return render(plain: "Unauthorized", status: :unauthorized)
-    end
-    room = bot_room(bot)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    unless room && message && message.room_id == room.id.not_nil!
-      return render(plain: "Not Found", status: :not_found)
-    end
-    if message.creator_id != bot.id
-      return render(plain: "Cannot edit this message", status: :forbidden)
-    end
-    room = room.not_nil!
+    bot = bot_from_key.not_nil!
+    room = @room.not_nil!
+    message = @message.not_nil!
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
 
@@ -167,19 +140,8 @@ class Messages::ByBotsController < ApplicationController
   # сообщения ботом (by_bots destroy: super — broadcast_remove, затем
   # head :no_content; ensure_can_administer — создатель или админ).
   def bot_destroy
-    bot = bot_from_key
-    unless bot
-      return render(plain: "Unauthorized", status: :unauthorized)
-    end
-    room = bot_room(bot)
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    unless room && message && message.room_id == room.id.not_nil!
-      return render(plain: "Not Found", status: :not_found)
-    end
-    if message.creator_id != bot.id
-      return render(plain: "Cannot delete this message", status: :forbidden)
-    end
-    room = room.not_nil!
+    room = @room.not_nil!
+    message = @message.not_nil!
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     mid = message.id.not_nil!
@@ -193,6 +155,34 @@ class Messages::ByBotsController < ApplicationController
 
     broadcast_remove_to([room, "messages"], target: "message_#{mid}")
     head(:no_content)
+  end
+
+  private def require_bot
+    render(plain: "Unauthorized", status: :unauthorized) unless bot_from_key
+  end
+
+  # by_bots set_room: комната + membership бота (roomForUser эталона).
+  private def set_room
+    if room = bot_room(bot_from_key.not_nil!)
+      @room = room
+    else
+      render(plain: "Not Found", status: :not_found)
+    end
+  end
+
+  private def set_message
+    if (message = Message.find?(params["message_id"].to_s.to_i64)) &&
+       message.room_id == @room.try(&.id)
+      @message = message
+    else
+      render(plain: "Not Found", status: :not_found)
+    end
+  end
+
+  # ensure_can_administer (наследуется из MessagesController у референса):
+  # создатель или админ.
+  private def ensure_can_administer
+    head :forbidden unless bot_from_key.not_nil!.can_administer?(@message)
   end
 
   # botUser(req) эталона: "<id>-<token>" → User (role=2, активный).

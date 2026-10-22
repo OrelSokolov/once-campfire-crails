@@ -1,168 +1,22 @@
 abstract class ApplicationController < ActionController::Base
   include ViewHelpers
+
+  include Authentication
+  include Authorization
+  include SetCurrentRequest
+  include TrackedRoomVisit
+  include CachedResponses
+
   # turbo-rails engine.rb подключает Turbo::Streams::Broadcasts в
   # ActionController::Base — контроллеры зовут broadcast_*_to напрямую
   # (транспорт: Turbo.cable = CampfireCable, тот же, что у Campfire.broadcast).
   include Turbo::Streams::Broadcasts
 
-  @db_epoch : String? = nil
-  @identity_entry : Campfire::IdentityCache::Entry? = nil
-  @identity_checked : Bool = false
-
   before_action :set_current_request
   before_action :require_authentication
 
   # Campfire authentication.rb: protect_from_forgery using: :header_only,
-  # with: :exception, unless: -> { authenticated_by.bot_key? } —
-  # Sec-Fetch-Site-защита Rails 8.2 (без токенов в формах), бот-ключи
-  # в URL (не из браузера) защиту отключают.
+  # with: :exception — Sec-Fetch-Site-защита Rails 8.2 (без токенов в
+  # формах), бот-ключи в URL (не из браузера) защиту отключают.
   protect_from_forgery using: :header_only, with: :exception, unless: :bot_request?
-
-  # Оракул (rails-main, lazy-сессии): protect_against_forgery? в контексте
-  # рендера false → формы НЕ содержат embedded authenticity_token (ни у
-  # анонимов, ни у залогиненных — проверено живым оракулом, /session/new и
-  # /account/edit). Turbo/XHR берут токен из csrf_meta_tags; верификация —
-  # Sec-Fetch-Site (header_only), от поля в форме не зависит.
-  protected def __csrf_token_field(action : String, method : String) : String
-    ""
-  end
-
-  def bot_request? : Bool
-    params["bot_key"]? != nil
-  end
-
-  def current_session : Session?
-    raw = cookies.signed["session_token"]?
-    token = case raw
-            when String then raw
-            when JSON::Any then raw.as_s? # signed jar decodes JSON-wrapped values
-            else nil
-            end
-    return nil unless token
-    @identity_checked = true
-    @identity_entry = Campfire::IdentityCache.lookup(token, db_epoch)
-    # concerns/authentication.rb#authenticated_as: Current.session = session
-    # (writer Current.session= в референсе заодно проставляет user).
-    Current.session = @identity_entry.try(&.session)
-    Current.user = @identity_entry.try(&.user)
-    @identity_entry.try(&.session)
-  end
-
-  def current_user : User?
-    current_session unless @identity_checked
-    @identity_entry.try(&.user)
-  end
-
-  # concerns/set_current_request.rb: Current.request = request.
-  def set_current_request : Nil
-    Current.request = request
-    nil
-  end
-
-  # DB-epoch запроса (PRAGMA data_version, см. PageCache): мемо на время
-  # запроса — аутентификация и page-cache видят одну эпоху, PRAGMA
-  # выполняется один раз.
-  def db_epoch : String
-    @db_epoch ||= PageCache.epoch
-  end
-
-  # Whole-page response cache (аналог around_action :cache_read_response
-  # референса): hit → закэшированная страница; иначе блок строит Page, сет —
-  # только если БД не менялась за время рендера и ответ чист (200, без
-  # Set-Cookie) — иначе старые чтения получат новый epoch. Вызывающий делает
-  # hit-специфичную работу (rooms#show: last_room-cookie) между cache_page
-  # и send_page — на hit и miss одинаково.
-  def cache_page(name : String, user_id : Int64?, & : -> Campfire::PageCache::Page) : Campfire::PageCache::Page
-    epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
-    key = PageCache.key(name, request, user_id)
-    if (cached = PageCache.get(key, epoch))
-      return cached
-    end
-    page = yield
-    if response.headers["Set-Cookie"]?.nil? && PageCache.epoch == epoch
-      PageCache.set(key, epoch, page)
-    end
-    page
-  end
-
-  def require_authentication : Nil
-    redirect_to new_session_path unless current_user
-  end
-
-  # Rails concerns/authorization.rb: ensure_can_administer — 403 для
-  # не-администраторов (role=1) на write-экшенах.
-  def require_admin : Nil
-    unless current_user.try(&.role) == 1
-      render(plain: "forbidden", status: 403)
-    end
-  end
-
-  # Rails authentication: start_new_session_for — создаёт сессию и
-  # подписывает permanent cookie session_token (sessions#create,
-  # first_runs#create).
-  def start_new_session_for(user : User) : Nil
-    session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
-    # authenticated_as(session): Current.session/user видны хелперам и
-    # моделям до конца запроса (между запросами сбрасываются диспетчером).
-    Current.session = session
-    Current.user = user
-    cookies.signed.set("session_token", session.token.not_nil!,
-      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
-  end
-
-  def remote_ip : String?
-    request.headers["X-Forwarded-For"]?.try(&.split(',').first?.try(&.strip)) ||
-      request.headers["Remote-Addr"]? || "127.0.0.1"
-  end
-
-  # Rails signed_id: generate/verify через MessageVerifier с ключом
-  # "active_record/signed_id" (см. campfire-express/src/rails.js: key()).
-  # Формат — data-конверт Rails 8.1 (urlsafe b64 без padding).
-  def generate_signed_id(user_id : Int64, purpose : String, expires_at : Time? = nil) : String
-    CRails.application.message_verifier("active_record/signed_id", url_safe: true)
-      .generate(user_id, purpose: purpose, expires_at: expires_at)
-  end
-
-  def verify_signed_id(token : String, purpose : String) : Int64?
-    # express/verifier: digest sha256, fallback sha1. Верификаторы —
-    # мемоизированы на CRails.application (PBKDF2-вывод ключа один раз
-    # на процесс, не на каждый запрос).
-    value = CRails.application.message_verifier("active_record/signed_id",
-      url_safe: true).verified_any(token, purpose: purpose)
-    if value.nil?
-      value = CRails.application.message_verifier("active_record/signed_id",
-        digest: :sha1, url_safe: true).verified_any(token, purpose: purpose)
-    end
-    if (raw = value.try(&.as_i?)) || (raw = value.try(&.as_s?.try(&.to_i64?)))
-      return raw.to_i64
-    end
-    nil
-  end
-
-  # origin(req) референса: схема://host — для session transfer / invite URL.
-  def origin : String
-    host = request.headers["Host"]? || "localhost"
-    "http://#{host}"
-  end
-
-  # Отдача кэшированной страницы: If-None-Match → 304; Accept-Encoding
-  # gzip → сжатое представление (лениво, живёт в Page). Тело — сырые
-  # байты (gzip-строка может быть невалидным UTF-8 — Crystal пишет
-  # байты как есть).
-  def send_page(page : Campfire::PageCache::Page) : Nil
-    response.headers["Content-Type"] = "text/html; charset=utf-8"
-    response.headers["ETag"] = page.etag
-    response.headers["Cache-Control"] = "no-cache"
-    if request.headers["If-None-Match"]? == page.etag
-      # render(plain:) сбрасывает статус — передаём аргументом
-      return render(plain: "", status: :not_modified)
-    end
-    if request.headers["Accept-Encoding"]?.to_s.includes?("gzip")
-      response.headers["Content-Encoding"] = "gzip"
-      response.headers["Vary"] = "Accept-Encoding"
-      render(html: page.gzip)
-    else
-      render(html: page.bytes)
-    end
-  end
 end

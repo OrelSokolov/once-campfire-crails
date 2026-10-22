@@ -1,4 +1,3 @@
-# Ported 1:1 from ~/once-campfire (Rails).
 class AlterUsersSetPasswordDigestNotNull < ActiveRecord::Migration
   def change
     execute <<-SQL

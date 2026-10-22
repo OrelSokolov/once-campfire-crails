@@ -6,27 +6,19 @@
 class Messages::Boosts::ByBotsController < ApplicationController
   skip_before_action :require_authentication
 
+  before_action :require_bot
+  before_action :set_room_and_message
+  before_action :set_boost, only: [:bot_destroy]
+
   # jbuilder-вьюха bots-API (bot_create)
   @boost : Boost?
+  @room : Room?
+  @message : Message?
 
   def bot_create
-    bot = bot_from_key
-    unless bot
-      return render(plain: "Unauthorized", status: :unauthorized)
-    end
-    bot = bot.not_nil!
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    room = message.try(&.room_id).try do |room_id|
-      Room.find?(room_id).try do |r|
-        Membership.where(
-          "room_id = ? AND user_id = ?", r.id.not_nil!, bot.id.not_nil!).take ? r : nil
-      end
-    end
-    unless message && room && params["id"].to_s == room.id.to_s
-      return render(plain: "Not Found", status: :not_found)
-    end
-    message = message.not_nil!
-    room = room.not_nil!
+    bot = bot_from_key.not_nil!
+    message = @message.not_nil!
+    room = @room.not_nil!
     mid = message.id.not_nil!
 
     content = request.body.try(&.gets_to_end).to_s
@@ -61,40 +53,54 @@ class Messages::Boosts::ByBotsController < ApplicationController
   # снятие своего буста ботом (by_bots destroy: set_boost ищет по
   # booster == бот, broadcast_remove boost_<id>, 204).
   def bot_destroy
-    bot = bot_from_key
-    unless bot
-      return render(plain: "Unauthorized", status: :unauthorized)
-    end
-    bot = bot.not_nil!
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    room = message.try(&.room_id).try do |room_id|
-      Room.find?(room_id).try do |r|
-        Membership.where(
-          "room_id = ? AND user_id = ?", r.id.not_nil!, bot.id.not_nil!).take ? r : nil
-      end
-    end
-    unless message && room && params["id"].to_s == room.id.to_s
-      return render(plain: "Not Found", status: :not_found)
-    end
-    boost = Boost.where(
-      "id = ? AND message_id = ? AND booster_id = ?",
-      params["boost_id"].to_s.to_i64, message.id.not_nil!, bot.id.not_nil!).take
-    return head(:not_found) unless boost
+    message = @message.not_nil!
+    boost = @boost.not_nil!
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    boost_id = boost.id.not_nil!
     Campfire::WriteQueue.perform do
       # after_destroy коллбэк belongs_to :message, touch: true трогает
       # messages.updated_at
-      boost.not_nil!.destroy
+      boost.destroy
     end
 
     # by_bots destroy наследует broadcast_remove boosts_controller:
     # remove по dom_id буста в стриме комнаты.
-    if (r = Room.find?(message.room_id.not_nil!))
-      broadcast_remove_to([r, "messages"], target: "boost_#{boost_id}")
+    if (room = Room.find?(message.room_id.not_nil!))
+      broadcast_remove_to([room, "messages"], target: "boost_#{params["boost_id"]}")
     end
     render(plain: "", status: :no_content)
+  end
+
+  private def require_bot
+    render(plain: "Unauthorized", status: :unauthorized) unless bot_from_key
+  end
+
+  # Комната из пути (:id) + сообщение (:message_id) + membership бота —
+  # как by_bots set_room/set_message референса.
+  private def set_room_and_message
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    room = message.try(&.room_id).try do |room_id|
+      Room.find?(room_id).try do |r|
+        Membership.where(
+          "room_id = ? AND user_id = ?", r.id.not_nil!,
+          bot_from_key.not_nil!.id.not_nil!).take ? r : nil
+      end
+    end
+    if message && room && params["id"].to_s == room.id.to_s
+      @message = message
+      @room = room
+    else
+      render(plain: "Not Found", status: :not_found)
+    end
+  end
+
+  # set_boost: буст этого сообщения, boostер — бот.
+  private def set_boost
+    @boost = Boost.where(
+      "id = ? AND message_id = ? AND booster_id = ?",
+      params["boost_id"].to_s.to_i64, @message.not_nil!.id.not_nil!,
+      bot_from_key.not_nil!.id.not_nil!).take
+    head(:not_found) unless @boost
   end
 
   # botUser(req) эталона: "<id>-<token>" → User (role=2, активный).

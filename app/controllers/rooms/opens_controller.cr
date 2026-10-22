@@ -1,11 +1,17 @@
 # /rooms/opens — открытые комнаты (референс: rooms/opens_controller.rb):
-# new/create/edit/update; общая логика (форма, создание, sync членств,
-# broadcast) — в базовом RoomsController, как в Rails. Membership при
-# создании — все активные юзеры аккаунта.
+# new/create/edit/update; общая логика — в базовом RoomsController.
+# Membership при создании — все активные юзеры аккаунта.
 class Rooms::OpensController < RoomsController
-  # Rails rooms/opens_controller.rb: ensure_permission_to_create_rooms
-  # на new/create (directs не ограничены — там свой контроллер).
+  before_action :set_room, only: [:edit, :update]
   before_action :ensure_permission_to_create_rooms, only: [:new, :create]
+
+  # Open and closed rooms convert into each other, so both are in reach here. Direct
+  # rooms never are: promoting one would republish its history to the whole account.
+  private def room_scope
+    Room.where(
+      "id IN (SELECT room_id FROM memberships WHERE user_id = ?) AND type NOT IN ('Direct', 'Rooms::Direct')",
+      Current.user.not_nil!.id.not_nil!)
+  end
 
   # GET /rooms/opens/new — форма новой комнаты (rooms/opens/new.html.erb
   # → общий _form.html.erb; данные готовит prepare_room_form).
@@ -25,10 +31,7 @@ class Rooms::OpensController < RoomsController
   # GET /rooms/opens/:room_id/edit — та же форма с текущим именем,
   # _method=patch.
   def edit
-    user = current_user.not_nil!
-    room = Room.find?(params["room_id"].to_s.to_i64)
-    return head(:not_found) unless room
-    prepare_room_form(room, "opens", user)
+    prepare_room_form(@room, "opens", current_user.not_nil!)
   end
 
   # PATCH /rooms/opens/:room_id — переименование + broadcast prepend с

@@ -1,5 +1,3 @@
-# Ported 1:1 from ~/once-campfire (Rails). t.references uses type: :integer
-# — the Rails sqlite3 database declares plain integer FK columns.
 class CreateInitialSchema < ActiveRecord::Migration
   def change
     create_table "accounts", force: :cascade do |t|

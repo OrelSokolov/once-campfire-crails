@@ -49,6 +49,7 @@ soft_check:
   - .pumaenv.code.txt
   - .rubocop.code.txt
   - .ruby-version.code.txt
+  - FORMS_SUPPORT.code.txt
   - 1to1.code.txt
   - AGENTS.code.txt
   - CONTRIBUTING.code.txt

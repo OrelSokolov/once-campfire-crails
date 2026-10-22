@@ -2,42 +2,24 @@
 # Роуты вложены в сообщение (/messages/:message_id/boosts), стрим —
 # комната сообщения ([room, :messages]). Bot-API создания буста — в
 # Messages::Boosts::ByBotsController.
-#
-#   GET    /messages/:message_id/boosts        — index (boosts-partial в
-#            turbo-frame message_<id>_boosting; redirect-цель формы буста)
-#   GET    /messages/:message_id/boosts/new    — new (форма в лениво
-#            загружаемый фрейм message_<id>_new_boost)
-#   POST   /messages/:message_id/boosts        — create: broadcast append
-#            boost в контейнер message_<id>_boosts (maintain_scroll) +
-#            redirect на index (фрейм message_<id>_boosting)
-#   DELETE /messages/:message_id/boosts/:id    — destroy своего буста:
-#            broadcast remove boost_<id>
 class Messages::BoostsController < ApplicationController
   include BoostsHelpers
+
+  before_action :set_message
+  before_action :set_boost, only: [:destroy]
 
   # ERB-вьюхи index/new (implicit render: app/views/messages/boosts/*.html.erb —
   # контроллер готовит данные, разметка в шаблонах, как в референсе);
   # boosts_dom (BoostsHelpers) читает mid/boosts — геттеры.
   @message : Message?
   @user : User?
+  @boost : Boost?
   attr_reader mid : Int64?
   attr_reader boosts : Array(ChatLayout::BoostEntry) = [] of ChatLayout::BoostEntry
-  # set_message: Current.user.reachable_messages.find(params[:message_id])
-  # — сообщение из комнаты, доступной текущему юзеру (membership).
-  private def find_reachable_message : Message?
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    return nil unless message
-    user = current_user.not_nil!
-    member = Membership.where(
-      "room_id = ? AND user_id = ?", message.room_id.not_nil!, user.id.not_nil!).take
-    member ? message : nil
-  end
 
   # GET /messages/:message_id/boosts — index.html.erb (boosts partial).
   def index
-    message = find_reachable_message
-    return head(:not_found) unless message
-    @message = message
+    message = @message.not_nil!
     mid = message.id.not_nil!
     @mid = mid
     @boosts = ChatLayout.boosts_for([mid])[mid]? || [] of ChatLayout::BoostEntry
@@ -46,10 +28,7 @@ class Messages::BoostsController < ApplicationController
   # GET /messages/:message_id/boosts/new — new.html.erb: форма кастомного
   # буста в turbo-frame message_<id>_new_boost (submit в фрейм boosting).
   def new
-    message = find_reachable_message
-    return head(:not_found) unless message
-    @message = message
-    @mid = message.id.not_nil!
+    @mid = @message.not_nil!.id.not_nil!
     @user = current_user.not_nil!
   end
 
@@ -58,14 +37,12 @@ class Messages::BoostsController < ApplicationController
   # append в контейнер message_<id>_boosts (maintain_scroll), redirect
   # на index (Turbo подставляет ответ в фрейм message_<id>_boosting).
   def create
-    message = find_reachable_message
-    return head(:not_found) unless message
+    message = @message.not_nil!
     user = current_user.not_nil!
-    content = boost_content_param
+    content = boost_params["content"]?.to_s
     return head(:unprocessable_content) if content.empty?
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    message = message.not_nil!
     mid = message.id.not_nil!
     now = Time.utc
     boost = Campfire::WriteQueue.perform do
@@ -97,38 +74,48 @@ class Messages::BoostsController < ApplicationController
   # DELETE /messages/:message_id/boosts/:id — удаление своего буста,
   # broadcast remove boost_<id>.
   def destroy
-    message = find_reachable_message
-    return head(:not_found) unless message
-    message = message.not_nil!
-    user = current_user.not_nil!
-    boost_id = params["id"].to_s.to_i64
-    boost = Boost.where(
-      "id = ? AND message_id = ? AND booster_id = ?",
-      boost_id, message.id.not_nil!, user.id.not_nil!).take
-    return head(:not_found) unless boost
+    message = @message.not_nil!
+    boost = @boost.not_nil!
 
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     mid = message.id.not_nil!
     Campfire::WriteQueue.perform do
       # after_destroy коллбэк belongs_to :message, touch: true трогает
       # messages.updated_at
-      boost.not_nil!.destroy
+      boost.destroy
     end
 
     # boosts_controller.rb#broadcast_remove: broadcast_remove_to room,
     # :messages (target — dom_id буста).
     if (room = Room.find?(message.room_id.not_nil!))
-      broadcast_remove_to([room, "messages"], target: "boost_#{boost_id}")
+      broadcast_remove_to([room, "messages"], target: "boost_#{params["id"]}")
     end
     render(plain: "", status: :no_content)
   end
 
-  private def boost_content_param : String
-    nested = params["boost"]?
-    value = case nested
-            when ActionController::Parameters then nested["content"]?
-            else nested ? nested : nil
-            end
-    value.to_s
+  # set_message референса: Current.user.reachable_messages.find — сообщение
+  # из комнаты, доступной текущему юзеру (membership).
+  private def set_message
+    message = Message.find?(params["message_id"].to_s.to_i64)
+    if message && Membership.where(
+        "room_id = ? AND user_id = ?", message.room_id.not_nil!,
+        Current.user.not_nil!.id.not_nil!).take
+      @message = message
+    else
+      head(:not_found)
+    end
+  end
+
+  # set_boost референса: @message.boosts.find_by!(id:, booster: Current.user).
+  private def set_boost
+    @boost = Boost.where(
+      "id = ? AND message_id = ? AND booster_id = ?",
+      params["id"].to_s.to_i64, @message.not_nil!.id.not_nil!,
+      Current.user.not_nil!.id.not_nil!).take
+    head(:not_found) unless @boost
+  end
+
+  private def boost_params
+    params.require("boost").permit("content")
   end
 end

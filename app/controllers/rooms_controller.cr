@@ -1,17 +1,13 @@
-# GET /rooms/:id — страница комнаты (контракт: полная HTML-страница,
-# data-message-id ровно 40 последних сообщений ASC; DOM-идентичности
-# id="message_<cmid>" / data-client-message-id="<cmid>"; браузерный гейт:
-# message-area + composer + turbo-cable-stream-source + importmap).
-# Whole-page response cache (Фаза 3): готовый HTML кэшируется per-worker,
-# инвалидация по DB-epoch (PRAGMA data_version); отдача с gzip + ETag/304.
-#
-# База для Rooms::Opens/Closeds (new/create/edit/update комнат — в
-# подклассах, общая логика здесь, как в Rails rooms_controller.rb).
+# Whole-page response cache: готовый HTML кэшируется per-worker,
+# инвалидация по DB-epoch (PRAGMA data_version); отдача с gzip + ETag/304
+# (show). База для Rooms::Opens/Closeds (new/create/edit/update — в
+# подклассах), как в Rails rooms_controller.rb.
 class RoomsController < ApplicationController
   include RoomsHelpers
 
-  # new.html.erb / edit.html.erb + партиал _form.html.erb (room_form)
-  # и direct-ветка edit. Данные формы готовит prepare_room_form.
+  before_action :set_room, only: [:show, :destroy]
+  before_action :ensure_can_administer, only: [:destroy]
+
   @room : Room?
   @kind : String = ""
   @user : User?
@@ -37,56 +33,18 @@ class RoomsController < ApplicationController
   }, dedent: true)
 
   def show
-    room = Room.find?(params["id"].to_s.to_i64)
-    unless room
-      response.status = :not_found
-      return render(plain: "Room not found")
-    end
-    room = room.not_nil!
     user = current_user.not_nil!
-
-    page = cache_page("rooms#show", user.id) { room_page(room, user, find_messages(room)) }
+    page = cache_page("rooms#show", user.id) { room_page(@room.not_nil!, user, find_messages) }
     # Cookie last_room — на каждом ответе, но ПОСЛЕ решения кэша
-    # (express: writeHead-хук эмитит её и на cache-hit, не блокируя кэш).
-    remember_last_room_visited(room)
+    # (Set-Cookie до cache_page не дал бы сохранить страницу в кэш).
+    remember_last_room_visited(@room.not_nil!)
     send_page(page)
   end
 
-  # TrackedRoomVisit#remember_last_room_visited: cookies.permanent.
-  private def remember_last_room_visited(room : Room) : Nil
-    cookies.permanent["last_room"] = room.id.not_nil!.to_s
-  end
-
-  # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
-  # /rooms/:id/@:message_id — page_around (pagination.rb): 40 до якоря
-  # + якорь + 40 после (first_page), вывод ASC. Сравнение — субзапросом
-  # по id (как в messages#index): литеральный Time-бинд sqlite3-шарда
-  # сериализуется с миллисекундами («…12:50:00.000»), и строка якоря
-  # «…12:50:00» без дроби префиксно меньше её — якорь попадал и в before,
-  # и в [anchor], дублируясь в выдаче.
-  private def find_messages(room : Room) : Array(Message)
-    if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
-       (anchor = Message.where("room_id = ? AND id = ?",
-         room.id.not_nil!, mid).first?)
-      before = Message.where(
-        "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, mid)
-        .order("created_at DESC").limit(40).to_a.reverse
-      after = Message.where(
-        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, mid)
-        .order("created_at ASC").limit(40).to_a
-      before + [anchor] + after
-    else
-      Message.where("room_id = ?", room.id.not_nil!)
-        .order("created_at DESC").limit(40).to_a.reverse
-    end
-  end
-
-  # GET /rooms/:id/refresh — turbo-stream опрос refresh-room-контроллера
-  # (refreshes_controller.rb + show.turbo_stream.erb): сообщения, созданные
-  # после since, — append в контейнер сообщений; обновлённые (кроме новых) —
-  # replace по dom_id. Разметка — refresh_stream (RoomsHelpers).
+  # GET /rooms/:id/refresh — turbo-stream опрос refresh-room-контроллера:
+  # сообщения, созданные после since, — append в контейнер сообщений;
+  # обновлённые (кроме новых) — replace по dom_id. Разметка —
+  # refresh_stream (RoomsHelpers).
   def refresh
     room = Room.find?(params["id"].to_s.to_i64)
     unless room
@@ -117,8 +75,7 @@ class RoomsController < ApplicationController
   end
 
   # GET /rooms/:id/involvement — содержимое turbo-frame колокольчика
-  # (rooms/involvements/show.html.erb: button_to PUT со следующим
-  # состоянием вовлечённости).
+  # (button_to PUT со следующим состоянием вовлечённости).
   def involvement
     room = Room.find?(params["id"].to_s.to_i64)
     user = current_user
@@ -154,16 +111,10 @@ class RoomsController < ApplicationController
     redirect_to "/rooms/#{room.id}/involvement"
   end
 
-  # GET /rooms/{kind}/new, POST /rooms/{kind}, GET/PATCH
-  # /rooms/{kind}/:room_id — вынесены в Rooms::OpensController /
-  # Rooms::ClosedsController (см. app/controllers/rooms/); /rooms/directs
-  # — в Rooms::DirectsController.
-
   # DELETE /rooms/:id — удаление комнаты (room_form.eta delete-панель).
   def destroy
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    room = Room.find?(params["id"].to_s.to_i64)
-    return head(:not_found) unless room
+    room = @room.not_nil!
     rid = room.id.not_nil!
     Membership.where("room_id = ?", rid).delete_all
     Message.where("room_id = ?", rid).delete_all
@@ -171,33 +122,86 @@ class RoomsController < ApplicationController
     redirect_to root_path
   end
 
-  # Rails rooms_controller.rb: ensure_permission_to_create_rooms — при
-  # включённом restrict_room_creation_to_administrators создание комнат
-  # (opens/closeds) доступно только администраторам; directs не ограничены
-  # (вызывается из подклассов Rooms::Opens/Closeds).
-  private def ensure_permission_to_create_rooms : Nil
+  private def set_room
+    room = room_scope.where(id: (params["room_id"]? || params["id"]).to_s.to_i64).first
+    if room
+      @room = room
+    else
+      redirect_to root_path, alert: "Room not found or inaccessible"
+    end
+  end
+
+  # Subclasses narrow this to the room types they're allowed to act on, so that one
+  # room namespace can't be used to reach another's rooms.
+  def room_scope
+    Room.where("id IN (SELECT room_id FROM memberships WHERE user_id = ?)",
+      Current.user.not_nil!.id.not_nil!)
+  end
+
+  def ensure_can_administer
+    head :forbidden unless Current.user.not_nil!.can_administer?(@room)
+  end
+
+  # При включённом restrict_room_creation_to_administrators создание
+  # комнат (opens/closeds) доступно только администраторам; directs не
+  # ограничены (вызывается из подклассов Rooms::Opens/Closeds).
+  def ensure_permission_to_create_rooms : Nil
     account = Account.take
     if account.try(&.restrict_room_creation_to_administrators?) &&
-       current_user.try(&.role) != 1
+       !Current.user.not_nil!.administrator?
       head(:forbidden)
     end
+  end
+
+  def room_params
+    params.require("room").permit("name")
+  end
+
+  # Контракт: 40 последних по created_at DESC, вывод в ASC. Deep-link
+  # /rooms/:id/@:message_id — page_around (pagination.rb): 40 до якоря
+  # + якорь + 40 после. Сравнение — субзапросом по id (как в
+  # messages#index): литеральный Time-бинд sqlite3-шарда сериализуется
+  # с миллисекундами, и строка якоря без дроби префиксно меньше её —
+  # якорь попадал и в before, и в [anchor], дублируясь в выдаче.
+  def find_messages : Array(Message)
+    room = @room.not_nil!
+    if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
+       (anchor = Message.where("room_id = ? AND id = ?",
+         room.id.not_nil!, mid).first?)
+      before = Message.where(
+        "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, mid)
+        .order("created_at DESC").limit(40).to_a.reverse
+      after = Message.where(
+        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
+        room.id.not_nil!, mid)
+        .order("created_at ASC").limit(40).to_a
+      before + [anchor] + after
+    else
+      Message.where("room_id = ?", room.id.not_nil!)
+        .order("created_at DESC").limit(40).to_a.reverse
+    end
+  end
+
+  # TrackedRoomVisit: cookies.permanent.
+  def remember_last_room_visited(room : Room) : Nil
+    cookies.permanent["last_room"] = room.id.not_nil!.to_s
   end
 
   # Общее create Rooms::Opens/Closeds: комната класса klass + membership
   # member_ids (opens — все активные, closeds — выбранные), broadcast
   # ссылки, redirect на /rooms/<id>.
-  private def create_room(klass : Rooms::Open.class | Rooms::Closed.class,
-                          member_ids : Array(Int64),
-                          user : User) : Nil
+  def create_room(klass : Rooms::Open.class | Rooms::Closed.class,
+                  member_ids : Array(Int64),
+                  user : User) : Nil
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    name = params["room"]?.try { |r| r.is_a?(ActionController::Parameters) ? r["name"]?.to_s : "" }.to_s
-    now = Time.utc
     room = klass.new(
-      name: name,
+      name: room_params["name"]?.to_s,
       creator_id: user.id.not_nil!,
-      created_at: now, updated_at: now)
+      created_at: Time.utc, updated_at: Time.utc)
     room.save!
 
+    now = Time.utc
     member_ids.each do |uid|
       Membership.new(room_id: room.id.not_nil!, user_id: uid,
         involvement: "everything", connections: 0,
@@ -211,12 +215,10 @@ class RoomsController < ApplicationController
   # Общее update Rooms::Opens/Closeds: переименование + sync memberships по
   # user_ids[] (opens не пересобирают членство — membership у всех), broadcast
   # prepend с тем же id — Turbo дедуплицирует и перемещает ссылку.
-  private def update_room : Nil
+  def update_room : Nil
     Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    room = Room.find(params["room_id"].to_s.to_i64)
-    return head(:not_found) unless room
-    nested = params["room"]?
-    if nested.is_a?(ActionController::Parameters) && (name = nested["name"]?)
+    room = @room.not_nil!
+    if name = room_params["name"]?
       room.name = name.to_s
     end
     room.updated_at = Time.utc
@@ -246,7 +248,8 @@ class RoomsController < ApplicationController
   end
 
   # user_ids[] из формы (формат action_pack: Scalar/Array/Parameters).
-  private def selected_user_ids : Array(Int64)    ids = [] of Int64
+  def selected_user_ids : Array(Int64)
+    ids = [] of Int64
     add = ->(v : String) do
       if (parsed = v.to_i64?)
         ids << parsed
@@ -269,7 +272,7 @@ class RoomsController < ApplicationController
 
   # Данные _form.html.erb: выбранные участники, флаги админа/открытости,
   # юзеры (выбранные первыми, потом по имени), позиция разделителя.
-  private def prepare_room_form(room : Room?, kind : String, user : User) : Nil
+  def prepare_room_form(room : Room?, kind : String, user : User) : Nil
     @room = room
     @kind = kind
     @user = user
@@ -296,10 +299,10 @@ class RoomsController < ApplicationController
     end
   end
 
-  # turbo-stream prepend ссылки комнаты в #shared_rooms (registerRoomForms:
-  # publish в стрим "rooms" для opens). id list_rooms_<kind>_<id> — как
-  # DOM("list") референса, чтобы Turbo дедуплицировал при переименовании.
-  private def broadcast_sidebar_link(room : Room) : Nil
+  # turbo-stream prepend ссылки комнаты в #shared_rooms: ручной аналог
+  # партиала _shared (id list_rooms_<kind>_<id> — как DOM("list")
+  # референса, чтобы Turbo дедуплицировал при переименовании).
+  def broadcast_sidebar_link(room : Room) : Nil
     kind = room.type.to_s.split("::").last?.try(&.downcase)
     link = String.build do |io|
       io << %(<a class="align-center gap room btn txt-nowrap" data-sorted-list-target="item" )
@@ -309,10 +312,6 @@ class RoomsController < ApplicationController
       io << %(" style="--column-gap: 0.5em" href="/rooms/) << room.id.not_nil!.to_s << %(">)
       io << %(<span class="overflow-ellipsis">) << HTML.escape(room.name.to_s) << %(</span></a>)
     end
-    # opens_controller.rb:50: broadcast_prepend_to :rooms, target:
-    # :shared_rooms, partial: "users/sidebars/rooms/shared" (link — ручной
-    # аналог партиала _shared; id list_rooms_<kind>_<id> — как DOM("list")
-    # референса, чтобы Turbo дедуплицировал при переименовании).
     broadcast_prepend_to(["rooms"], target: "shared_rooms", html: link)
   end
 end

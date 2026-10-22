@@ -1,4 +1,3 @@
-# Ported 1:1 from ~/once-campfire (Rails, active_storage).
 class RemoveNotNullOnActiveStorageBlobsChecksum < ActiveRecord::Migration
   def change
     return unless table_exists?(:active_storage_blobs)

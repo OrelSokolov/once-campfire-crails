@@ -1,4 +1,3 @@
-# Ported 1:1 from ~/once-campfire (Rails).
 class ChangeActiveToStatusOnUsers < ActiveRecord::Migration
   def change
     add_column :users, :status, :integer, default: 0, null: false

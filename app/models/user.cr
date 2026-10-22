@@ -12,6 +12,20 @@ class User < ActiveRecord::Base
   scope(:active_bots) { active.where("role = 2") }
   scope(:ordered)    { order("LOWER(name)") }
 
+  # User::Role референса: enum role (member/administrator/bot; в порте
+  # role — integer: 0/1/2).
+  def administrator? : Bool
+    role == 1
+  end
+
+  def can_administer?(record : Room? = nil) : Bool
+    administrator? || record.try(&.creator) == self || record.try(&.new_record?) == true
+  end
+
+  def can_administer?(message : Message?) : Bool
+    administrator? || message.try(&.creator) == self || message.try(&.new_record?) == true
+  end
+
   # Rails: User.active.authenticate_by(email_address:, password:) —
   # bcrypt compare against password_digest (status 0 = active).
   def self.authenticate(email_address : String, password : String) : User?

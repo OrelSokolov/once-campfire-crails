@@ -1,4 +1,3 @@
-# Ported 1:1 from ~/once-campfire (Rails).
 class AlterUsersAddBotToken < ActiveRecord::Migration
   def change
     add_column :users, :bot_token, :string
