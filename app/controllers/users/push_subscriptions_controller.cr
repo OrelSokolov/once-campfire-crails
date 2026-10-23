@@ -7,18 +7,18 @@
 class Users::PushSubscriptionsController < ApplicationController
   include PushSubscriptionsHelpers
 
-  @push_subscriptions : Array(PushSubscription) = [] of PushSubscription
+  @push_subscriptions : Array(Push::Subscription) = [] of Push::Subscription
 
   # Строка списка (users/push_subscriptions/_push_subscription.html.erb).
   compile_partials({
     "users/push_subscriptions/push_subscription" => {
       path: "app/views/users/push_subscriptions/_push_subscription.html.erb",
-      locals: {"push_subscription" => PushSubscription},
+      locals: {"push_subscription" => Push::Subscription},
     },
   }, dedent: true)
 
   def index
-    @push_subscriptions = PushSubscription
+    @push_subscriptions = Push::Subscription
       .where("user_id = ?", current_user.not_nil!.id.not_nil!)
       .order("id").to_a
   end
@@ -29,7 +29,7 @@ class Users::PushSubscriptionsController < ApplicationController
     p256dh = nested("p256dh_key")
     auth = nested("auth_key")
 
-    existing = PushSubscription.where(
+    existing = Push::Subscription.where(
       "user_id = ? AND endpoint = ? AND p256dh_key = ? AND auth_key = ?",
       user.id.not_nil!, endpoint, p256dh, auth).take
     if existing
@@ -40,7 +40,7 @@ class Users::PushSubscriptionsController < ApplicationController
         head :unprocessable_entity
       end
     else
-      subscription = PushSubscription.new(
+      subscription = Push::Subscription.new(
         user_id: user.id.not_nil!,
         endpoint: endpoint,
         p256dh_key: p256dh,
@@ -56,8 +56,8 @@ class Users::PushSubscriptionsController < ApplicationController
   end
 
   def destroy
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
-    PushSubscription.where("user_id = ? AND id = ?",
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Push::Subscription.where("user_id = ? AND id = ?",
       current_user.not_nil!.id.not_nil!, params["id"].to_s).delete_all
     redirect_to user_push_subscriptions_url
   end

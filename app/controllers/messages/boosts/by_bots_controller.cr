@@ -1,34 +1,35 @@
 # POST /rooms/:id/:bot_key/messages/:message_id/boosts — JSON-API бота
 # (boosts by_bots create референса + routes.js): raw body как content
 # (trim-непустой, ≤16 code points, иначе 422), broadcast append в комнату,
-# 201 + messages/boosts/by_bots/bot_create.json.jbuilder (+ _boost/_user
+# 201 + messages/boosts/by_bots/create.json.jbuilder (+ _boost/_user
 # партиалы). Аутентификация по боту, не по сессии.
 class Messages::Boosts::ByBotsController < ApplicationController
+  include RawRequestBody
   skip_before_action :require_authentication
 
   before_action :require_bot
   before_action :set_room_and_message
-  before_action :set_boost, only: [:bot_destroy]
+  before_action :set_boost, only: [:destroy]
 
-  # jbuilder-вьюха bots-API (bot_create)
+  # jbuilder-вьюха bots-API (create)
   @boost : Boost?
   @room : Room?
   @message : Message?
 
-  def bot_create
+  def create
     bot = bot_from_key.not_nil!
     message = @message.not_nil!
     room = @room.not_nil!
     mid = message.id.not_nil!
 
-    content = request.body.try(&.gets_to_end).to_s
+    content = raw_request_body
     if content.strip.empty? || content.size > 16
       # 422: :unprocessable_content — Rails 8+ имя (:unprocessable_entity
       # роняет status_code; заодно чиним тот же латентный баг в create)
       return head(:unprocessable_content)
     end
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     now = Time.utc
     @boost = Campfire::WriteQueue.perform do
       record = Boost.new(message_id: mid, booster_id: bot.id.not_nil!,
@@ -46,17 +47,17 @@ class Messages::Boosts::ByBotsController < ApplicationController
         html: ChatLayout.boost_dom(mid, entry) + "\n",
         attributes: {"maintain_scroll" => "true"})
     end
-    render(template: "messages/boosts/by_bots/bot_create", status: :created)
+    render(template: "messages/boosts/by_bots/show", status: :created)
   end
 
   # DELETE /rooms/:id/:bot_key/messages/:message_id/boosts/:boost_id —
   # снятие своего буста ботом (by_bots destroy: set_boost ищет по
   # booster == бот, broadcast_remove boost_<id>, 204).
-  def bot_destroy
+  def destroy
     message = @message.not_nil!
     boost = @boost.not_nil!
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     Campfire::WriteQueue.perform do
       # after_destroy коллбэк belongs_to :message, touch: true трогает
       # messages.updated_at

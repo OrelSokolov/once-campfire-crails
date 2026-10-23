@@ -6,6 +6,13 @@
 class RoomMessagesChannel < ApplicationCable::Channel
   STREAM_SUFFIX = "messages"
 
+  # room_streams_are_authorized.rb: стрим guarded, если его суффикс —
+  # сообщения комнаты (подписка — только через этот канал с проверкой
+  # membership).
+  def self.guarded_stream?(stream_name : String?) : Bool
+    !!stream_name.try { |s| s.split(":", 2)[1]? == STREAM_SUFFIX }
+  end
+
   def subscribed : Nil
     stream_name = verified_stream_name_from_params
     if stream_name && subscribable_room?(stream_name)

@@ -7,7 +7,7 @@
 class Users::PushSubscriptions::TestNotificationsController < ApplicationController
   def create
     user = current_user.not_nil!
-    subscription = PushSubscription.where("user_id = ? AND id = ?",
+    subscription = Push::Subscription.where("user_id = ? AND id = ?",
       user.id.not_nil!, params["push_subscription_id"].to_s).take
 
     if subscription && (vapid_private = ENV["VAPID_PRIVATE_KEY"]?) &&
@@ -19,7 +19,7 @@ class Users::PushSubscriptions::TestNotificationsController < ApplicationControl
 
   # WebPush::Pool#deliver + invalid_subscription_handler: 404/410
   # (ExpiredSubscription) — подписка удаляется; прочие ошибки — лог.
-  private def deliver(user : User, subscription : PushSubscription,
+  private def deliver(user : User, subscription : Push::Subscription,
                       vapid_public : String, vapid_private : String) : Nil
     badge = ActiveRecord::Base.connection.query_one(
       "SELECT count(*) FROM memberships WHERE user_id = ? AND unread_at IS NOT NULL",

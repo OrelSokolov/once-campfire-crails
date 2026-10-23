@@ -5,9 +5,7 @@ module BlockBannedRequests
   private def reject_banned_ip : Nil
     return if safe_request?
     return unless (ip = remote_ip)
-    banned = ActiveRecord::Base.connection.query_one?(
-      "SELECT 1 FROM bans WHERE ip_address = ? LIMIT 1", ip, as: Int32)
-    head(:too_many_requests) if banned
+    head(:too_many_requests) if Ban.banned?(ip)
   end
 
   private def safe_request? : Bool

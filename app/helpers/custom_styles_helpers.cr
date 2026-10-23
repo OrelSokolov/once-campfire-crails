@@ -1,6 +1,6 @@
 # CustomStylesHelpers — ERB-хелперы app/views/custom_styles/edit.html.erb:
 # head + body + nav (только «назад» на /account/edit) + main.
-# Включается в CustomStylesController; общий icon/page_close — ViewHelpers.
+# Включается в CustomStylesController; общий icon/page_close — ApplicationHelper.
 module CustomStylesHelpers
   def page_open(user : User) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("custom-styles", "Custom CSS",
@@ -9,6 +9,6 @@ module CustomStylesHelpers
 
   # translation_button (translations_helper): details/popup меню переводов.
   def translation_button(key : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.translation_button(key))
+    ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 end

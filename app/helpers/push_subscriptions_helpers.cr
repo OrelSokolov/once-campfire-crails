@@ -3,7 +3,7 @@
 # link_back_to_last_room_visited референса) и разбор User-Agent
 # подписки (UserAgent.parse: browser/version/platform).
 # Включается в Users::PushSubscriptionsController; icon/page_close —
-# ViewHelpers.
+# ApplicationHelper.
 module PushSubscriptionsHelpers
   # head + body + nav + main; nav — «Go Back» к последней посещённой
   # комнате (rooms_helper: link_back_to_last_room_visited).
@@ -25,7 +25,7 @@ module PushSubscriptionsHelpers
 
   # TrackedRoomVisit (rooms_helper): cookie last_room (если комната
   # видима пользователю), иначе первая видимая; корень — когда видимых
-  # комнат нет. Как AccountsHelpers#last_room_visited_path.
+  # комнат нет. Как AccountsHelper#last_room_visited_path.
   private def last_room_visited_path : String
     user = current_user.not_nil!
     room = nil
@@ -39,7 +39,7 @@ end
 
 # Мини-порт useragent-гема для списковой строки подписки: browser —
 # первый известный продукт в UA, version — его токен версии, platform —
-# классификация PlatformAgent (ApplicationPlatform референса).
+# классификация ApplicationPlatform (application_platform.rb референса).
 class UserAgent
   BROWSERS = %w[Firefox FxiOS Chrome Opera MSIE Edg Edge Safari]
 
@@ -56,7 +56,7 @@ class UserAgent
   end
 
   def platform : String
-    PlatformAgent.new(@ua).operating_system
+    ApplicationPlatform.new(@ua).operating_system
   end
 
   private def browser_token : String?

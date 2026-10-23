@@ -25,7 +25,7 @@ class JoinsController < ApplicationController
   end
 
   def create
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     code = params["code"].to_s
     account = Account.where("join_code = ?", code).take ||
               Account.where("join_code = ?", code.gsub(' ', '+')).take

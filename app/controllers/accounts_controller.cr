@@ -7,7 +7,7 @@
 require "./application_controller"
 
 class AccountsController < ApplicationController
-  include AccountsHelpers
+  include AccountsHelper
 
   before_action :require_admin, only: [:update]
 
@@ -51,7 +51,7 @@ class AccountsController < ApplicationController
   end
 
   def update
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     account = set_account
     if name = account_params["name"]?
       account.name = name.to_s

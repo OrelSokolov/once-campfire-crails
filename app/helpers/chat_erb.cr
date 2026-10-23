@@ -54,8 +54,8 @@ class ChatERB
   # ————— rooms/involvements (bell + pwa-диалоги + show) —————
 
   # useragent-классификация для pwa-инструкций (ApplicationPlatform).
-  def platform : PlatformAgent
-    PlatformAgent.new(@ua)
+  def platform : ApplicationPlatform
+    ApplicationPlatform.new(@ua)
   end
 
   # root_url референса (инструкции печатают абсолютный origin).
@@ -217,14 +217,15 @@ class ChatERB
   compile_template "body_close", "app/views/layouts/_body_close.html.erb", dedent: true
   compile_template "bell", "app/views/rooms/involvements/_bell.html.erb"
   compile_template "involvement_show", "app/views/rooms/involvements/_show.html.erb", dedent: true
+  compile_template "incompatible_browser", "app/views/sessions/incompatible_browser.html.erb"
 
   # Вложенные партиалы — через render(): compile_template-методы
   # переключают общий @__erb_buf, вложенный вызов затёр бы буфер
   # родителя; партиалы честно подменяют его и восстанавливают.
   compile_partials({
     "users/sidebars/rooms/direct" => {path: "app/views/users/sidebars/rooms/_direct.html.erb", locals: {"membership" => Membership}},
-    "browser_settings"     => {path: "app/views/rooms/involvements/_browser_settings.html.erb", locals: {} of String => Nil},
-    "system_settings"      => {path: "app/views/rooms/involvements/_system_settings.html.erb", locals: {} of String => Nil},
-    "install_instructions" => {path: "app/views/rooms/involvements/_install_instructions.html.erb", locals: {} of String => Nil},
+    "browser_settings"     => {path: "app/views/pwa/_browser_settings.html.erb", locals: {} of String => Nil},
+    "system_settings"      => {path: "app/views/pwa/_system_settings.html.erb", locals: {} of String => Nil},
+    "install_instructions" => {path: "app/views/pwa/_install_instructions.html.erb", locals: {} of String => Nil},
   })
 end

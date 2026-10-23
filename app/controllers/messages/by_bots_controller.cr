@@ -4,25 +4,26 @@ require "uuid"
 # messages/by_bots_controller.rb + routes.js). Аутентификация по
 # "<id>-<bot_token>" в пути, не по сессии.
 class Messages::ByBotsController < ApplicationController
-  include MessagesHelpers
+  include RawRequestBody
+  include MessagesHelper
 
   skip_before_action :require_authentication
 
-  before_action :require_bot, except: [:bot_create]
-  before_action :set_room, only: [:bot_index, :bot_show, :bot_update, :bot_destroy]
-  before_action :set_message, only: [:bot_update, :bot_destroy]
-  before_action :ensure_can_administer, only: [:bot_update, :bot_destroy]
+  before_action :require_bot, except: [:create]
+  before_action :set_room, only: [:index, :show, :update, :destroy]
+  before_action :set_message, only: [:update, :destroy]
+  before_action :ensure_can_administer, only: [:update, :destroy]
 
-  # jbuilder-вьюхи bots-API (bot_index/bot_show)
+  # jbuilder-вьюхи bots-API (index/show)
   @messages : Array(Message) = [] of Message
   @message : Message?
   @room : Room?
 
   # GET /rooms/:id/:bot_key/messages — by_bots index референса: страница
   # истории (before/after по anchor-сообщению, 40 шт, вывод ASC), заголовки
-  # X-Total-Count/Link. Разметка — messages/by_bots/bot_index.json.jbuilder
+  # X-Total-Count/Link. Разметка — messages/by_bots/index.json.jbuilder
   # (+ _message/_user партиалы).
-  def bot_index
+  def index
     room = @room.not_nil!
 
     @messages = bot_messages_page(room)
@@ -51,19 +52,19 @@ class Messages::ByBotsController < ApplicationController
           %(<#{origin}/rooms/#{room.id.not_nil!}/#{params["bot_key"]}/messages?#{direction}=#{anchor_id}>; rel="next")
       end
     end
-    render(template: "messages/by_bots/bot_index")
+    render(template: "messages/by_bots/index")
   end
 
   # GET /rooms/:id/:bot_key/messages/:message_id — by_bots show: одно
-  # сообщение. Разметка — messages/by_bots/bot_show.json.jbuilder.
-  def bot_show
-    render(template: "messages/by_bots/bot_show")
+  # сообщение. Разметка — messages/by_bots/show.json.jbuilder.
+  def show
+    render(template: "messages/by_bots/show")
   end
 
   # POST /rooms/:id/:bot_key/messages — публикация от имени бота
   # (routes.js: botKey = "<id>-<bot_token>", plain body). Аутентификация
   # по боту, не по сессии.
-  def bot_create
+  def create
     return head(:payload_too_large) if upload_too_large?
     room = Room.find?(params["id"].to_s.to_i64)
     unless room
@@ -74,7 +75,7 @@ class Messages::ByBotsController < ApplicationController
     bot = bot_from_key
     return render(plain: "invalid bot key", status: 404) unless bot
 
-    plain = request.body.try(&.gets_to_end).to_s
+    plain = raw_request_body
     # Rails message_params бота: body = raw_request_body — ActionText
     # хранит plain-строку как есть, презентация рендерит текст без <p>.
     body_html = HTML.escape(plain)
@@ -98,16 +99,16 @@ class Messages::ByBotsController < ApplicationController
   # ensure_can_administer — создатель или админ). Тело — ActionText +
   # FTS5 + touch, broadcast replace presentation (maintain_scroll);
   # ответ — bot_show JSON (format :json роута).
-  def bot_update
+  def update
     bot = bot_from_key.not_nil!
     room = @room.not_nil!
     message = @message.not_nil!
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
 
     # by_bots message_params: body = raw_request_body — ActionText
     # хранит plain-строку с escape (как в bot_create).
-    plain = request.body.try(&.gets_to_end).to_s
+    plain = raw_request_body
     body_html = HTML.escape(plain)
     now = Time.utc
     target = message
@@ -116,11 +117,7 @@ class Messages::ByBotsController < ApplicationController
       conn.exec(
         "UPDATE action_text_rich_texts SET body = ?, updated_at = ? WHERE record_type = 'Message' AND record_id = ?",
         body_html, now, target.not_nil!.id.not_nil!)
-      conn.exec(
-        "DELETE FROM message_search_index WHERE rowid = ?", target.not_nil!.id.not_nil!)
-      conn.exec(
-        "INSERT INTO message_search_index (rowid, body) VALUES (?, ?)",
-        target.not_nil!.id.not_nil!, plain)
+      Message::Searchable.update_in_index(conn, target.not_nil!.id.not_nil!, plain)
       # touch сообщения (аналог AR updated_at при update!)
       target.not_nil!.touch
     end
@@ -134,25 +131,24 @@ class Messages::ByBotsController < ApplicationController
       html: ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s)),
       attributes: {"maintain_scroll" => "true"})
     @message = message
-    render(template: "messages/by_bots/bot_show")
+    render(template: "messages/by_bots/show")
   end
 
   # DELETE /rooms/:id/:bot_key/messages/:message_id — удаление своего
   # сообщения ботом (by_bots destroy: super — broadcast_remove, затем
   # head :no_content; ensure_can_administer — создатель или админ).
-  def bot_destroy
+  def destroy
     room = @room.not_nil!
     message = @message.not_nil!
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     mid = message.id.not_nil!
     ActiveRecord::Base.connection.exec(
       "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
-    ActiveRecord::Base.connection.exec(
-      "DELETE FROM message_search_index WHERE rowid=?", mid)
+    Message::Searchable.remove_from_index(ActiveRecord::Base.connection, mid)
     message.destroy
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
 
     broadcast_remove_to([room, "messages"], target: "message_#{mid}")
     head(:no_content)

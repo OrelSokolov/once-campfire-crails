@@ -3,7 +3,8 @@
 # (show). База для Rooms::Opens/Closeds (new/create/edit/update — в
 # подклассах), как в Rails rooms_controller.rb.
 class RoomsController < ApplicationController
-  include RoomsHelpers
+  include RoomScoped
+  include RoomsHelper
 
   before_action :set_room, only: [:show, :destroy]
   before_action :ensure_can_administer, only: [:destroy]
@@ -11,7 +12,7 @@ class RoomsController < ApplicationController
   @room : Room?
   @kind : String = ""
   @user : User?
-  # Геттер для RoomsHelpers#page_open (модуль не видит @user).
+  # Геттер для RoomsHelper#page_open (модуль не видит @user).
   attr_reader :user
   @selected : Set(Int64) = Set(Int64).new
   @is_open : Bool = false
@@ -45,24 +46,21 @@ class RoomsController < ApplicationController
   # Controller и Rooms::InvolvementsController (app/controllers/rooms/),
   # как в Rails rooms_controller.rb.
 
-  # DELETE /rooms/:id — удаление комнаты (room_form.eta delete-панель).
+  # DELETE /rooms/:id — удаление комнаты (rooms_controller.rb#destroy):
+  # destroy_later (членства снимаются сразу, сообщения — Room::DestroyJob),
+  # broadcast_remove_room + редирект.
   def destroy
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
     room = @room.not_nil!
     rid = room.id.not_nil!
-    Membership.where("room_id = ?", rid).delete_all
-    Message.where("room_id = ?", rid).delete_all
-    room.destroy
+    room.destroy_later
+    broadcast_remove_room(rid, room.type.to_s)
     redirect_to root_url
   end
 
-  private def set_room
-    room = room_scope.where(id: (params["room_id"]? || params["id"]).to_s.to_i64).first
-    if room
-      @room = room
-    else
-      redirect_to root_url, alert: "Room not found or inaccessible"
-    end
+  # broadcast_remove_room: таргет dom_id(room, :list) сайдбара.
+  private def broadcast_remove_room(rid : Int64, room_type : String) : Nil
+    kind = room_type.split("::").last?.to_s.downcase
+    broadcast_remove_to(["rooms"], target: "list_rooms_#{kind}_#{rid}")
   end
 
   # Subclasses narrow this to the room types they're allowed to act on, so that one
@@ -128,7 +126,7 @@ class RoomsController < ApplicationController
   def create_room(klass : Rooms::Open.class | Rooms::Closed.class,
                   member_ids : Array(Int64),
                   user : User) : Nil
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     room = klass.new(
       name: room_params["name"]?.to_s,
       creator_id: user.id.not_nil!,
@@ -150,7 +148,7 @@ class RoomsController < ApplicationController
   # user_ids[] (opens не пересобирают членство — membership у всех), broadcast
   # prepend с тем же id — Turbo дедуплицирует и перемещает ссылку.
   def update_room : Nil
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     room = @room.not_nil!
     if name = room_params["name"]?
       room.name = name.to_s

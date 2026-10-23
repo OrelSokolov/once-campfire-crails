@@ -9,9 +9,7 @@ require "digest/md5"
 # уведомлений (push/webhook) в leased-SQLite очередь — всё persisted ДО
 # HTTP-ответа.
 module MessageCreator
-  # Загруженный файл (multipart от file_uploader.js): клиент шлёт файл
-  # прямо в POST /rooms/:id/messages, без ActiveStorage direct uploads.
-  record UploadedFile, filename : String, content_type : String, bytes : Bytes
+  alias UploadedFile = Message::Attachment::UploadedFile
 
   # Возвращает созданное сообщение (после вставки тела/индекса и broadcast).
   # attachment: сохранить файл как blob + active_storage_attachments
@@ -47,12 +45,11 @@ module MessageCreator
           conn.exec(
             "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
             "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
-          store_attachment(conn, record, attachment, now) if attachment
+          Message::Attachment.store(conn, record, attachment, now) if attachment
           # indexMessage: plainText(body) || filename — файл без текста
           # индексируется именем файла.
-          conn.exec(
-            "INSERT INTO message_search_index (rowid, body) VALUES ($1, $2)",
-            message_id, plain.presence || attachment.try(&.filename) || "")
+          Message::Searchable.insert_in_index(conn, message_id,
+            plain.presence || attachment.try(&.filename) || "")
 
           pending_jobs = notify(room, record, creator, body_html, webhooks)
           {record: record, jobs: pending_jobs}
@@ -69,50 +66,9 @@ module MessageCreator
     # publishMessage: presentation вместо rich-text тела).
     record = message[:record]
     rendered = attachment ? ChatLayout.attachments_for([record.id.not_nil!])[record.id.not_nil!]? : nil
-    broadcast(room, record, creator, rendered, base_url)
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Message::Broadcasts.broadcast_create(room, record, creator, rendered, base_url)
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     record
-  end
-
-  def self.broadcast(room : Room, message : Message, author : User,
-                     attachment : ChatLayout::Attachment? = nil,
-                     base_url : String = "") : Nil
-    # Message::Broadcasts#broadcast_create референса: broadcast_append_to
-    # room, :messages, target: [ room, :messages ], html: … Cable-фрейм —
-    # без хвостового \n (он только в HTTP-ответе create.turbo_stream.erb,
-    # который собирает контроллер). Хвостовой \n message_dom срезаем:
-    # у Rails html = render_to_string партиала, а Erubi глотает переводы
-    # строк после <% end %> — партиал кончается ровно </div>. Иначе Turbo
-    # аппендит в контейнер текстовый узел-пробел после сообщения (видно
-    # в браузерном DOM: </div></div> склеены у оракула, у нас с переносом).
-    Turbo::StreamsChannel.broadcast_append_to([room, "messages"],
-      target: "messages_#{room.dom_id}",
-      html: ChatLayout.message_dom(message, room, author, attachment, base_url: base_url).chomp)
-  end
-
-  # storeUpload + attachMessage (storage.js/routes.js): файл через
-  # Disk-сервис шарда (Blob.create_and_upload!: файл в
-  # <root>/<key[0,2]>/<key[2,2]>/<key>, md5-checksum в base64, key —
-  # 24 символа [A-Za-z0-9] как в геме), blob-строка + attachment на
-  # Message + touch messages.updated_at (record.touch — аналог
-  # belongs_to :record, touch: true у ActiveStorage::Attachment гема).
-  private def self.store_attachment(conn, message : Message,
-                                    upload : UploadedFile, now : Time) : Nil
-    message_id = message.id.not_nil!
-    filename = File.basename(upload.filename.presence || "file")
-    content_type = upload.content_type.presence || "application/octet-stream"
-    blob = ActiveStorage::Blob.create_and_upload!(
-      io: String.new(upload.bytes), filename: filename, content_type: content_type)
-    # Blob#analyze! шарда (порт Analyzable 8.1.4): width/height картинки
-    # в metadata (`{"width":W,"height":H,"analyzed":true}` — формат
-    # Rails), откуда их берёт preview_dimensions рендера; не-картинки —
-    # NullAnalyzer (analyzed:true). Анализ — чтение заголовка через
-    # vips, синхронно внутри production-транзакции.
-    blob.analyze!
-    conn.exec(
-      "INSERT INTO active_storage_attachments (name, record_type, record_id, blob_id, created_at) VALUES ('attachment', 'Message', $1, $2, $3)",
-      message_id, blob.id.not_nil!, now)
-    message.touch
   end
 
   # Room#receive: unread для участников, отключённых дольше 60 секунд,
@@ -129,7 +85,7 @@ module MessageCreator
       "AND (connected_at IS NULL OR connected_at < ?)",
       now, now, room.id.not_nil!, creator.id.not_nil!, now - 60.seconds)
 
-    mentions = mention_ids(body_html)
+    mentions = Message::Mentionee.mention_ids(body_html)
     direct = room.type == "Direct" # STI-порт хранит короткие имена
     jobs = [] of Tuple(String, String)
 
@@ -161,8 +117,11 @@ module MessageCreator
 
     # Room::PushMessageJob (message.rb: after_create_commit →
     # room.push_later): единая push-джоба на сообщение; получатели
-    # (Room::MessagePusher) фильтруются при доставке — perform_push.
+    # (Room::MessagePusher) фильтруются при доставке.
     jobs << {"push", %({"message_id":#{message.id.not_nil!}})}
+    # Message::BroadcastUnreadRoomJob: fanout непрочитанных в сайдбар
+    # (UnreadRoomsChannel, per-user стримы).
+    jobs << {"broadcast_unread_room", %({"message_id":#{message.id.not_nil!}})}
     jobs
   end
 
@@ -192,19 +151,5 @@ module MessageCreator
       end
     end
     raise Exception.new("unreachable") # исключает Nil из типа возврата
-  end
-
-  # ————— Упоминания (порт mentionIds, richtext.js) —————
-  # sgid проверяется подписью в ChatLayout.mention_user (Rails
-  # to_signed_gid): неподписанный конверт mention'ом не считается.
-
-  def self.mention_ids(body : String) : Set(Int64)
-    ids = Set(Int64).new
-    body.scan(/<action-text-attachment\b[^>]*\bsgid=["']([^"']+)/) do |match|
-      if (gid = match[1]?) && (user = ChatLayout.mention_user(gid))
-        ids << user.id.not_nil!
-      end
-    end
-    ids
   end
 end

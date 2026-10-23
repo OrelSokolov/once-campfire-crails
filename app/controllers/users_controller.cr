@@ -4,14 +4,14 @@
 # см. Users::BansController). Разметка — app/views/users/show.html.erb
 # (implicit render).
 class UsersController < ApplicationController
-  include UsersHelpers
+  include UsersHelper
 
   # show.html.erb: viewer (ветки admin-блоков) и subject профиля.
   @viewer : User?
   @subject : User?
 
   # HTML-партиал nav профиля (layout_start Screen "user"): назад +
-  # «Edit my profile» для себя; рендерится обёрткой UsersHelpers#user_nav.
+  # «Edit my profile» для себя; рендерится обёрткой UsersHelper#user_nav.
   compile_partials({
     "users/nav" => {path: "app/views/users/_nav.html.erb",
                     locals: {"viewer" => User, "subject" => User}},

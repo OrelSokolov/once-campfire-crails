@@ -17,7 +17,7 @@ module CachedResponses
   # Set-Cookie) — иначе старые чтения получат новый epoch. Вызывающий делает
   # hit-специфичную работу (rooms#show: last_room-cookie) между cache_page
   # и send_page — на hit и miss одинаково.
-  def cache_page(name : String, user_id : Int64?, & : -> Campfire::PageCache::Page) : Campfire::PageCache::Page
+  def cache_page(name : String, user_id : Int64?, & : -> Campfire::ResponseCache::Page) : Campfire::ResponseCache::Page
     epoch = db_epoch # мемо: require_authentication уже вычислил PRAGMA
     key = PageCache.key(name, request, user_id)
     if (cached = PageCache.get(key, epoch))
@@ -34,7 +34,7 @@ module CachedResponses
   # gzip → сжатое представление (лениво, живёт в Page). Тело — сырые
   # байты (gzip-строка может быть невалидным UTF-8 — Crystal пишет
   # байты как есть).
-  def send_page(page : Campfire::PageCache::Page) : Nil
+  def send_page(page : Campfire::ResponseCache::Page) : Nil
     response.headers["Content-Type"] = "text/html; charset=utf-8"
     response.headers["ETag"] = page.etag
     response.headers["Cache-Control"] = "no-cache"

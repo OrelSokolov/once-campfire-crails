@@ -1,7 +1,10 @@
-# concerns/authentication.rb референса: сессия по signed cookie
-# session_token (IdentityCache + DB-epoch), Current.session/user,
+require "./authentication/session_lookup"
+
+# concerns/authentication.rb референса: Current.session/user,
 # require_authentication, start_new_session_for, signed_id-хелперы.
+# Cookie→сессия — Authentication::SessionLookup.
 module Authentication
+  include SessionLookup
   @identity_entry : Campfire::IdentityCache::Entry? = nil
   @identity_checked : Bool = false
 
@@ -24,15 +27,9 @@ module Authentication
   end
 
   def current_session : Session?
-    raw = cookies.signed["session_token"]?
-    token = case raw
-            when String then raw
-            when JSON::Any then raw.as_s? # signed jar decodes JSON-wrapped values
-            else nil
-            end
-    return nil unless token
+    return nil unless (entry = find_session_by_cookie)
     @identity_checked = true
-    @identity_entry = Campfire::IdentityCache.lookup(token, db_epoch)
+    @identity_entry = entry
     # concerns/authentication.rb#authenticated_as: Current.session = session
     # (writer Current.session= в референсе заодно проставляет user).
     Current.session = @identity_entry.try(&.session)

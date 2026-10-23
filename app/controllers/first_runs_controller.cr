@@ -14,7 +14,7 @@ class FirstRunsController < ApplicationController
   end
 
   def create
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     user = FirstRun.create!(user_params)
     start_new_session_for user
 

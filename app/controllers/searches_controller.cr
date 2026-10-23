@@ -1,12 +1,12 @@
 # GET /searches?q=coffee — поиск по FTS5 (контракт: ID = MATCH с join по
 # membership/email из сида, максимум 100, вывод в порядке ID). Разметка —
-# app/views/searches/show.html.erb (референс: searches/index.html.erb;
+# app/views/searches/index.html.erb (референс: searches/index.html.erb;
 # имя — по экшену порта, см. config/routes.cr).
 class SearchesController < ApplicationController
-  include SearchesHelpers
+  include SearchesHelper
 
   # show.html.erb: запрос, выдача (FTS5), недавние запросы, DB-epoch
-  # (ERB-хелперы SearchesHelpers читают их через геттеры);
+  # (ERB-хелперы SearchesHelper читают их через геттеры);
   # @return_room — комната возврата (composer, читается шаблоном напрямую).
   attr_reader user : User? = nil
   attr_reader query : String = ""
@@ -16,7 +16,7 @@ class SearchesController < ApplicationController
   @return_room : Int64 = 1_i64
 
   # HTML-партиалы nav поиска (search_nav.eta/recent_searches.eta): чип
-  # запроса + recents; рендерятся обёртками SearchesHelpers#search_nav и
+  # запроса + recents; рендерятся обёртками SearchesHelper#search_nav и
   # #recent_searches_html (второй используется и в page_close — aside).
   compile_partials({
     "searches/nav" => {path: "app/views/searches/_nav.html.erb",
@@ -26,12 +26,12 @@ class SearchesController < ApplicationController
                                    locals: {"recents" => Array(String)}},
   }, dedent: true)
 
-  def show
+  def index
     user = current_user.not_nil!
 
     # Whole-page cache (как rooms#show): ключ включает query
     # (?q=...), инвалидация — общий DB-epoch (FTS-индекс и сообщения
-    # меняются только write'ами, все сбрасывают PageCache.invalidate!).
+    # меняются только write'ами, все сбрасывают Campfire::ResponseCache.invalidate!).
     page = cache_page("searches#show", user.id) do
       query = params["q"]?.to_s.strip
 
@@ -46,7 +46,7 @@ class SearchesController < ApplicationController
                    JOIN memberships mm ON mm.room_id = m.room_id
                    WHERE mm.user_id = ? AND message_search_index MATCH ?
                    ORDER BY m.id DESC LIMIT 100)),
-          user.id.not_nil!, match_terms(query))
+          user.id.not_nil!, Message::Searchable.match_terms(query))
           .order("id ASC").to_a
       end
 
@@ -68,7 +68,7 @@ class SearchesController < ApplicationController
       @recents = recents
       @return_room = return_room
       @epoch = db_epoch
-      Campfire::PageCache::Page.new(__render_view("show").to_s)
+      Campfire::ResponseCache::Page.new(__render_view("index").to_s)
     end
     send_page(page)
   end
@@ -82,7 +82,7 @@ class SearchesController < ApplicationController
       now = Time.utc
       Search.new(user_id: user.id.not_nil!, query: query,
         created_at: now, updated_at: now).save!
-      Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+      Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     end
     redirect_to searches_url(q: query)
   end
@@ -92,15 +92,8 @@ class SearchesController < ApplicationController
     user = current_user.not_nil!
     ActiveRecord::Base.connection.exec(
       "DELETE FROM searches WHERE user_id = ?", user.id.not_nil!)
-    Campfire::PageCache.invalidate!
+    Campfire::ResponseCache.invalidate!
     redirect_to searches_url
   end
 
-  # message/searchable.rb#match_terms: каждое слово запроса берётся в
-  # кавычки FTS5 (двойные внутри удваиваются) — иначе запрос из
-  # операторов ("AND", "salt AND", незакрытая кавычка) даёт синтаксическую
-  # ошибку FTS5 и 500 вместо выдачи.
-  private def match_terms(query : String) : String
-    query.split.map { |word| %("#{word.gsub('"', %q(""))}") }.join(" ")
-  end
 end

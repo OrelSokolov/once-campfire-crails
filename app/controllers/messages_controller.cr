@@ -5,7 +5,8 @@ require "uuid"
 # POST /rooms/:id/messages — создание сообщения (контракт: turbo-stream
 # append; аудит: messages + action_text_rich_texts + FTS5 с телом).
 class MessagesController < ApplicationController
-  include MessagesHelpers
+  include RawRequestBody
+  include MessagesHelper
 
   # Верхний лимит тела запроса (сообщение с вложением уходит одним
   # multipart-POST'ом): без него участник комнаты кладёт в память
@@ -18,11 +19,13 @@ class MessagesController < ApplicationController
   before_action :ensure_can_administer, only: [:edit, :update, :destroy]
 
   # show.html.erb / edit.html.erb
-  # Геттеры — для ERB-хелперов MessagesHelpers (модуль не видит ивары).
+  # Геттеры — для ERB-хелперов MessagesHelper (модуль не видит ивары).
   attr_reader :room, :message, :mid, :attachment
   @room : Room?
   @message : Message?
   @mid : Int64?
+  @messages : Array(Message) = [] of Message
+  @message_html : String = ""
   @attachment : ChatLayout::Attachment?
 
   def index
@@ -36,7 +39,8 @@ class MessagesController < ApplicationController
       # по нему понимает, что история дочитана). Rails: head :no_content —
       # без тела и без Content-Type (не кэшируется).
       return head(:no_content) if messages.empty?
-      Campfire::PageCache::Page.new(messages_page_html(@room.not_nil!, messages, db_epoch))
+      @messages = messages
+      Campfire::ResponseCache::Page.new(__render_view("index").to_s)
     end
     send_page(page)
   end
@@ -74,8 +78,8 @@ class MessagesController < ApplicationController
     # Без хвостового \n: у Rails @message_html = render_to_string партиала
     # (Erubi глотает переводы после <% end %>), Turbo не должен аппендить
     # текстовый узел-пробел после сообщения в контейнер.
-    message_html = ChatLayout.message_dom(message, room, user, attachment, base_url: origin).chomp
-    render(html: append_message_stream(room, message_html),
+    @message_html = ChatLayout.message_dom(message, room, user, attachment, base_url: origin).chomp
+    render(html: __render_view("create", format: "turbo_stream").to_s,
       content_type: "text/vnd.turbo-stream.html")
   end
 
@@ -103,7 +107,7 @@ class MessagesController < ApplicationController
     message = @message.not_nil!
     room = @room.not_nil!
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
 
     body_html = message_body_param
     plain = plain_text(body_html)
@@ -116,11 +120,7 @@ class MessagesController < ApplicationController
       conn.exec(
         "UPDATE action_text_rich_texts SET body = ?, updated_at = ? WHERE record_type = 'Message' AND record_id = ?",
         body_html.empty? ? plain : body_html, now, target.not_nil!.id.not_nil!)
-      conn.exec(
-        "DELETE FROM message_search_index WHERE rowid = ?", target.not_nil!.id.not_nil!)
-      conn.exec(
-        "INSERT INTO message_search_index (rowid, body) VALUES (?, ?)",
-        target.not_nil!.id.not_nil!, plain)
+      Message::Searchable.update_in_index(conn, target.not_nil!.id.not_nil!, plain)
       # touch сообщения (аналог AR updated_at при update!)
       target.not_nil!.touch
     end
@@ -144,20 +144,19 @@ class MessagesController < ApplicationController
     message = @message.not_nil!
     room = @room.not_nil!
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     mid = message.id.not_nil!
     ActiveRecord::Base.connection.exec(
       "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
-    ActiveRecord::Base.connection.exec(
-      "DELETE FROM message_search_index WHERE rowid=?", mid)
+    Message::Searchable.remove_from_index(ActiveRecord::Base.connection, mid)
     message.destroy
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
 
     # messages_controller.rb#destroy: broadcast_remove (cable-фрейм — без
     # хвостового \n); HTTP-ответ — destroy.turbo_stream.erb (тег + \n файла).
     broadcast_remove_to([room, "messages"], target: "message_#{mid}")
-    render(html: %(<turbo-stream action="remove" target="message_#{mid}"></turbo-stream>\n),
+    render(html: __render_view("destroy", format: "turbo_stream").to_s,
       content_type: "text/vnd.turbo-stream.html")
   end
 
@@ -195,25 +194,18 @@ class MessagesController < ApplicationController
     head :forbidden unless Current.user.not_nil!.can_administer?(@message)
   end
 
-  # messages#index: before → 40 строго до anchor по created_at (вывод ASC),
-  # after → 40 строго после (ASC), без anchor — последние 40 ASC.
+  # messages#index: Message::Pagination — before → страница до anchor
+  # (вывод ASC), after → после, без anchor — последние 40 ASC.
   private def find_messages : Array(Message)
     room = @room.not_nil!
     anchor = params["before"]?
     after_anchor = params["after"]?
     if anchor && (anchor_id = anchor.to_s.to_i64?)
-      Message.where(
-        "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, anchor_id)
-        .order("created_at DESC").limit(40).to_a.reverse
+      Message::Pagination.page_before(room, anchor_id)
     elsif after_anchor && (after_id = after_anchor.to_s.to_i64?)
-      Message.where(
-        "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, after_id)
-        .order("created_at ASC").limit(40).to_a
+      Message::Pagination.page_after(room, after_id)
     else
-      Message.where("room_id = ?", room.id.not_nil!)
-        .order("created_at DESC").limit(40).to_a.reverse
+      Message::Pagination.last_page(room)
     end
   end
 
@@ -252,7 +244,7 @@ class MessagesController < ApplicationController
     return nil unless match
     boundary = match[1].strip('"')
 
-    raw = request.body.try(&.gets_to_end).to_s
+    raw = raw_request_body
     return nil if raw.empty?
     delimiter = "--" + boundary
     start = raw.index(delimiter)

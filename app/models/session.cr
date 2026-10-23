@@ -1,4 +1,5 @@
-class Session < ActiveRecord::Base
+require "./application_record"
+class Session < ApplicationRecord
   belongs_to :user
 
   # Rails: user.sessions.start!(user_agent:, ip_address:) — creates the

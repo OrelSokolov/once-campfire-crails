@@ -1,0 +1,30 @@
+<%= ERB::SafeString.new(ChatLayout.head(platform.apple_messages? ? "Campfire" : "Unsupported browser", nil, chat: false)) %><body class="" data-controller="local-time lightbox">
+  <a href="#main-content" class="skip-navigation btn">Skip to main content</a>
+  <nav id="nav">
+  </nav><main id="main-content">
+    <div class="panel center">
+      <header>
+        <h1 class="txt-x-large txt-tight-lines txt-align-center margin-none-block-start margin-block-end">
+          Upgrade to a supported web browser
+        </h1>
+        <div class="flex align-start gap">
+          <%= ERB::SafeString.new(TranslationsHelper.translation_button("incompatible_browser_messsage")) %>
+          <p class="margin-none-block-start">Campfire requires a modern web browser. Please use one of the browsers listed below and make sure auto-updates are enabled.</p>
+        </div>
+      </header>
+
+      <div class="browser-list flex align-center flex-wrap gap justify-center margin-block">
+        <% {"safari" => "17.2", "chrome" => "120", "firefox" => "121", "opera" => "104"}.each do |browser, version| %>
+          <div class="browser flex flex-column">
+            <img class="center" aria-hidden="true" src="<%= asset("browsers/#{browser}.svg") %>">
+            <div class="flex flex-column align-center margin-block-start-half">
+              <strong><%= browser.capitalize %></strong>
+              <span> <%= version %>+</span>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  </main>
+  <%= ERB::SafeString.new(ChatLayout.page_close) %></body>
+</html>

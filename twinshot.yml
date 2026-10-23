@@ -36,11 +36,39 @@ soft_check:
   # имени группы): артефакты лежат в code-artifacts/<side>/capybara-tests/...,
   # поэтому пишем "capybara-tests/*", а не "code/capybara-tests/*".
   - capybara-tests/*
+  - capybara-tests/tests/*
   - docs/*
   - test/*
   - vendor/*
   - taks/*
   - db/migrate/*
+
+  # Rails-инфраструктура без Crystal-аналога (другой стек: binstubs,
+  # puma/resque/brakeman, Rails-env и инициализаторы, бенчмарки
+  # npm-стека). Эквиваленты живут в src/app.cr, config/application.cr,
+  # tasks/*.rake, bench-workspace/ — см. notes/style-parity.md.
+  - bin/*
+  - config/boot.code.txt
+  - config/brakeman.code.txt
+  - config/bundler-audit.code.txt
+  - config/ci.code.txt
+  - config/environment.code.txt
+  - config/importmap.code.txt
+  - config/puma.code.txt
+  - config/puma_dev.code.txt
+  - config/redis.code.txt
+  - config/resque-pool.code.txt
+  - config/storage.code.txt
+  - config/environments/*
+  - config/initializers/*
+  - config/locales/*
+  - hooks/*
+  - lib/*
+  - script/*
+  - bench/*
+  - public/502.code.txt
+  - log/*
+  - tmp/*
 
   - .dockerignore.code.txt
   - .env.code.txt
@@ -79,4 +107,4 @@ soft_check:
   - .github/ISSUE_TEMPLATE/preapproved.code.txt
   - .github/workflows/ci.code.txt
   - .github/workflows/publish-image.code.txt
-
+  - capybara-tests/tests/*

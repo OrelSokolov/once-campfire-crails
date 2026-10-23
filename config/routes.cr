@@ -69,7 +69,7 @@ CRails.application.routes.draw do
   post   "/users/:user_id/ban", to: "users/bans#create"
   delete "/users/:user_id/ban", to: "users/bans#destroy"
 
-  get "/autocompletable/users", to: "autocompletable/users#show"
+  get "/autocompletable/users", to: "autocompletable/users#index"
 
   # Виды комнат — как в Rails (`namespace :rooms`): контроллеры
   # Rooms::Opens/Closeds/Directs; :room_id — имя параметра, которое
@@ -101,14 +101,14 @@ CRails.application.routes.draw do
     # Bot-API: /rooms/:id/:bot_key/messages (в Rails — scope path:
     # ":bot_key" внутри nested с controller: "messages/by_bots").
     scope path: ":bot_key", as: :bot do
-      post   "messages", to: "messages/by_bots#bot_create"
-      get    "messages", to: "messages/by_bots#bot_index"
-      get    "messages/:message_id", to: "messages/by_bots#bot_show"
-      patch  "messages/:message_id", to: "messages/by_bots#bot_update"
-      put    "messages/:message_id", to: "messages/by_bots#bot_update"
-      delete "messages/:message_id", to: "messages/by_bots#bot_destroy"
-      post   "messages/:message_id/boosts", to: "messages/boosts/by_bots#bot_create"
-      delete "messages/:message_id/boosts/:boost_id", to: "messages/boosts/by_bots#bot_destroy"
+      post   "messages", to: "messages/by_bots#create"
+      get    "messages", to: "messages/by_bots#index"
+      get    "messages/:message_id", to: "messages/by_bots#show"
+      patch  "messages/:message_id", to: "messages/by_bots#update"
+      put    "messages/:message_id", to: "messages/by_bots#update"
+      delete "messages/:message_id", to: "messages/by_bots#destroy"
+      post   "messages/:message_id/boosts", to: "messages/boosts/by_bots#create"
+      delete "messages/:message_id/boosts/:boost_id", to: "messages/boosts/by_bots#destroy"
     end
   end
 
@@ -128,7 +128,7 @@ CRails.application.routes.draw do
   resource :unfurl_link, only: [:create]
 
   # GET /searches у порта — searches#show (в Rails resources даёт index).
-  get "/searches", to: "searches#show", as: "searches"
+  get "/searches", to: "searches#index", as: "searches"
   post "/searches", to: "searches#create"
   delete "/searches/clear", to: "searches#clear"
   post "/searches/clear", to: "searches#clear"

@@ -1,6 +1,6 @@
 # BotsHelpers — ERB-хелперы app/views/bots/{index,new,edit}.html.erb:
 # каркас страницы с nav-назад, copy-кнопка curl-команды, аватар бота.
-# Включается в BotsController; общий icon/page_close — ViewHelpers.
+# Включается в BotsController; общий icon/page_close — ApplicationHelper.
 module BotsHelpers
   # head + body + nav (назад на back_path) + main.
   def page_open(title : String, back_path : String) : ERB::SafeString
@@ -15,7 +15,7 @@ module BotsHelpers
 
   # translation_button (translations_helper): details/popup меню переводов.
   def translation_button(key : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.translation_button(key))
+    ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
   # avatar_tag референса (users/avatars_helper): аватар по токен-путя с

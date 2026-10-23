@@ -11,7 +11,7 @@ class Accounts::Bots::KeysController < ApplicationController
     bot = User.where("id = ? AND role = 2 AND status = 0",
       params["bot_id"].to_s.to_i64).take
     return head(:not_found) unless bot
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     bot.bot_token = User.generate_bot_token
     bot.updated_at = Time.utc
     bot.save!

@@ -1,8 +1,9 @@
-class ActiveStorageBlob < ActiveRecord::Base
+require "./application_record"
+class ActiveStorageBlob < ApplicationRecord
 end
 
-class ActiveStorageAttachment < ActiveRecord::Base
+class ActiveStorageAttachment < ApplicationRecord
 end
 
-class ActiveStorageVariantRecord < ActiveRecord::Base
+class ActiveStorageVariantRecord < ApplicationRecord
 end

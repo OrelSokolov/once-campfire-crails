@@ -4,7 +4,7 @@
 # ровно этим набором участников или создать (membership "everything");
 # edit — настройки (аватары участников + Delete Ping).
 class Rooms::DirectsController < ApplicationController
-  include RoomsHelpers
+  include RoomsHelper
 
   # new.html.erb: viewer (для head-метаданных); edit.html.erb — комната,
   # участники, заголовок.
@@ -13,7 +13,7 @@ class Rooms::DirectsController < ApplicationController
   @direct : Bool = false
   @direct_title : String = ""
   @direct_members : Array(User) = [] of User
-  # Геттер для RoomsHelpers#page_open (модуль не видит @user).
+  # Геттер для RoomsHelper#page_open (модуль не видит @user).
   attr_reader :user
 
   # GET /rooms/directs/new — форма (подменяет direct_rooms_control в
@@ -49,7 +49,7 @@ class Rooms::DirectsController < ApplicationController
   # POST /rooms/directs — существующая комната с тем же набором участников
   # или новая Rooms::Direct (name NULL, involvement "everything").
   def create
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     user = current_user.not_nil!
     ids = selected_user_ids.unshift(user.id.not_nil!).uniq!
     ids.reject! { |id| User.where("id = ? AND status = 0", id).take.nil? }

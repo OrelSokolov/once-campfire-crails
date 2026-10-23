@@ -5,7 +5,7 @@
 # Ключ подписи: PBKDF2-SHA256(secret, "active_record/signed_id", 1000, 64),
 # HMAC-SHA256 (см. campfire-express/src/rails.js: key()/verifyId).
 class Users::AvatarsController < ApplicationController
-  include AvatarsHelpers
+  include Users::AvatarsHelper
 
   skip_before_action :require_authentication # аватары публично линкуются
 
@@ -121,7 +121,7 @@ class Users::AvatarsController < ApplicationController
   end
 
   # users/avatars_helper.rb + show.svg.erb референса — SVG-инициалы
-  # (initials_svg, AvatarsHelpers); cache_epoch передаётся из show — SVG
+  # (initials_svg, Users::AvatarsHelper); cache_epoch передаётся из show — SVG
   # тоже кэшируется по токену; public_path — дополнительно в PublicCache.
   private def render_initials(user : User?, cache_key : String? = nil,
                               cache_epoch : String? = nil,

@@ -1,7 +1,8 @@
+require "./application_record"
 # Message bodies live in ActionText (action_text_rich_texts) and are
 # mirrored into the FTS5 message_search_index by the reference app;
 # the seed database carries both.
-class Message < ActiveRecord::Base
+class Message < ApplicationRecord
   belongs_to :room
   belongs_to :creator, class_name: "User"
   has_many :boosts, foreign_key: "message_id"

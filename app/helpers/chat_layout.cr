@@ -300,90 +300,6 @@ module ChatLayout
       %(\n</button>)
   end
 
-  # translations_helper.rb: TRANSLATIONS — словари кнопки перевода
-  # (порядок флагов: US, ES, FR, IN, DE, BR, JP).
-  TRANSLATIONS = {
-    "email_address" => {"Enter your email address", "Introduce tu correo electrónico",
-      "Entrez votre adresse courriel", "अपना ईमेल पता दर्ज करें",
-      "Geben Sie Ihre E-Mail-Adresse ein", "Insira seu endereço de email",
-      "メールアドレスを入力してください"},
-    "password" => {"Enter your password", "Introduce tu contraseña",
-      "Saisissez votre mot de passe", "अपना पासवर्ड दर्ज करें",
-      "Geben Sie Ihr Passwort ein", "Insira sua senha", "パスワードを入力してください"},
-    "update_password" => {"Change password", "Cambiar contraseña",
-      "Changer le mot de passe", "पासवर्ड बदलें", "Passwort ändern",
-      "Alterar senha", "パスワードを変更"},
-    "user_name" => {"Enter your name", "Introduce tu nombre", "Entrez votre nom",
-      "अपना नाम दर्ज करें", "Geben Sie Ihren Namen ein", "Insira seu nome",
-      "お名前を入力してください"},
-    "account_name" => {"Name this account", "Nombre de esta cuenta",
-      "Nommez ce compte", "इस खाते का नाम दें", "Benennen Sie dieses Konto",
-      "Dê um nome a essa conta", "アカウントに名前を付ける"},
-    "room_name" => {"Name the room", "Nombrar la sala", "Nommez la salle",
-      "कमरे का नाम दें", "Geben Sie dem Raum einen Namen", "Dê um nome a essa sala",
-      "ルームに名前を付ける"},
-    "invite_message" => {"Welcome to Campfire. To invite some people to chat with you, share the join link below.",
-      "Bienvenido a Campfire. Para invitar a algunas personas a chatear contigo, comparte el enlace de unión que se encuentra a continuación.",
-      "Bienvenue sur Campfire. Pour inviter des personnes à discuter avec vous, partagez le lien pour rejoindre ci-dessous.",
-      "Campfire में आपका स्वागत है। अधिक लोगों को चैट के लिए आमंत्रित करने के लिए, नीचे जुड़ने का लिंक साझा करें।",
-      "Willkommen bei Campfire. Um einige Personen zum Chatten einzuladen, teilen Sie den unten stehenden Beitrittslink.",
-      "Boas vindas ao Campfire. Para convidar pessoas para conversarem com você, compartilhe o link de convite abaixo.",
-      "Campfireへようこそ。他の人をチャットに招待するには、下記の参加リンクを共有してください。"},
-    "incompatible_browser_messsage" => {"Upgrade to a supported web browser. Campfire requires a modern web browser. Please use one of the browsers listed below and make sure auto-updates are enabled.",
-      "Actualiza a un navegador web compatible. Campfire requiere un navegador web moderno. Utiliza uno de los navegadores listados a continuación y asegúrate de que las actualizaciones automáticas estén habilitadas.",
-      "Mettez à jour vers un navigateur web pris en charge. Campfire nécessite un navigateur web moderne. Veuillez utiliser l'un des navigateurs répertoriés ci-dessous et assurez-vous que les mises à jour automatiques sont activées.",
-      "समर्थित वेब ब्राउज़र में अपग्रेड करें। Campfire को एक आधुनिक वेब ब्राउज़र की आवश्यकता है। कृपया नीचे सूचीबद्ध ब्राउज़रों में से कोई एक का उपयोग करें और सुनिश्चित करें कि स्वचालित अपडेट्स सक्षम हैं।",
-      "Aktualisieren Sie auf einen unterstützten Webbrowser. Campfire erfordert einen modernen Webbrowser. Verwenden Sie bitte einen der unten aufgeführten Browser und stellen Sie sicher, dass automatische Updates aktiviert sind.",
-      "Atualize para um navegador compatível. O Campfire requer um navegador moderno. Por favor, use um dos navegadores listados abaixo e certifique-se de que as atualizações automáticas estão ativadas.",
-      "サポートされたウェブブラウザーにアップグレードしてください。Campfireはモダンなウェブブラウザーが必要です。下記のブラウザーのいずれかを使用し、自動更新が有効になっていることを確認してください。"},
-    "bio" => {"Enter a few words about yourself.",
-      "Ingresa algunas palabras sobre ti mismo.",
-      "Saisissez quelques mots à propos de vous-même.",
-      "अपने बारे में कुछ शब्द लिखें.",
-      "Geben Sie ein paar Worte über sich selbst ein.",
-      "Insira alguma palavras sobre você.", "ご自分について簡単に記入してください。"},
-    "webhook_url" => {"Webhook URL", "URL del Webhook", "URL du webhook",
-      "वेबहुक URL", "Webhook-URL", "URL do Webhook", "Webhook URL"},
-    "chat_bots" => {"Chat bots. With Chat bots, other sites and services can post updates directly to Campfire.",
-      "Bots de chat. Con los bots de chat, otros sitios y servicios pueden publicar actualizaciones directamente en Campfire.",
-      "Bots de discussion. Avec les bots de discussion, d'autres sites et services peuvent publier des mises à jour directement sur Campfire.",
-      "चैट बॉट। चैट बॉट के साथ, अन्य साइटों और सेवाएं सीधे कैम्पफायर में अपडेट पोस्ट कर सकती हैं।",
-      "Chat-Bots. Mit Chat-Bots können andere Websites und Dienste Updates direkt in Campfire veröffentlichen.",
-      "Chat bots. Com Chat bots, outros sites e serviços podem postar atualizações diretamente no Campfire.",
-      "チャットボット。チャットボットを使用すると、他のサイトやサービスがCampfireに直接更新情報を投稿できます。"},
-    "bot_name" => {"Name the bot", "Nombrar al bot", "Nommer le bot",
-      "बॉट का नाम दें", "Benenne den Bot", "Dê um nome ao bot", "ボットに名前を付ける"},
-    "custom_styles" => {"Add custom CSS styles. Use Caution: you could break things.",
-      "Agrega estilos CSS personalizados. Usa precaución: podrías romper cosas.",
-      "Ajoutez des styles CSS personnalisés. Utilisez avec précaution : vous pourriez casser des choses.",
-      "कस्टम CSS स्टाइल जोड़ें। सावधानी बरतें: आप चीज़ों को तोड़ सकते हैं।",
-      "Fügen Sie benutzerdefinierte CSS-Stile hinzu. Vorsicht: Sie könnten Dinge kaputt machen.",
-      "Adicione estilos CSS personalizados. Use com cuidado: você pode quebrar coisas.",
-      "カスタムCSSスタイルを追加。注意: サイトが壊れる可能性があります。"},
-  }
-  LANGUAGE_FLAGS = {"🇺🇸", "🇪🇸", "🇫🇷", "🇮🇳", "🇩🇪", "🇧🇷", "🇯🇵"}
-
-  # translations_helper.rb: translation_button — details/popup с меню
-  # переводов (globe.svg, for-screen-reader «Translate»).
-  def self.translation_button(key : String) : String
-    return "" unless (texts = TRANSLATIONS[key]?)
-    String.build do |io|
-      io << %(<details class="position-relative" data-controller="popup" )
-      io << %(data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside" )
-      io << %(data-popup-orientation-top-class="popup-orientation-top">)
-      io << %(<summary class="btn" tabindex="-1">)
-      io << icon("globe.svg", 20, "color-icon")
-      io << %(<span class="for-screen-reader">Translate</span></summary>)
-      io << %(<div class="language-list-menu shadow" data-popup-target="menu">)
-      io << %(<dl class="language-list">)
-      texts.each_with_index do |text, i|
-        io << "<dt>" << LANGUAGE_FLAGS[i] << "</dt>"
-        io << %(<dd class="margin-none">) << HTML.escape(text) << "</dd>"
-      end
-      io << %(</dl></div></details>)
-    end
-  end
-
   # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — блок
   # «Welcome to Campfire» над сообщениями исходной комнаты (Room.original,
   # пока сообщений в ней не больше PAGE_SIZE): логотип аккаунта, перевод
@@ -404,7 +320,7 @@ module ChatLayout
       io << %(<img alt="Account logo" src="#{fresh_account_logo_path(account)}" width="300" height="300"></figure>\n)
       io << %(<div class="flex align-center gap">\n)
       io << %(<div class="system-welcome--translation">\n)
-      io << translation_button("invite_message") << "\n"
+      io << TranslationsHelper.translation_button("invite_message") << "\n"
       io << %(</div>\n)
       io << %(<p>\n<strong>Welcome to Campfire</strong><br>\n)
       io << %(To invite people to chat, share the join link below.\n</p>\n)
@@ -489,18 +405,6 @@ module ChatLayout
       },
     }).to_s
   end
-
-  # Быстрые реакции (EmojiHelper::REACTIONS референса) — форма на каждую.
-  REACTIONS = {
-    "👍"  => "Thumbs up",
-    "👏"  => "Clapping",
-    "👋"  => "Waving hand",
-    "💪"  => "Muscle",
-    "❤️"  => "Red heart",
-    "😂"  => "Face with tears of joy",
-    "🎉"  => "Party popper",
-    "🔥"  => "Fire",
-  }
 
   # User#title референса: «name – bio» (bio может быть NULL).
   def self.user_title(name : String?, bio : String?) : String
@@ -997,98 +901,16 @@ module ChatLayout
     end.gsub(/&#(\d+);/) { |m| ((m[/\d+/].to_i32?) || 63).chr.to_s }
   end
 
-  # ————— Звуки /play (models/sound.rb референса) —————
+  ChatSound = Sound
 
-  # BUILTIN-звуки: name → текст или картинка (sounds/<file>, WxH).
-  class ChatSound
-    attr_reader name : String
-    attr_reader text : String?
-    attr_reader image_name : String?
-    attr_accessor image_width : Int32 = 0
-    attr_accessor image_height : Int32 = 0
-
-    def initialize(@name, @text = nil, @image_name = nil)
-    end
-
-    def image? : Bool
-      !@image_name.nil?
-    end
-  end
-
-  SOUNDS = {
-    "56k"         => {image: {"56k.webp", 79, 33}},
-    "bell"        => {text: "🔔"},
-    "bezos"       => {text: "😆💭"},
-    "bueller"     => {text: "anyone?"},
-    "butts"       => {text: "👐 🚬"},
-    "clowntown"   => {image: {"clowntown.webp", 210, 150}},
-    "cottoneyejoe" => {text: "🎶🙉🎶 "},
-    "crickets"    => {text: "hears crickets chirping"},
-    "curb"        => {image: {"curb.webp", 150, 101}},
-    "dadgummit"   => {text: "dad gummit!! 🎣"},
-    "dangerzone"  => {image: {"dangerzone.webp", 157, 32}},
-    "danielsan"   => {text: "🎆 🏆 🎆"},
-    "deeper"      => {image: {"top.webp", 188, 80}},
-    "ballmer"     => {text: "developers!"},
-    "donotwant"   => {image: {"donotwant.webp", 150, 150}},
-    "drama"       => {image: {"drama.webp", 300, 16}},
-    "flawless"    => {text: "#flawless"},
-    "glados"      => {text: "🤖💢"},
-    "gogogo"      => {text: "Go, go, go!"},
-    "greatjob"    => {image: {"greatjob.webp", 79, 16}},
-    "greyjoy"     => {text: "😖🎺"},
-    "guarantee"   => {text: "guarantees it 👌"},
-    "heygirl"     => {text: "✨💁✨"},
-    "honk"        => {text: "HONK"},
-    "horn"        => {text: "🐶 ✂️ 🐱"},
-    "horror"      => {text: "💀 💀 💀 💀 💀 💀 💀"},
-    "inconceivable" => {text: "doesn't think it means what you think it means…"},
-    "letitgo"     => {text: "❄️👩❄️⛄️❄️"},
-    "live"        => {text: "is DOING IT LIVE"},
-    "loggins"     => {image: {"loggins.webp", 200, 151}},
-    "makeitso"    => {text: "make it so 👉"},
-    "noooo"       => {text: "👸💀😒"},
-    "nyan"        => {image: {"nyan.webp", 36, 15}},
-    "ohmy"        => {text: "raises an eyebrow 😏"},
-    "ohyeah"      => {text: "isn't playing by the rules"},
-    "pushit"      => {image: {"pushit.webp", 104, 15}},
-    "rimshot"     => {text: "plays a rimshot"},
-    "rollout"     => {text: "is rolling out 🚗"},
-    "rumble"      => {image: {"rumble.webp", 220, 150}},
-    "sax"         => {text: "🌇🎷🎶"},
-    "secret"      => {text: "found a secret area 🔑"},
-    "sexyback"    => {text: "🔞"},
-    "story"       => {text: "and now you know…"},
-    "tada"        => {text: "plays a fanfare 🎏"},
-    "tmyk"        => {text: "✨ ⭐️ The More You Know ✨ ⭐️"},
-    "totes"       => {text: "😁👍"},
-    "trololo"     => {text: "трололо"},
-    "trombone"    => {text: "plays a sad trombone"},
-    "unix"        => {text: "knows this 💻"},
-    "vuvuzela"    => {text: "======<() ~ ♪ ~♫"},
-    "what"        => {image: {"what.webp", 100, 131}},
-    "whoomp"      => {text: "👏‼️😎"},
-    "wups"        => {text: "wups!"},
-    "yay"         => {image: {"yay.webp", 103, 50}},
-    "yeah"        => {image: {"yeah.webp", 104, 15}},
-    "yodel"       => {text: "📣🗻🙉"},
-  }
-
-  # Sound.find_by_name по BUILTIN-индексу референса.
-  def self.sound_by_name(name : String) : ChatSound?
-    spec = SOUNDS[name]? || return nil
-    sound = ChatSound.new(name, text: spec[:text]? || nil,
-      image_name: spec[:image]?.try(&.[0]))
-    if (image = spec[:image]?)
-      sound.image_width = image[1]
-      sound.image_height = image[2]
-    end
-    sound
+  # Sound.find_by_name (app/models/sound.cr): каталог BUILTIN.
+  def self.sound_by_name(name : String) : Sound?
+    Sound.find_by_name(name)
   end
 
   # Message#sound референса: plain-тело вида «/play <name>» с известным
   # именем → звук (content_type "sound").
-  def self.message_sound(body : String?) : ChatSound?
+  def self.message_sound(body : String?) : Sound?
 
     plain = body.to_s.gsub(/<[^>]*>/, " ").gsub("&nbsp;", " ").strip
     if (match = plain.match(/\A\/play (\w+)\z/))
@@ -1098,7 +920,7 @@ module ChatLayout
 
   # message_sound_presentation (MessagesHelper): div.sound с кнопкой 🔊
   # и текстом/картинкой звука.
-  def self.sound_presentation(sound : ChatSound) : String
+  def self.sound_presentation(sound : Sound) : String
     String.build do |io|
       io << %(<div class="sound" data-action="messages:play-&gt;sound#play" data-controller="sound" )
       io << %(data-sound-url-value="#{asset("#{sound.name}.mp3")}">)
@@ -1390,7 +1212,7 @@ module ChatLayout
       io << %(<span class="for-screen-reader">Message options</span>\n</summary>\n)
       io << %(<div class="message__actions-menu border shadow" data-popup-target="menu">\n)
       io << %(<div class="quick-boosts">\n)
-      REACTIONS.each do |character, title|
+      EmojiHelper::REACTIONS.each do |character, title|
         io << %(<form data-turbo-frame="#{boost_frame}" data-action="popup#close" )
         io << %(action="#{boost_path}" accept-charset="UTF-8" method="post">\n)
         io << %(<input type="hidden" name="boost[content]" id="boost_content" value=") << HTML.escape(character)

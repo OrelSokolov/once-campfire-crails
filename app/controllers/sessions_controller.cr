@@ -47,7 +47,7 @@ class SessionsController < ApplicationController
   def destroy
     if (endpoint = params["push_subscription_endpoint"]?.try(&.to_s.presence)) &&
        (user = current_user)
-      PushSubscription.where("endpoint = ? AND user_id = ?",
+      Push::Subscription.where("endpoint = ? AND user_id = ?",
         endpoint, user.id.not_nil!).delete_all
     end
     raw = cookies.signed["session_token"]?

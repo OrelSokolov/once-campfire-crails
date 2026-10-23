@@ -2,8 +2,8 @@
 # проверка итоговых байтов (переносы строк в конце страницы).
 #   crystal run script/render_smoke.cr
 require "../src/app_boot_models"
-require "../app/helpers/platform_agent"
-require "../app/helpers/fragment_cache"
+require "../app/models/application_platform"
+require "../app/models/fragment_cache"
 require "../app/helpers/chat_layout"
 require "../app/helpers/chat_erb"
 

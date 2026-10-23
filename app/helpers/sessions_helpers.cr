@@ -1,7 +1,7 @@
 # SessionsHelpers — ERB-хелперы app/views/sessions/new.html.erb:
 # head логина без chat-обвязки, flash/alert,
 # логотип аккаунта, лайтбокс. Включается в SessionsController; общий
-# icon/campfire_icon_src — ViewHelpers.
+# icon/campfire_icon_src — ApplicationHelper.
 module SessionsHelpers
   # head без chat-обвязки + turbo-visit-control reload
   # (layouts/application.html.erb логина).
@@ -30,7 +30,7 @@ module SessionsHelpers
   end
 
   def translation_button(key : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.translation_button(key))
+    ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
   def lightbox_dialog : ERB::SafeString

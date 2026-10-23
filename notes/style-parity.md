@@ -69,3 +69,62 @@
   проверки только создателя.
 - `Rooms::Opens/Closeds#edit/update` на несуществующую комнату: раньше
   head 404 → теперь redirect через set_room (как в оракуле).
+
+## Структурный паритет (missing-файлы), 2026-10-23 — plans/structure-parity.md
+
+Фазы A–F выполнены: helpers переименованы под оракул (accounts_helper,
+application_helper, users/{avatars,profiles,sidebar}_helper …), модели
+разобраны из misc.cr/opengraph.cr по файлам оракула + concerns
+(user/*, message/*, room/message_pusher, membership/connectable,
+account/joinable, push/*), каналы room/read_rooms/typing_notifications +
+RoomStreamsAreAuthorized (reopen: нет `prepend`), джобы
+(ApplicationJob-база + Bot::WebhookJob, Room::{Destroy,PushMessage}Job,
+Message::BroadcastUnreadRoomJob, RemoveBannedContentJob), concerns
+контроллеров (raw_request_body, version_headers, room_scoped,
+authentication/session_lookup, active_storage_authentication,
+allow_browser). Механика concerns: include в конце concern-файла через
+reopen (glob сортирует `user.cr` раньше `user/avatar.cr`; include в
+корневом файле невозможен — модуль ещё не загружен); class-методы —
+через `ActiveSupport::Concern` + `class_methods do … end` +
+`macro included; extend_class_methods!; end`.
+
+Оставшиеся отклонения (не воспроизводится / отложено):
+
+- **`ApplicationJob`** — ActiveJob нет; база задаёт только сигнатуру
+  `self.perform(data)`, диспетчер — `Campfire::JobQueue` (kind-строки).
+- **`RoomStreamsAreAuthorized`** — вместо `prepend` reopened-класс
+  `Turbo::StreamsChannel#subscribed` (app/channels/concerns/).
+- **`Message::Pagination::Page < Array`** — дженерики Crystal не
+  наследуются; методы возвращают `Array(Message)`.
+- **`Push::Subscription`** — `set_table_name "push_subscriptions"`
+  (codegen вывел бы `push/subscriptions`; table_name_prefix нет).
+- **`RecordCache`, `Purchaser`, `Room::MessagesCount`** (колонки/триггеры
+  schemes нет) — потребителей в порте нет, файлы не созданы.
+- **View-слой**: значительная часть HTML оракула собирается
+  compile-time в ChatLayout/ChatERB, а не ERB-файлами: сообщения
+  (`_message/_presentation/_actions/_template/_unrenderable`,
+  `boosts/_boost(s)`, `users/_mention`, `action_text/*`,
+  `active_storage/blobs/_blob`, `layouts/application`, `_lightbox`,
+  `accounts/_invite`, `rooms/show*`, `rooms/layouts/*`) — маппинг
+  «oracle-путь → генератор» в комментариях chat_layout.cr
+  (grep по имени файла). Файлы с ChatERB-локалами остаются с
+  `_`-префиксом (`users/sidebars/_show`, `rooms/involvements/_show`) —
+  implicit-scan action_pack_cr скомпилировал бы их в контексте
+  контроллера без локалов; исключение из скана — только патчем шарда.
+- **Мейлер** (`layouts/mailer.{html,text}`) — почты в порте нет.
+- **Пагинация accounts/users** (`_next_page_container`,
+  `index.turbo_stream`) — список рендерится целиком.
+- **`messages#room_not_found`** — порт отдаёт `render plain: "Room
+  not found"` (404), оракул — turbo-frame «This room was deleted.».
+- **`users#new`** живёт в `JoinsController#show` — см. выше (express).
+- **`set_platform` / `inline_script_hashes` / CSP** — платформа покрыта
+  `ApplicationPlatform`-хелперами; CSP-заголовок не формируется вовсе
+  (нужен отдельный план: initializer + middleware).
+- **`webhook deliver`** (`Webhook#deliver`) живёт в `Bot::WebhookJob`
+  (доставка + реплай), не в модели.
+- **Rails-инфра** (bin/*, puma/resque/brakeman/bundler-audit,
+  config/environments, config/initializers, hooks/, lib/rails_ext,
+  lib/web_push (→ app/jobs/web_push.cr), lib/restricted_http (→
+  Opengraph DNS-pinning), script/admin, script/dev, bench/*) —
+  soft_check в twinshot.yml; эквиваленты: config/application.cr,
+  src/app.cr, tasks/*.rake, bench-workspace/.

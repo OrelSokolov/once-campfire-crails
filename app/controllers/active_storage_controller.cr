@@ -8,6 +8,8 @@
 # Variation шарда (image_processing, vips) с кешем variants/<key>/…;
 # ошибка обработки/чужой тип — отдаётся оригинальный файл.
 class ActiveStorageController < ApplicationController
+  include ActiveStorageAuthentication
+
   # content-types, которые Rails отдаёт как octet-stream/attachment.
   BINARY_TYPES = {
     "text/html", "image/svg+xml", "application/postscript",
@@ -30,7 +32,7 @@ class ActiveStorageController < ApplicationController
 
   private def serve_common(representation : Bool) : Nil
     user = current_user
-    return render(plain: "unauthorized", status: 401) unless user
+    return head(:unauthorized) unless user
 
     blob_record = find_authorized_blob(params["token"].to_s, user)
     return render(plain: "not found", status: 404) unless blob_record

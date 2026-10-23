@@ -42,7 +42,7 @@ class Accounts::LogosController < ApplicationController
   # (attachment + вариантные записи + blob + файлы — оригинал и кешированные
   # варианты variants/<key>/* на диске) и редирект в настройки.
   def destroy
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     user = current_user.not_nil!
     return render(plain: "forbidden", status: 403) unless user.role == 1
     if (attachment = Account.take.try(&.logo_attachment))

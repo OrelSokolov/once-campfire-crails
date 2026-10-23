@@ -8,7 +8,7 @@ class Autocompletable::UsersController < ApplicationController
   # show.json.jbuilder (JSON-ветка) + show.html.erb (HTML-ветка): до 20
   # отфильтрованных юзеров.
   @users : Array(User) = [] of User
-  def show
+  def index
     user = current_user.not_nil!
     filter = (params["filter"]? || params["query"]?).to_s.downcase
 
@@ -29,10 +29,10 @@ class Autocompletable::UsersController < ApplicationController
     # Autocomplete-контроллер шлёт Accept: application/json и парсит
     # JSON (routes.js: req.accepts(["html","json"]) === "json");
     # HTML-ветка (prompt_item.eta) — для серверного рендера
-    # (implicit render → show.html.erb).
+    # (implicit render → index.html.erb).
     accept = request.headers["Accept"]?.to_s
     if accept.includes?("application/json") && !accept.includes?("text/html")
-      return render(template: "autocompletable/users/show")
+      return render(template: "autocompletable/users/index")
     end
   end
 

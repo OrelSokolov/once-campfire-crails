@@ -1,6 +1,6 @@
 # FirstRunsHelpers — ERB-хелперы app/views/first_runs/show.html.erb:
 # обёртка страницы первого запуска. Включается в FirstRunsController;
-# icon/page_close/lanyard_src/default_avatar_src — общие (ViewHelpers).
+# icon/page_close/lanyard_src/default_avatar_src — общие (ApplicationHelper).
 module FirstRunsHelpers
   # head + body.signup + пустой nav + main (без user).
   def page_open : ERB::SafeString

@@ -42,7 +42,7 @@ class Messages::BoostsController < ApplicationController
     content = boost_params["content"]?.to_s
     return head(:unprocessable_content) if content.empty?
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     mid = message.id.not_nil!
     now = Time.utc
     boost = Campfire::WriteQueue.perform do
@@ -77,7 +77,7 @@ class Messages::BoostsController < ApplicationController
     message = @message.not_nil!
     boost = @boost.not_nil!
 
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     mid = message.id.not_nil!
     Campfire::WriteQueue.perform do
       # after_destroy коллбэк belongs_to :message, touch: true трогает

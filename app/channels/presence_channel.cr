@@ -1,41 +1,29 @@
-# PresenceChannel — присутствие в комнате (референс: presence_channel.rb
-# + RoomChannel): подписка через membership, present/absent двигают
-# connections/connected_at, refresh обновляет connected_at (presence_
-# controller.js шлёт его каждые 50с, loadgen — по --refresh-secs).
-class PresenceChannel < ApplicationCable::Channel
+require "./room_channel"
+# PresenceChannel — присутствие в комнате (presence_channel.rb оракула,
+# база RoomChannel): подписка через membership, present/absent двигают
+# connections/connected_at (Membership::Connectable), refresh обновляет
+# connected_at (presence_controller.js шлёт его каждые 50с, loadgen — по
+# --refresh-secs).
+class PresenceChannel < RoomChannel
   def subscribed : Nil
-    if (room_id = subscribable_room_id)
-      stream_from("presence_channel:#{gid_param(room_id)}")
-      mark_present(room_id)
-      broadcast_read_room(room_id)
+    if (@room = find_room)
+      stream_from("presence_channel:#{gid_param(@room.not_nil!.id.not_nil!)}")
+      mark_present(@room.not_nil!.id.not_nil!)
+      broadcast_read_room(@room.not_nil!.id.not_nil!)
     else
       reject
     end
   end
 
   def unsubscribed : Nil
-    if (room_id = subscribable_room_id)
-      mark_absent(room_id)
+    if (room = @room)
+      mark_absent(room.id.not_nil!)
     end
   end
 
   def refresh(data : Hash(String, String)) : Nil
-    if (room_id = subscribable_room_id)
-      conn = ActiveRecord::Base.connection
-      conn.exec(
-        "UPDATE memberships SET connected_at = ? WHERE room_id = ? AND user_id = ?",
-        Time.utc, room_id, current_user_id)
-    end
-  end
-
-  private def subscribable_room_id : Int64?
-    uid = current_user_id
-    return nil unless uid
-    room_id = params["room_id"]?.try(&.to_i64?)
-    return nil unless room_id
-
-    Membership.where("room_id = ? AND user_id = ?", room_id, uid).take.try do |_m|
-      room_id
+    if (room = @room) && (uid = current_user_id)
+      Membership::Connectable.refresh_connection(room.id.not_nil!, uid)
     end
   end
 
@@ -44,30 +32,23 @@ class PresenceChannel < ApplicationCable::Channel
   end
 
   private def mark_present(room_id : Int64) : Nil
-    # Membership#present → connect (Connectable): connections растёт при
-    # живой подписке в TTL (60с), иначе 1; подписка чистит unread_at.
-    conn = ActiveRecord::Base.connection
-    conn.exec(
-      "UPDATE memberships SET connected_at = ?, unread_at = NULL, " \
-      "connections = CASE WHEN connected_at >= ? THEN connections + 1 ELSE 1 END " \
-      "WHERE room_id = ? AND user_id = ?",
-      Time.utc, Time.utc - 60.seconds, room_id, current_user_id)
+    Membership::Connectable.connect(room_id, current_user_id.not_nil!)
     # Чистка unread_at меняет сайдбар/rooms#show, но пишем из своего
     # соединения — PRAGMA data_version пула этого не видит (инвалидация
-    # только на чужие коммиты), поэтому сбрасываем PageCache явно.
-    PageCache.invalidate!
+    # только на чужие коммиты), поэтому сбрасываем ResponseCache явно.
+    Campfire::ResponseCache.invalidate!
   end
 
   private def mark_absent(room_id : Int64) : Nil
-    conn = ActiveRecord::Base.connection
-    conn.exec(
-      "UPDATE memberships SET connections = MAX(connections - 1, 0) WHERE room_id = ? AND user_id = ?",
-      room_id, current_user_id)
+    if (uid = current_user_id)
+      Membership::Connectable.disconnect(room_id, uid)
+    end
   end
 
   private def broadcast_read_room(room_id : Int64) : Nil
     if (uid = current_user_id)
-      ActionCable.server.broadcast("user_#{uid}_reads", {"room_id" => room_id})
+      ActionCable.server.broadcast("user_#{uid}_reads",
+        {"room_id" => room_id, "at" => Time.utc.to_unix_f})
     end
   end
 end

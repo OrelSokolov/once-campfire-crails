@@ -5,7 +5,7 @@
 # Разметка — app/views/users/profiles/show.html.erb (implicit render),
 # контроллер готовит данные.
 class Users::ProfilesController < ApplicationController
-  include ProfilesHelpers
+  include Users::ProfilesHelper
 
   # show.html.erb: user, пары комната-membership для списка участия
   # (shared по LOWER(name), direct по id — с порядком референса:
@@ -41,7 +41,7 @@ class Users::ProfilesController < ApplicationController
   end
 
   def update
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     user = current_user.not_nil!
     user.name = nested("name") unless nested?("name").nil?
     user.email_address = nested("email_address") unless nested?("email_address").nil?

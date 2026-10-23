@@ -1,4 +1,5 @@
-class Room < ActiveRecord::Base
+require "./application_record"
+class Room < ApplicationRecord
   has_many :memberships, foreign_key: "room_id"
   has_many :messages, foreign_key: "room_id"
   belongs_to :creator, class_name: "User"
@@ -46,5 +47,28 @@ class Room < ActiveRecord::Base
 
   def self.visible_for(user : User)
     visible(user)
+  end
+
+  # room.rb#destroy_later: комнату у участников отбирает сразу (open
+  # предварительно закрывается, чтобы никто не «вошёл» до джобы), а
+  # сообщения оставляет Room::DestroyJob — удаление их в транзакции
+  # запроса держало бы write-lock базы до последнего сообщения.
+  def destroy_later : Nil
+    Campfire::ResponseCache.invalidate!
+    rid = id.not_nil!
+    now = Time.utc
+    former_member_ids = Campfire::WriteQueue.perform do
+      ActiveRecord::Base.transaction do
+        conn = ActiveRecord::Base.__session
+        conn.exec("UPDATE rooms SET type = 'Closed', updated_at = ? WHERE id = ?", now, rid)
+        ids = conn.query_all(
+          "SELECT user_id FROM memberships WHERE room_id = ?", rid) do |rs|
+          rs.read(Int64)
+        end
+        conn.exec("DELETE FROM memberships WHERE room_id = ?", rid)
+        ids
+      end
+    end || [] of Int64
+    Campfire::JobQueue.enqueue_batch([{"room_destroy", %({"room_id":#{rid},"former_member_ids":[#{former_member_ids.join(",")}]})}])
   end
 end

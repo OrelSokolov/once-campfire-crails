@@ -21,7 +21,7 @@ class Accounts::BotsController < ApplicationController
   # POST /account/bots — create: role=2, bot_token = hex(6 байт)
   # (routes.js: randomBytes(6).toString("hex")).
   def create
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     name = nested("name")
     if name.empty?
       response.status = :unprocessable_entity
@@ -83,7 +83,7 @@ class Accounts::BotsController < ApplicationController
 
   # PATCH /account/bots/:id — rename.
   def update
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     bot = User.where("id = ? AND role = 2 AND status = 0",
       params["id"].to_s.to_i64).take
     return head(:not_found) unless bot
@@ -97,7 +97,7 @@ class Accounts::BotsController < ApplicationController
 
   # DELETE /account/bots/:id — удаление бота (bot_form.eta delete-панель).
   def destroy
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     bot = User.where("id = ? AND role = 2", params["id"].to_s.to_i64).take
     return head(:not_found) unless bot
     ActiveRecord::Base.connection.exec(

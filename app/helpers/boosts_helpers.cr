@@ -1,6 +1,6 @@
 # BoostsHelpers — ERB-хелперы app/views/messages/boosts/*.html.erb
 # (index/new). Включается в Messages::BoostsController; общий icon —
-# ViewHelpers.
+# ApplicationHelper.
 module BoostsHelpers
   # index.html.erb: boosts partial. Файл шаблона — без завершающего
   # перевода строки после <%= boosts_dom %> (byte-parity с референсом:

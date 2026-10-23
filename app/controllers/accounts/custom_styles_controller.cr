@@ -18,7 +18,7 @@ class Accounts::CustomStylesController < ApplicationController
   end
 
   def update
-    Campfire::PageCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
     account = Account.take.not_nil!
     if styles = account_params["custom_styles"]?
       account.custom_styles = styles.to_s

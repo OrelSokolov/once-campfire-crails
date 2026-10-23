@@ -1,5 +1,5 @@
 abstract class ApplicationController < ActionController::Base
-  include ViewHelpers
+  include ApplicationHelper
 
   include Authentication
   include Authorization
@@ -7,6 +7,8 @@ abstract class ApplicationController < ActionController::Base
   include TrackedRoomVisit
   include CachedResponses
   include BlockBannedRequests
+  include VersionHeaders
+  include AllowBrowser
 
   # turbo-rails engine.rb подключает Turbo::Streams::Broadcasts в
   # ActionController::Base — контроллеры зовут broadcast_*_to напрямую
@@ -14,6 +16,8 @@ abstract class ApplicationController < ActionController::Base
   include Turbo::Streams::Broadcasts
 
   before_action :set_current_request
+  before_action :set_version_headers
+  before_action :verify_supported_browser
   before_action :reject_banned_ip
   before_action :require_authentication
 

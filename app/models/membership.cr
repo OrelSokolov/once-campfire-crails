@@ -1,6 +1,7 @@
+require "./application_record"
 require "turbo_cr"
 
-class Membership < ActiveRecord::Base
+class Membership < ApplicationRecord
   # broadcast_*_to instance-методы (turbo-rails Broadcastable): directs
   # #create зовёт membership.broadcast_prepend_to ... partial: (local
   # membership Broadcastable подставляет сам).

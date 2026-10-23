@@ -1,9 +1,9 @@
 # GET /users/me/sidebar — сайдбар со списком комнат. Тонкий контроллер
 # (sidebars_controller.rb референса): данные — scope'ы Membership/User,
-# разметка — SidebarsHelpers + ChatERB (users/sidebars/_show.html.erb),
+# разметка — Users::SidebarHelper + ChatERB (users/sidebars/_show.html.erb),
 # whole-page кэш — PageCache (around_action :cache_read_response).
 class Users::SidebarsController < ApplicationController
-  include SidebarsHelpers
+  include Users::SidebarHelper
 
   DIRECT_PLACEHOLDERS = 20
 
