@@ -27,10 +27,12 @@ module HtmlSanitizer
   # rails-html-sanitizer DEFAULT_ALLOWED_ATTRIBUTES + ActionText::
   # Attachment::ATTRIBUTES + ContentFilters::EDITOR_FORMATTING_ATTRIBUTES
   # (data-language) + class (ContentFilters::SanitizeAttributes).
+  # target — из дефолт-списка Rails: якоря mention/og-embed сохраняют
+  # target="_top"/"_blank" после финального sanitize оракула.
   ALLOWED_ATTRIBUTES = %w(
     abbr alt cite class datetime height href lang name src title width xml:lang
     sgid content-type url filename filesize previewable presentation caption content
-    data-language
+    data-language target
   )
 
   # Атрибуты-ссылки: схема допускается только http/https/mailto либо
@@ -42,20 +44,25 @@ module HtmlSanitizer
 
   # Один проход по строке: теги разрешены → verbatim/пересборка,
   # запрещены → удаление с содержимым, комментарии/doctype → удаление.
+  # ВНИМАНИЕ: вся индексация здесь БАЙТОВАЯ (byte_index/byte_slice) —
+  # String#index, String#[] и MatchData#begin/#end на этом Crystal
+  # посимвольные; их смешение с байтовыми смещениями ломает
+  # мультибайтный контент, поэтому длины/позиции регекс-совпадений
+  # считаем через match[0].bytesize, а не match.end.
   def self.sanitize(html : String) : String
     outp = IO::Memory.new
     size = html.bytesize
     i = 0
-    while (lt = html.index('<', i))
-      outp << html[i...lt]
+    while (lt = html.byte_index('<', i))
+      outp << html.byte_slice(i, lt - i)
       rest = html.byte_slice(lt, size - lt)
       end_pos = size
       case
       when rest.starts_with?("<!--")
-        close = html.index("-->", lt + 4)
+        close = html.byte_index("-->", lt + 4)
         end_pos = close ? close + 3 : size
       when rest.starts_with?("<!") || rest.starts_with?("<?")
-        close = html.index('>', lt + 2)
+        close = html.byte_index('>', lt + 2)
         end_pos = close ? close + 1 : size
       when rest.starts_with?("</")
         end_pos = closing_tag_end(html, rest, lt, outp)
@@ -65,7 +72,7 @@ module HtmlSanitizer
       i = end_pos
       i = lt + 1 if i <= lt # защита от зацикливания на мусорном «<»
     end
-    outp << html[i..] if i < size
+    outp << html.byte_slice(i, size - i) if i < size
     outp.to_s
   end
 
@@ -76,8 +83,9 @@ module HtmlSanitizer
       outp << "<" # «</» без имени — текст
       return lt + 1
     end
-    outp << html[lt...(lt + match.end.not_nil!)] if ALLOWED_TAGS.includes?(match[1].not_nil!.downcase)
-    lt + match.end.not_nil!
+    len = match[0].bytesize # match.end посимвольный — длину берём байтами
+    outp << html.byte_slice(lt, len) if ALLOWED_TAGS.includes?(match[1].not_nil!.downcase)
+    lt + len
   end
 
   # <name attr…>: запрещённый элемент удаляется вместе с содержимым до
@@ -91,14 +99,14 @@ module HtmlSanitizer
     end
     name = match[1].not_nil!.downcase
     self_closing = !match[3]?.to_s.empty?
-    consumed = lt + match.end.not_nil!
+    consumed = lt + match[0].bytesize # совпадение заякорено на \A от rest
     unless ALLOWED_TAGS.includes?(name)
       return self_closing ? consumed : skip_element(html, name, consumed)
     end
 
     attrs = parse_attributes(match[2].to_s)
     if attrs.all?(&.ok)
-      outp << html[lt...consumed]
+      outp << html.byte_slice(lt, consumed - lt)
     else
       outp << '<' << match[1].not_nil!
       attrs.each { |a| outp << ' ' << a.raw if a.ok }
@@ -130,10 +138,11 @@ module HtmlSanitizer
     regex = /<(\/?)#{Regex.escape(name)}(?:\s[^>]*)?(\/?)>/i
     match = regex.match(html, pos)
     return nil unless match
+    byte_begin = html.char_index_to_byte_index(match.begin.not_nil!).not_nil!
     {
       closing:      !match[1]?.to_s.empty?,
       self_closing: !match[2]?.to_s.empty?,
-      end:          match.end.not_nil!,
+      end:          byte_begin + match[0].not_nil!.bytesize,
     }
   end
 
@@ -151,10 +160,17 @@ module HtmlSanitizer
         cursor += 1
       end
       break if cursor >= size
-      name_match = src.byte_slice(cursor, {size - cursor, 64}.min).match(/\A#{ATTR_NAME}/)
+      # Окно может разрезать многобайтовый символ в значении атрибута —
+      # PCRE2 падает на невалидном UTF-8. Подрезаем до валидной границы
+      # (ATTR_NAME — ASCII, отрезанный хвост для имени не нужен).
+      window = src.byte_slice(cursor, {size - cursor, 64}.min)
+      until window.empty? || window.valid_encoding?
+        window = window.byte_slice(0, window.bytesize - 1)
+      end
+      name_match = window.match(/\A#{ATTR_NAME}/)
       break unless name_match && name_match.end.not_nil! > 0
       name = name_match[0]
-      attr_end = cursor + name_match.end.not_nil!
+      attr_end = cursor + name.bytesize
       value : String? = nil
       probe = attr_end
       while probe < size && src.byte_at(probe).chr.whitespace?
@@ -166,18 +182,18 @@ module HtmlSanitizer
           probe += 1
         end
         if probe < size && (q = src.byte_at(probe).chr) && (q == '"' || q == '\'')
-          close = src.index(q, probe + 1) || size
-          value = src[(probe + 1)...close]
+          close = src.byte_index(q, probe + 1) || size
+          value = src.byte_slice(probe + 1, close - probe - 1)
           attr_end = {close + 1, size}.min
         else
           vm = src.byte_slice(probe, size - probe).match(/\A[^\s>]*/)
           value = vm.try(&.[0]).to_s
-          attr_end = {probe + vm.try(&.end).not_nil!, size}.min
+          attr_end = {probe + value.bytesize, size}.min
         end
       end
       ok = ALLOWED_ATTRIBUTES.includes?(name.downcase) &&
            (!URI_ATTRIBUTES.includes?(name.downcase) || value.nil? || safe_uri?(value))
-      attrs << Attr.new(src[cursor...attr_end], ok)
+      attrs << Attr.new(src.byte_slice(cursor, attr_end - cursor), ok)
       cursor = attr_end
     end
     attrs
@@ -199,9 +215,9 @@ module HtmlSanitizer
     outp = String::Builder.new
     pos = 0
     while (match = ENTITY.match(value, pos))
-      match_begin = match.begin.not_nil!
-      match_end = match.end.not_nil!
-      outp << value[pos...match_begin]
+      match_begin = value.char_index_to_byte_index(match.begin.not_nil!).not_nil!
+      match_end = match_begin + match[0].not_nil!.bytesize
+      outp << value.byte_slice(pos, match_begin - pos)
       token = match[1].not_nil!
       codepoint = token.starts_with?('x') ? token[1..].to_i?(16) : token.to_i?
       if codepoint && codepoint > 0 && codepoint < 0xD800
@@ -211,7 +227,7 @@ module HtmlSanitizer
       end
       pos = match_end
     end
-    outp << value[pos..] if pos < value.bytesize
+    outp << value.byte_slice(pos, value.bytesize - pos) if pos < value.bytesize
     outp.to_s
   end
 end

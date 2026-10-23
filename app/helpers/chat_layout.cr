@@ -537,10 +537,13 @@ module ChatLayout
     outp = IO::Memory.new
     body = remove_solo_unfurled_link_text(body)
     cursor = 0
-    while (start = body.index("<action-text-attachment", cursor))
+    # индексация байтовая: parse_tag ходит по to_unsafe, byte_slice —
+    # String#index/[] посимвольные, с байтовым курсором они ломаются
+    # на мультибайтном контенте до вложения
+    while (start = body.byte_index("<action-text-attachment", cursor))
       attrs, tag_end = parse_tag(body, start)
-      outp << body[cursor...start]
-      if (close = body.index("</action-text-attachment>", tag_end))
+      outp << body.byte_slice(cursor, start - cursor)
+      if (close = body.byte_index("</action-text-attachment>", tag_end))
         content = attrs["content"]?
         content_type = attrs["content-type"]?
         sgid = attrs["sgid"]?
@@ -553,11 +556,11 @@ module ChatLayout
         end
         cursor = close + "</action-text-attachment>".size
       else
-        outp << body[start...tag_end]
+        outp << body.byte_slice(start, tag_end - start)
         cursor = tag_end
       end
     end
-    outp << body[cursor..]
+    outp << body.byte_slice(cursor, body.bytesize - cursor)
     outp.to_s
   end
 
@@ -694,9 +697,9 @@ module ChatLayout
   private def self.remove_solo_unfurled_link_text(body : String) : String
     spans = [] of {Int32, Int32}
     cursor = 0
-    while (start = body.index("<action-text-attachment", cursor))
+    while (start = body.byte_index("<action-text-attachment", cursor))
       attrs, tag_end = parse_tag(body, start)
-      close = body.index("</action-text-attachment>", tag_end) || break
+      close = body.byte_index("</action-text-attachment>", tag_end) || break
       if attrs["content-type"]?.to_s.includes?("application/vnd.actiontext.opengraph-embed")
         spans << {start, close + "</action-text-attachment>".size}
       end
@@ -709,17 +712,21 @@ module ChatLayout
     data = og_attributes(attrs, attrs["content"]?)
     return body unless (href = data[:href])
 
-    plain = body[0...s] + body[e..]
+    plain = body.byte_slice(0, s) + body.byte_slice(e, body.bytesize - e)
     plain = plain.gsub(/<[^>]*>/, " ").gsub("&nbsp;", " ").gsub(/\s+/, " ").strip
     return body unless normalize_tweet_url(plain) == normalize_tweet_url(href)
 
     if body.includes?("<div")
-      return body unless (div_start = body.rindex("<div", s))
-      content_start = body.index(">", div_start).try(&. + 1) || return body
-      div_end = body.index("</div>", e) || return body
-      body[0...content_start] +
-        body[s...e] +
-        "</div>" + body[(div_end + "</div>".size)..]
+      # rindex посимвольный: ищем в байтовом префиксе и конвертируем
+      # индекс (до вложения мультибайта обычно нет, но корректно всегда)
+      prefix = body.byte_slice(0, s)
+      div_start = prefix.rindex("<div").try { |ci| prefix.char_index_to_byte_index(ci) }
+      return body unless div_start
+      content_start = body.byte_index(">", div_start).try(&. + 1) || return body
+      div_end = body.byte_index("</div>", e) || return body
+      body.byte_slice(0, content_start) +
+        body.byte_slice(s, e - s) +
+        "</div>" + body.byte_slice(div_end + "</div>".size, body.bytesize - div_end - "</div>".size)
     else
       body.gsub(/<p\b[^>]*>(.*?)<\/p>/m) do
         $~[1].includes?("<action-text-attachment") ? $~[0] : ""
@@ -752,51 +759,31 @@ module ChatLayout
     end
   end
 
-  # sgid → User: конверт _rails. attachable-sgid бывает в двух формах
-  # (AS MessageVerifier): новая — {"data": <gid|b64>}, legacy (сид) —
-  # {"message": <strict_b64 полезной нагрузки>} с exp/pur рядом.
-  # СНАЧАЛА проверяется подпись (тот же verifier, что в attachable_sgid,
-  # Rails to_signed_gid): неподписанный/перековерканный sgid → nil —
-  # иначе можно было бы рендерить mention-чипы и слать push-уведомления
-  # произвольным юзерам, подделав конверт.
+  # sgid → User — порт lib/rails_ext/action_text_attachables.rb
+  # (attachable_from_possibly_expired_sgid): подпись НЕ проверяется —
+  # ротация SECRET_KEY_BASE не должна ломать существующие упоминания
+  # User (допустим ТОЛЬКО User, ATTACHABLES_PERMITTED_WITH_INVALID_
+  # SIGNATURES). Конверт бывает двух форм (AS MessageVerifier): новая —
+  # {"data": <gid|b64>}, legacy (сид, Rails 7 Marshal) — {"message":
+  # strict_b64(Marshal-обёртки)}; gid в marshal-байтах вынимается
+  # напрямую (gid://campfire/<model>/<id>, без query), полный парсер
+  # Marshal не нужен.
   def self.mention_user(sgid : String) : User?
-    return nil unless sgid_signature_valid?(sgid)
-    sep = sgid.rindex("--") || return nil
-    json = decode_base64_lenient(sgid[0...sep]) || return nil
-    envelope = JSON.parse(json)
+    message = sgid.split("--").first?
+    return nil unless message
+    encoded = decode_base64_lenient(message) || return nil
+    envelope = JSON.parse(encoded)
     rails = envelope["_rails"]?
     data = rails.try &.["data"]?
-    if !data && (message = rails.try &.["message"]?)
-      # legacy: message = strict_b64(json-значение) — сам gid в кавычках
-      # ИЛИ strict_b64(Marshal.dump(gid)) — Marshal-обёртка (\x04\bI"…)
-      # вокруг ASCII-gid; полный парсер Marshal не нужен, вынимаем gid
-      # из байтов напрямую (сид Verification генерирует именно Marshal).
-      inner = decode_base64_lenient(message.to_s)
-      data = inner.try &.gsub(/\A"|"$/, "")
-      if data && !data.starts_with?("gid:") && (gid = data[/gid:\/\/[\w:\/.+?=&;-]+/]?)
-        data = gid
-      end
+    if data.nil? && (msg = rails.try &.["message"]?)
+      inner = decode_base64_lenient(msg.to_s)
+      data = inner.try &.[/gid:\/\/campfire\/[^\/]+\/\d+/]?
     end
     return nil unless data
-    gid = data.to_s
-    gid = decode_base64_lenient(gid) || return nil unless gid.starts_with?("gid:")
-    id = gid[/\/User\/(\d+)/, 1]?.try(&.to_i64?)
+    id = data.to_s[/\/User\/(\d+)/, 1]?.try(&.to_i64?)
     id.try { |i| User.find?(i) }
-  end
-
-  # Подпись sgid: verifier "signed_global_ids" с purpose "attachable"
-  # (тот же, что генерирует attachable_sgid; Rails Signed::GlobalID
-  # верифицирует ровно так же).
-  private def self.sgid_signature_valid?(sgid : String) : Bool
-    secret = ENV["SECRET_KEY_BASE"]? ||
-             raise RuntimeError.new("SECRET_KEY_BASE is not configured")
-    key = ActiveSupport::CachingKeyGenerator.new(
-      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha1))
-      .generate_key("signed_global_ids")
-    verifier = ActiveSupport::MessageVerifier.new(key, url_safe: true, digest: :sha1)
-    !verifier.verified_any(sgid, purpose: "attachable").nil?
-  rescue ex
-    false
+  rescue JSON::ParseException | Base64::Error | ArgumentError
+    nil
   end
 
   private def self.decode_base64_lenient(text : String) : String?
@@ -828,12 +815,15 @@ module ChatLayout
     outp = IO::Memory.new
     cursor = 0
     while match = AUTO_LINK_RE.match_at_byte_index(text, cursor)
-      m_begin = match.begin.not_nil!
-      m_end = match.end.not_nil!
-      href = match[0]
-      left = text[0...m_begin]
-      right = text[m_end..]
-      outp << text[cursor...m_begin]
+      # MatchData#begin/#end на этом Crystal посимвольные — переводим в
+      # байтовые смещения (курсор match_at_byte_index байтовый)
+      m_begin = text.char_index_to_byte_index(match.begin.not_nil!).not_nil!
+      href = match[0].not_nil!
+      m_end = m_begin + href.bytesize
+      # m_begin/m_end/cursor — байтовые; срезы тоже байтовые
+      left = text.byte_slice(0, m_begin)
+      right = text.byte_slice(m_end, text.bytesize - m_end)
+      outp << text.byte_slice(cursor, m_begin - cursor)
       if auto_linked?(left, right)
         outp << href
       else
@@ -861,17 +851,19 @@ module ChatLayout
       end
       cursor = m_end
     end
-    outp << text[cursor..]
+    outp << text.byte_slice(cursor, text.bytesize - cursor)
     outp.to_s
   end
 
   private def self.auto_link_emails(text : String) : String
     text.gsub(AUTO_EMAIL_RE) do
       m = $~
-      left = text[0...m.begin.not_nil!]
-      right = text[m.end.not_nil!..]
+      m_begin = text.char_index_to_byte_index(m.begin.not_nil!).not_nil!
+      email = m[0].not_nil!
+      m_end = m_begin + email.bytesize
+      left = text.byte_slice(0, m_begin)
+      right = text.byte_slice(m_end, text.bytesize - m_end)
       next m[0] if auto_linked?(left, right)
-      email = m[0]
       %(<a target="_blank" href="mailto:) + escape_once(email) + %(">) +
         escape_once(email) + %(</a>)
     end
