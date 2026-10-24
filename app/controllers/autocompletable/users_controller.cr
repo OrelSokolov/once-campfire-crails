@@ -1,19 +1,14 @@
-# GET /autocompletable/users?filter=&room_id= — подсказки автокомплита
-# (референс: routes.js registerUsers + prompt_item.eta): HTML-фрагмент
-# lexxy-prompt-item на каждого пользователя (до 20, filter по имени).
-# Вывод show.html.erb содержит отступы (перенесён с ними, бейзлайны
-# parity их фиксируют) — отключаем dedent implicit-рендера.
+# Keep the template's original indentation: parity baselines fix it.
 @[ActionController::NoTemplateDedent]
 class Autocompletable::UsersController < ApplicationController
-  # show.json.jbuilder (JSON-ветка) + show.html.erb (HTML-ветка): до 20
-  # отфильтрованных юзеров.
   @users : Array(User) = [] of User
   def index
     user = current_user.not_nil!
+    # The rich text editor's mentions prompt filters with `filter`, the
+    # autocomplete inputs with `query`
     filter = (params["filter"]? || params["query"]?).to_s.downcase
 
     scope = if room_id = params["room_id"]?.try(&.to_s.to_i64?)
-              # Участники комнаты, доступной текущему пользователю
               User.where(
                 %(id IN (SELECT m.user_id FROM memberships m
                  JOIN memberships me ON me.room_id = m.room_id
@@ -26,17 +21,13 @@ class Autocompletable::UsersController < ApplicationController
       .select { |u| u.name.to_s.downcase.includes?(filter) }
       .first(20)
 
-    # Autocomplete-контроллер шлёт Accept: application/json и парсит
-    # JSON (routes.js: req.accepts(["html","json"]) === "json");
-    # HTML-ветка (prompt_item.eta) — для серверного рендера
-    # (implicit render → index.html.erb).
+    # <lexxy-prompt-item> elements for the mentions prompt
     accept = request.headers["Accept"]?.to_s
     if accept.includes?("application/json") && !accept.includes?("text/html")
       return render(template: "autocompletable/users/index")
     end
   end
 
-  # Rails SignedGlobalID (rails.js sgid) — общий генератор в ChatLayout.
   private def generate_sgid(user_id : Int64) : String
     ChatLayout.attachable_sgid(user_id)
   end

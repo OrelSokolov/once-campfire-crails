@@ -1,6 +1,7 @@
-# UnreadRoomsChannel — непрочитанные комнаты текущего пользователя
-# (референс: unread_rooms_channel.rb): стрим per-user.
 class UnreadRoomsChannel < ApplicationCable::Channel
+  # Scoped per user, like ReadRoomsChannel. A single global stream would tell every
+  # authenticated connection when any room on the account is active, including closed
+  # rooms and direct conversations they're not part of.
   def self.stream_name_for(user_id : String) : String
     "user_#{user_id}_unreads"
   end

@@ -1,8 +1,3 @@
-# GET / — корень: redirect в последнюю посещённую комнату (cookie
-# last_room, если пользователь её видит), иначе — первая original-комната
-# (семантика welcome#show + TrackedRoomVisit из Rails-референса).
-# Если видимых комнат нет — welcome/show.html.erb: пустой message-area
-# с иконкой и именем юзера для screen-reader (hi, Lonely Lou).
 class WelcomeController < ApplicationController
   include WelcomeHelpers
 
@@ -24,8 +19,8 @@ class WelcomeController < ApplicationController
     end
   end
 
-  # Current.user.rooms.original — первая original-комната; как fallback
-  # берём первую видимую по id.
+  # The reference's Current.user.rooms.original — the first original room; we fall
+  # back to the first visible room by id.
   private def default_room(user : User) : Room?
     Room.visible_for(user).order("id").first?
   end

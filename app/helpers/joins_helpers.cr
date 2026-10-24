@@ -1,9 +1,5 @@
-# JoinsHelpers — ERB-хелперы app/views/joins/show.html.erb:
-# head+nav формы регистрации по invite-ссылке.
-# Включается в JoinsController; общий icon/page_close и
-# lanyard_src/app_logo_src/default_avatar_src — ApplicationHelper.
+# ERB helpers for app/views/joins/show.html.erb, included in JoinsController.
 module JoinsHelpers
-  # head + body.signup + nav (Sign in на /session/new) + main.
   def page_open : ERB::SafeString
     account = self.account.not_nil!
     nav = %(<div class="flex-item-justify-end"><a href="#{new_session_path}" class="btn flex-item-justify-end">) +

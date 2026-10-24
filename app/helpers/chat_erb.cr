@@ -1,15 +1,14 @@
-# ChatERB — ERB-контекст HTML-шаблонов app/views/** (порт
-# once-campfire/app/views + templates/eta express-реализации как эталон
-# переносов). Разметка живёт в шаблонах и компилируется на этапе сборки
-# (compile_template, как jbuilder-партиалы); хелперы делегируют в ChatLayout.
+# ChatERB: ERB rendering context for the app/views/** HTML templates
+# (markup lives in templates compiled at build time via compile_template,
+# like the jbuilder partials); helpers delegate to ChatLayout.
 class ChatERB
   include ERB::Rendering
-  # Шаблоны sidebar/composer/_direct рендерятся и в контексте
-  # контроллера, и здесь — именованные *_path-хелперы (routes.url_for)
-  # должны работать в обоих; route_set назначается railties при буте.
+  # The sidebar/composer/_direct templates render both in controller
+  # context and here, so the named *_path helpers must work in both;
+  # route_set is assigned by railties at boot.
   include CRails::Routes::UrlHelpers
-  # turbo_frame_tag в rooms/involvements/** (bell, show) — блочная
-  # capture-форма шарда turbo_cr.
+  # Block capture form of turbo_frame_tag (turbo_cr shard) for
+  # rooms/involvements/** (bell, show).
   include Turbo::FramesHelper
 
   def initialize(@room : Room? = nil, @footer : String = "", @sidebar : String = "",
@@ -27,16 +26,15 @@ class ChatERB
     @room.not_nil!
   end
 
-  # layouts/_body_close.html.erb (SafeString: HTML без повторного
-  # экранирования в <%= %>)
+  # layouts/_body_close.html.erb (SafeString: raw HTML for <%= %>)
   def footer : ERB::SafeString
     ERB::SafeString.new(@footer)
   end
 
-  # layouts/_body_close.html.erb — строка content_for :sidebar референса
-  # (SafeString: HTML без повторного экранирования в <%= %>).
-  # Имя НЕ `sidebar`: compile_template "sidebar" ниже определяет метод
-  # рендера сайдбар-шаблона и перекрыл бы этот аксессор.
+  # layouts/_body_close.html.erb — the oracle's content_for :sidebar string
+  # (SafeString). Named sidebar_html, not sidebar: compile_template
+  # "sidebar" below defines the sidebar template render method and would
+  # shadow this accessor.
   def sidebar_html : ERB::SafeString
     ERB::SafeString.new(@sidebar)
   end
@@ -46,25 +44,25 @@ class ChatERB
     ChatLayout.asset(name)
   end
 
-  # Lightbox-диалог layout'а (layouts/_lightbox).
+  # Layout lightbox dialog (layouts/_lightbox).
   def lightbox : ERB::SafeString
     ERB::SafeString.new(ChatLayout.lightbox_dialog)
   end
 
-  # ————— rooms/involvements (bell + pwa-диалоги + show) —————
+  # ————— rooms/involvements (bell + pwa dialogs + show) —————
 
-  # useragent-классификация для pwa-инструкций (ApplicationPlatform).
+  # User-agent classification for the pwa instructions (ApplicationPlatform).
   def platform : ApplicationPlatform
     ApplicationPlatform.new(@ua)
   end
 
-  # root_url референса (инструкции печатают абсолютный origin).
+  # Oracle root_url (the instructions print an absolute origin).
   def root_url : String
     @origin.empty? ? "/" : "#{@origin}/"
   end
 
-  # rich_text_area (ActionText): абсолютные route-URL —
-  # rails_direct_uploads_url и blob-redirect-шаблон.
+  # rich_text_area (ActionText): absolute route URLs — rails_direct_uploads_url
+  # and the blob-redirect template.
   def direct_uploads_url : String
     @origin.empty? ? "/rails/active_storage/direct_uploads" : "#{@origin}/rails/active_storage/direct_uploads"
   end
@@ -78,8 +76,8 @@ class ChatERB
     @involvement
   end
 
-  # direct: everything→nothing; остальные: mentions→everything→nothing→
-  # invisible (RoomsHelper#next_involvement_for).
+  # direct: everything -> nothing; others: mentions -> everything ->
+  # nothing -> invisible (RoomsHelper#next_involvement_for).
   def next_involvement : String
     choices = room.direct? ? %w[everything nothing] : %w[mentions everything nothing invisible]
     idx = choices.index(involvement) || -1
@@ -90,20 +88,20 @@ class ChatERB
     ChatLayout::INVOLVEMENT_LABELS[involvement]? || involvement
   end
 
-  # Ping для direct-комнат, иначе room (bell SR-текст).
+  # "Ping" for direct rooms, "room" otherwise (bell SR text).
   def noun : String
     room.direct? ? "Ping" : "room"
   end
 
-  # dom_id референса: STI route_key (Rooms::Open → rooms_open). type бывает
-  # полным ('Rooms::Open', сид) и коротким ('Open', создание портом) —
-  # нормализуем: последний сегмент, downcase.
+  # Oracle dom_id: STI route_key (Rooms::Open -> rooms_open). type can be
+  # full ('Rooms::Open', seed) or short ('Open', created via the port) —
+  # normalized to the last segment, downcased.
   def dom_id(prefix : String) : String
     sti = room.type.to_s.split("::").last?.to_s.downcase
     "#{prefix}_rooms_#{sti}_#{room.id}"
   end
 
-  # ————— users/sidebars/show (сайдбар) —————
+  # ————— users/sidebars/show (sidebar) —————
 
   class SidebarDirect
     attr_accessor room_id : Int64, epoch_ms : Int64, unread : Bool, members : Array(User)
@@ -143,14 +141,13 @@ class ChatERB
     @user_rooms_stream
   end
 
-  # fresh_user_avatar_path (UsersHelper) для аватаров сайдбара.
+  # fresh_user_avatar_path (UsersHelper) for the sidebar avatars.
   def avatar_path(u : User) : String
     ChatLayout.fresh_user_avatar_path(u.id.not_nil!, u.updated_at)
   end
 
-  # Подпись direct-комнаты: одному участнику — первое слово имени,
-  # нескольким — инициалы (3 первых слова по букве) через to_sentence
-  # (two_words_connector: '+').
+  # Direct room label: one member — the first word of the name; several —
+  # initials (first letter of up to 3 words each) joined to_sentence-style.
   def direct_label(d : SidebarDirect) : String
     direct_label(d.members)
   end
@@ -170,10 +167,9 @@ class ChatERB
   end
 
   # ————— users/sidebars/rooms/_direct (turbo-stream prepend create) —————
-  # Партиал рендерится из broadcast (directs#create), не из шаблона
-  # сайдбара (тот держит batch-запрос участников), поэтому данные
-  # считаются по membership — как в референсе (room.users.without(
-  # membership.user).presence || [membership.user]).
+  # The partial is rendered from a broadcast (directs#create), not from
+  # the sidebar template (which batch-loads members), so member data is
+  # computed from the membership, as in the oracle.
 
   # room.users.without(membership.user).presence || [membership.user]
   def direct_members(membership : Membership) : Array(User)
@@ -184,20 +180,19 @@ class ChatERB
     members.empty? ? [membership.user.not_nil!] : members
   end
 
-  # Membership#unread? референса: unread_at.present?
+  # Oracle Membership#unread?: unread_at.present?
   def unread?(membership : Membership) : Bool
     !membership.unread_at.nil?
   end
 
-  # data-sorted-list-number сайдбара: epoch updated_at комнаты в мс.
+  # Sidebar data-sorted-list-number: room updated_at epoch in ms.
   def epoch_ms(room : Room) : Int64
     t = room.updated_at.as(Time)
     (t.to_unix * 1000) + (t.nanosecond // 1_000_000)
   end
 
-  # dom_id(room, :list) референса: STI route_key (Rooms::Open →
-  # rooms_open). type бывает полным ('Rooms::Open', сид) и коротким
-  # ('Open', создание портом) — нормализуем к rooms_<sti>.
+  # Oracle dom_id(room, :list): STI route_key (Rooms::Open -> rooms_open),
+  # normalized to rooms_<sti> for both full and short type values.
   def route_key(room : Room) : String
     "rooms_#{room.type.to_s.split("::").last?.to_s.downcase}"
   end
@@ -207,10 +202,11 @@ class ChatERB
     user.role == 1 || !Account.take.try(&.restrict_room_creation_to_administrators?)
   end
 
-  # _show.html.erb (не show.html.erb): файл компилируется только здесь,
-  # в контексте ChatERB с локалами; имя без подчёркивания попало бы и в
-  # implicit-scan экшена Users::SidebarsController#show, где локалов нет
-  # (контроллер рендерит сайдбар сам, через этот шаблон и PageCache).
+  # _show.html.erb (not show.html.erb): compiled only here in the ChatERB
+  # context with locals; the unprefixed name would also be picked up by
+  # the implicit template scan of Users::SidebarsController#show, which
+  # has no locals (the controller renders the sidebar itself via this
+  # template and PageCache).
   compile_template "sidebar", "app/views/users/sidebars/_show.html.erb", dedent: true
 
   compile_template "composer", "app/views/rooms/show/_composer.html.erb"
@@ -219,9 +215,9 @@ class ChatERB
   compile_template "involvement_show", "app/views/rooms/involvements/_show.html.erb", dedent: true
   compile_template "incompatible_browser", "app/views/sessions/incompatible_browser.html.erb"
 
-  # Вложенные партиалы — через render(): compile_template-методы
-  # переключают общий @__erb_buf, вложенный вызов затёр бы буфер
-  # родителя; партиалы честно подменяют его и восстанавливают.
+  # Nested partials go through render(): compile_template methods switch
+  # the shared @__erb_buf, so a nested call would clobber the parent's
+  # buffer; partials swap it out and restore it.
   compile_partials({
     "users/sidebars/rooms/direct" => {path: "app/views/users/sidebars/rooms/_direct.html.erb", locals: {"membership" => Membership}},
     "browser_settings"     => {path: "app/views/pwa/_browser_settings.html.erb", locals: {} of String => Nil},

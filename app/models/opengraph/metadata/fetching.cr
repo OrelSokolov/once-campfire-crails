@@ -1,5 +1,3 @@
-# metadata/fetching.rb: выборка og-метаданных — fxtwitter-подмена
-# для twitter/x.com, валидация canonical-URL и content-type картинки.
 class Opengraph::Metadata
   module Fetching
     def from_url(url : String, deadline : Time::Instant? = nil) : Metadata
@@ -36,8 +34,9 @@ class Opengraph::Metadata
       nil
     end
 
-    # Twitter.com/X.com не отдают og-теги — подменяем домен на
-    # fxtwitter.com.
+    # Twitter.com and X.com do not support Opengraph at the moment.
+    # Piggybacking on fxtwitter.com allows us to have twitter unfurling
+    # without relying on fxtwitter.com's future availability.
     def replace_twitter_domain(url : String) : String
       uri = URI.parse(url)
       uri.host = Metadata::FX_TWITTER_HOST if (host = uri.host) && Metadata::TWITTER_HOSTS.includes?(host)

@@ -1,18 +1,18 @@
 require "http"
 
-# Короткое замыкание публичных ответов — аналог front-кэша Thruster
-# (crates/kit/src/front/cache.rs Rust-порта): GET на публичный токен-путь
-# аватара отдаётся из памяти ДО RequestId/RequestLogger/маршрутизации/
-# PRAGMA data_version/верификации подписи — цена запроса падает до уровня
-# статики.
+# Short-circuit for public responses, the port's analogue of Thruster's front
+# cache (crates/kit/src/front/cache.rs of the Rust port): a GET on a public
+# avatar token path is served from memory before RequestId/RequestLogger/
+# routing/PRAGMA data_version/signature verification — the request costs about
+# as much as a static file.
 #
-# Кэш заполняет AvatarsController (ответ и так целиком в памяти):
-# перехватывать тело чужого ответа в middleware stdlib-Response не даёт
-# API (нужен tee-выход — это уровень фреймворка, см. PLAN.md roadmap).
+# The cache is filled by AvatarsController (its response is already fully in
+# memory): the stdlib Response API gives middleware no way to tee another
+# handler's body (a framework-level feature, see PLAN.md roadmap).
 #
-# Свежесть — TTL из Cache-Control, как у HTTP-кэша и Rust-фронта:
-# PRAGMA/epoch тут НЕТ намеренно, смена аватара видна до max-age
-# (30 минут) — ровно та же семантика, что отдаёт браузеру сам заголовок.
+# Freshness is TTL from Cache-Control, like an HTTP cache and the Rust front:
+# no PRAGMA/epoch here on purpose — an avatar change may stay invisible up to
+# max-age (30 minutes), exactly the semantics the header itself gives browsers.
 module Campfire
   class PublicCache
     include HTTP::Handler
@@ -33,7 +33,7 @@ module Campfire
     end
 
     OVERHEAD = 256
-    TTL = 30.minutes # expires_in 30.minutes, public: true (референс)
+    TTL = 30.minutes # expires_in 30.minutes, public: true
 
     def self.budget : Int32
       mb = ENV["CAMPFIRE_PUBLIC_CACHE_MB"]?.try(&.to_i?) || 16
@@ -45,9 +45,8 @@ module Campfire
 
     AVATAR_PATH = /^\/users\/([^\/]+)\/avatar$/
 
-    # Публичный (не зависящий от зрителя) путь: signed_id-токен, не
-    # числовый id (числовой — только для авторизованных, зависит от
-    # сессии, кэшировать публично нельзя).
+    # Public (viewer-independent) path: a signed_id token, not a numeric id
+    # (numeric ids are session-dependent and must not be cached publicly).
     def self.avatar_token_path?(path : String) : String?
       if (match = path.match(AVATAR_PATH)) && !match[1].matches?(/\A\d+\z/)
         match[1]
@@ -63,7 +62,7 @@ module Campfire
     def self.get(key : String) : Entry?
       if (entry = @@entries.delete(key))
         if entry.expires_at > Time.instant
-          @@entries[key] = entry # LRU: переставить в конец
+          @@entries[key] = entry # LRU: move to the end
           entry
         else
           @@bytes -= entry.cost + key.bytesize
@@ -84,7 +83,7 @@ module Campfire
       evict
     end
 
-    # Чистая память без yield-точек — атомарно между фибрами.
+    # Pure memory work with no yield points — atomic between fibers.
     private def self.evict : Nil
       while @@bytes > budget && @@entries.size > 1
         oldest = @@entries.each_key.next.as(String)
@@ -94,8 +93,8 @@ module Campfire
       end
     end
 
-    # HEAD/Range уходят полным путём (без тела middleware не отвечает,
-    # Range не кэшируется по определению).
+    # HEAD/Range take the full path (middleware serves no body for HEAD,
+    # Range is not cacheable by definition).
     def call(context)
       request = context.request
       if request.method == "GET" && !request.headers["Range"]? &&
@@ -114,5 +113,5 @@ module Campfire
   end
 end
 
-# Короткое имя для контроллера/конфига.
+# Short alias for controllers/config.
 PublicCache = Campfire::PublicCache

@@ -1,22 +1,19 @@
 require "./application_record"
+
 class Account < ApplicationRecord
-  # Rails has_json :settings, restrict_room_creation_to_administrators:
-  # false (account.rb:9) — доступ к флагу в jsonb settings без ручной
-  # работы с JSON-строкой (parse → присваивание → dump).
   def restrict_room_creation_to_administrators? : Bool
     settings.try(&.["restrict_room_creation_to_administrators"]?.try(&.as_bool?)) == true
   end
 
   def restrict_room_creation_to_administrators=(value : Bool) : Nil
-    # dup: as_h возвращает ссылку на хеш внутри JSON::Any — мутация на месте
-    # сломала бы dirty-tracking (снапшот видит то же значение).
+    # dup: as_h returns a reference into the JSON::Any hash — mutating it in
+    # place would break dirty tracking (the snapshot would see the same value).
     base = settings.try(&.as_h.dup) || {} of String => JSON::Any
     base["restrict_room_creation_to_administrators"] = JSON::Any.new(value)
     self.settings = JSON::Any.new(base)
   end
 
-  # Rails: has_one_attached :logo — логотип аккаунта (favicon,
-  # accounts/logos_controller).
+  # The reference's has_one_attached :logo, looked up manually.
   def logo_attachment : ActiveStorageAttachment?
     ActiveStorageAttachment
       .where("record_type = ? AND record_id = ? AND name = ?", "Account", id.not_nil!, "logo")
@@ -29,12 +26,9 @@ class Account < ApplicationRecord
     end
   end
 
-  # attachable.variant :large/:small (account.rb:4-7): resize_to_limit
-  # 512/192, format png. logo_variant (account.rb:11-13) —
-  # logo.variant(size).processed при variable?; nil (нет вложения /
-  # не-variable тип / ошибка vips-обработки) — контроллер отдаёт
-  # сток-иконку. Blob — шардовый ActiveStorage::Blob (variant/variable?
-  # живут там, ср. create_and_upload! в MessageCreator).
+  # The reference's attachable.variant :large/:small: resize_to_limit 512/192, png.
+  # Returns nil when there's no attachment, the type isn't variable, or vips fails —
+  # the controller then serves the stock icon.
   LOGO_VARIANT_SIZES = {"large" => [512, 512], "small" => [192, 192]}
 
   def logo_variant(size : String = "large") : ActiveStorage::Variant?

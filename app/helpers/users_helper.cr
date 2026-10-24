@@ -1,23 +1,17 @@
-# UsersHelper — ERB-хелперы app/views/users/show.html.erb:
-# head+nav профиля юзера, transfer-ссылка (админ).
-# Включается в UsersController; общий icon/page_close — ApplicationHelper.
+# ERB helpers for app/views/users/show.html.erb, included in UsersController.
 module UsersHelper
-  # head + body + nav (назад + «Edit my profile» для себя) + main.
   def page_open(viewer : User, subject : User) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("user", subject.name.to_s,
       nav_html: user_nav(viewer, subject)))
   end
 
-  # layout_start (Screen "user") → users/_nav.html.erb: назад +
-  # «Edit my profile» для себя, у чужого профиля — пустой блок справа
-  # (артефакты profile-jason). Ссылка — литеральный <a>: link_to из
-  # action_view_cr ставит href последним, вывод порта — href первым.
+  # users/_nav.html.erb: back link + "Edit my profile" for self.
+  # Literal <a>: link_to from action_view_cr renders href last, oracle output has it first.
   def user_nav(viewer : User, subject : User) : String
     render(partial: "users/nav", locals: {"viewer" => viewer, "subject" => subject}).raw
   end
 
-  # transfer_link.eta (админский блок на профиле юзера): QR/копирование/
-  # web-share той же разметки, что и собственный профиль (users/profiles).
+  # Admin transfer panel on the user profile: QR/copy/web-share of the auto-login URL.
   def transfer_link(subject : User) : ERB::SafeString
     url = origin + "/session/transfers/" +
           generate_signed_id(subject.id.not_nil!, "user/transfer",

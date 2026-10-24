@@ -1,7 +1,5 @@
 require "../application_record"
 
-# User::Mentionable (user/mentionable.rb): аттачабл-упоминание в
-# rich-text (@user → attachable content-type + @name в plain text).
 class User
   module Mentionable
     MENTION_CONTENT_TYPE = "application/vnd.campfire.mention"
@@ -14,7 +12,7 @@ class User
       "users/mention"
     end
 
-    # Как упоминание выглядит в редакторе (шаблон промпта).
+    # How a mention appears inside the editor, matching the prompt's editor template.
     def to_editor_content_attachment_partial_path : String
       "users/mention"
     end

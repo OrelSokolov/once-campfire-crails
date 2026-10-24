@@ -2,18 +2,14 @@ require "json"
 require "sqlite3"
 require "digest/md5"
 
-# Создание сообщения со всеми побочными эффектами комнаты — порт
-# MessagesController#create + Room#receive + notifyMessage
-# (once-campfire-express): вставка + ActionText-тело + FTS5-индекс +
-# turbo-stream broadcast + unread_memberships + постановка джобов
-# уведомлений (push/webhook) в leased-SQLite очередь — всё persisted ДО
-# HTTP-ответа.
+# Creates a message with all of the room's side effects (port of MessagesController#create +
+# Room#receive + notifyMessage): insert + ActionText body + FTS5 index + turbo-stream broadcast +
+# unread_memberships + notification job enqueueing — all persisted before the HTTP response.
 module MessageCreator
   alias UploadedFile = Message::Attachment::UploadedFile
 
-  # Возвращает созданное сообщение (после вставки тела/индекса и broadcast).
-  # attachment: сохранить файл как blob + active_storage_attachments
-  # (storage.js storeUpload + attachMessage; FTS-индекс — тело или filename).
+  # Returns the created message (after body/index insert and broadcast).
+  # attachment: store the file as blob + active_storage_attachments; the FTS index gets body or filename.
   def self.create!(room : Room, creator : User, body_html : String,
                    client_message_id : String, webhooks : Bool = true,
                    attachment : UploadedFile? = nil,
@@ -21,16 +17,13 @@ module MessageCreator
     now = Time.utc
     plain = plain_text(body_html)
 
-    # Одна атомарная транзакция на production-БД: message + rich text +
-    # FTS5 + unread. Атомарность обязательна для retry: повтор после
-    # "database is locked" не должен оставлять сообщений без тела/индекса
-    # (аудит write_ack'ов сверяет каждую запись).
+    # One atomic transaction on the production DB: message + rich text + FTS5 + unread.
+    # Atomicity is required for retry: a retry after "database is locked" must not leave
+    # messages without body/index (the write_ack audit checks every record).
     #
-    # Производственная транзакция и постановка джобов идут через
-    # Campfire::WriteQueue: в процессе пишет одна writer-фибера (см.
-    # write_queue.cr — почему конкурентный BEGIN IMMEDIATE из фибер
-    # лайвлокит воркер). Broadcast и инвалидация кэша — после, вне
-    # очереди.
+    # The production transaction and job enqueueing go through Campfire::WriteQueue:
+    # a single writer fiber per process (see write_queue.cr); broadcast and cache
+    # invalidation happen after, outside the queue.
     message = Campfire::WriteQueue.perform do
       created = retry_on_lock do
         ActiveRecord::Base.transaction do
@@ -38,16 +31,15 @@ module MessageCreator
             room_id: room.id.not_nil!,
             creator_id: creator.id.not_nil!,
             client_message_id: client_message_id)
-          record.save! # belongs_to :room, touch: true трогает rooms.updated_at
+          record.save! # belongs_to :room, touch: true touches rooms.updated_at
           message_id = record.id.not_nil!
 
-          conn = ActiveRecord::Base.__session # pinned-коннект транзакции
+          conn = ActiveRecord::Base.__session # pinned transaction connection
           conn.exec(
             "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
             "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
           Message::Attachment.store(conn, record, attachment, now) if attachment
-          # indexMessage: plainText(body) || filename — файл без текста
-          # индексируется именем файла.
+          # indexMessage: a file without text is indexed by its filename.
           Message::Searchable.insert_in_index(conn, message_id,
             plain.presence || attachment.try(&.filename) || "")
 
@@ -55,29 +47,26 @@ module MessageCreator
           {record: record, jobs: pending_jobs}
         end
       end.not_nil!
-      # Постановка джобов (отдельная БД очереди) — строго ПОСЛЕ commit
-      # production-транзакции: ожидание write-lock очереди внутри чужой
-      # транзакции держит production write-lock и заводит конвейер из
-      # двух пулов (наблюдали полный дедлок приложения при conc=16).
+      # Enqueue jobs (a separate queue DB) strictly AFTER the production transaction commits:
+      # waiting for the queue's write lock inside another transaction held the production
+      # write-lock and deadlocked both pools (full app deadlock observed at conc=16).
       Campfire::JobQueue.enqueue_batch(created[:jobs])
       created
     end
-    # Broadcast с вложением, если файл был сохранён (attachMessage →
-    # publishMessage: presentation вместо rich-text тела).
+    # Broadcast with the attachment when a file was stored (attachMessage → publishMessage:
+    # presentation instead of the rich-text body).
     record = message[:record]
     rendered = attachment ? ChatLayout.attachments_for([record.id.not_nil!])[record.id.not_nil!]? : nil
     Message::Broadcasts.broadcast_create(room, record, creator, rendered, base_url)
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate! # write: invalidate the whole-page cache
     record
   end
 
-  # Room#receive: unread для участников, отключённых дольше 60 секунд,
-  # затем сборка джобов уведомлений (notifyMessage у express). Возвращает
-  # собранные джобы — постановка в очередь выполняет вызывающий ПОСЛЕ
-  # commit production-транзакции.
+  # Room#receive: unread for members disconnected longer than 60 seconds, then collect
+  # notification jobs; the caller enqueues them AFTER the production transaction commits.
   def self.notify(room : Room, message : Message, creator : User,
                   body_html : String, webhooks : Bool) : Array(Tuple(String, String))
-    conn = ActiveRecord::Base.__session # pinned-коннект транзакции create!
+    conn = ActiveRecord::Base.__session # pinned connection of the create! transaction
     now = Time.utc
     conn.exec(
       "UPDATE memberships SET unread_at = ?, updated_at = ? " \
@@ -86,7 +75,7 @@ module MessageCreator
       now, now, room.id.not_nil!, creator.id.not_nil!, now - 60.seconds)
 
     mentions = Message::Mentionee.mention_ids(body_html)
-    direct = room.type == "Direct" # STI-порт хранит короткие имена
+    direct = room.type == "Direct" # STI port stores short type names
     jobs = [] of Tuple(String, String)
 
     rows = conn.query_all(
@@ -115,27 +104,22 @@ module MessageCreator
       end
     end
 
-    # Room::PushMessageJob (message.rb: after_create_commit →
-    # room.push_later): единая push-джоба на сообщение; получатели
-    # (Room::MessagePusher) фильтруются при доставке.
+    # Room::PushMessageJob: one push job per message; recipients (Room::MessagePusher) are filtered at delivery.
     jobs << {"push", %({"message_id":#{message.id.not_nil!}})}
-    # Message::BroadcastUnreadRoomJob: fanout непрочитанных в сайдбар
-    # (UnreadRoomsChannel, per-user стримы).
+    # Message::BroadcastUnreadRoomJob: fan out the unread room to per-user sidebar streams.
     jobs << {"broadcast_unread_room", %({"message_id":#{message.id.not_nil!}})}
     jobs
   end
 
-  # Грубое html→text для FTS5-индекса: контракту достаточно вхождения
-  # слов тела; теги вырезаем.
+  # Rough html→text for the FTS5 index: the contract only needs the body's words; tags are stripped.
   def self.plain_text(html : String) : String
     html.gsub(/<[^>]*>/, " ").gsub(/\s+/, " ").strip
   end
 
-  # Транзакция стартует BEGIN IMMEDIATE (active_record.cr 0.1.2, как
-  # Rails 8.1 sqlite3_adapter): писатель берёт write-lock сразу и ждёт
-  # его через busy_timeout драйвера. Повтор остаётся страховкой от
-  # истечения busy_timeout при сильной конкуренции fork-воркеров —
-  # повтор транзакции целиком берёт свежий снапшот.
+  # Transactions start with BEGIN IMMEDIATE (like the Rails 8.1 sqlite3 adapter): the writer
+  # takes the write lock up front and waits via the driver's busy_timeout. The retry guards
+  # against busy_timeout expiry under heavy fork-worker contention — retrying the whole
+  # transaction takes a fresh snapshot.
   private def self.retry_on_lock(attempts : Int32 = 5, &)
     tries = 0
     loop do
@@ -150,6 +134,6 @@ module MessageCreator
         raise e
       end
     end
-    raise Exception.new("unreachable") # исключает Nil из типа возврата
+    raise Exception.new("unreachable") # excludes Nil from the return type
   end
 end

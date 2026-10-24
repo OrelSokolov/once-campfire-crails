@@ -1,9 +1,5 @@
 require "./room_channel"
-# PresenceChannel — присутствие в комнате (presence_channel.rb оракула,
-# база RoomChannel): подписка через membership, present/absent двигают
-# connections/connected_at (Membership::Connectable), refresh обновляет
-# connected_at (presence_controller.js шлёт его каждые 50с, loadgen — по
-# --refresh-secs).
+
 class PresenceChannel < RoomChannel
   def subscribed : Nil
     if (@room = find_room)
@@ -33,9 +29,8 @@ class PresenceChannel < RoomChannel
 
   private def mark_present(room_id : Int64) : Nil
     Membership::Connectable.connect(room_id, current_user_id.not_nil!)
-    # Чистка unread_at меняет сайдбар/rooms#show, но пишем из своего
-    # соединения — PRAGMA data_version пула этого не видит (инвалидация
-    # только на чужие коммиты), поэтому сбрасываем ResponseCache явно.
+    # PRAGMA data_version of the pool does not see writes from this connection, so
+    # invalidate the response cache explicitly.
     Campfire::ResponseCache.invalidate!
   end
 

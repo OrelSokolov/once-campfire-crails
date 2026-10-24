@@ -1,8 +1,5 @@
-# WelcomeHelpers — ERB-хелперы app/views/welcome/show.html.erb:
-# пустой экран «No rooms yet» (hi, Lonely Lou). Включается в
-# WelcomeController; общий campfire_icon_src — ApplicationHelper.
+# ERB helpers for app/views/welcome/show.html.erb (empty "No rooms yet" screen).
 module WelcomeHelpers
-  # «No rooms yet»: head для пустого message-area-экрана (chat: false).
   def head : ERB::SafeString
     ERB::SafeString.new(ChatLayout.head("No rooms yet", nil, chat: false))
   end
@@ -11,9 +8,8 @@ module WelcomeHelpers
     ChatLayout.asset("messages-empty.svg")
   end
 
-  # footer + aside с turbo-frame user_sidebar (src=/users/me/sidebar) +
-  # lightbox-диалог + app-logo — как layouts/_body_close референса
-  # (welcome/show: content_for :sidebar, sidebar_turbo_frame_tag(src:)).
+  # footer + aside with the user_sidebar turbo-frame + lightbox + app-logo,
+  # as in layouts/_body_close (welcome/show: sidebar_turbo_frame_tag(src:)).
   def page_close : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_close("", ChatLayout.chat_sidebar_frame))
   end

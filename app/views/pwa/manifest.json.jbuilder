@@ -1,5 +1,3 @@
-# Порт pwa/manifest.json.erb референса (jbuilder-DSL): имя аккаунта,
-# иконки fresh_account_logo, shortcuts и screenshots с digest-путями.
 account = @account
 
 json.name account.try(&.name).to_s.presence || "Campfire"

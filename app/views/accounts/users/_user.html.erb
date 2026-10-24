@@ -1,7 +1,3 @@
-<%# Порт once-campfire/app/views/accounts/users/_user.html.erb: строка
-    юзера в списке accounts/edit — аватар, имя, тумблер роли
-    (check_box с checked/unchecked values, disabled у себя), удаление
-    (button_to DELETE, turbo-confirm) и «My settings» для себя. %>
 <% uid = user.id.not_nil! %>
 <% viewer = @user.not_nil! %>
 <% admin = viewer.role == 1 %>

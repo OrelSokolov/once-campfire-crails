@@ -1,8 +1,6 @@
-# TranslationsHelper — словари и кнопка перевода полей ввода
-# (translations_helper.rb оракула). Разметка — 1:1 с ERB оригинала;
-# иконки — ChatLayout.icon (asset-пути пребилда).
+# TranslationsHelper: translation dictionaries and the "Translate" popup
+# button (port of the Rails oracle translations_helper.rb).
 module TranslationsHelper
-  # translations_helper.rb: TRANSLATIONS — словари кнопки перевода
   TRANSLATIONS = {
     "email_address" => {"Enter your email address", "Introduce tu correo electrónico",
       "Entrez votre adresse courriel", "अपना ईमेल पता दर्ज करें",
@@ -64,8 +62,6 @@ module TranslationsHelper
   }
   LANGUAGE_FLAGS = {"🇺🇸", "🇪🇸", "🇫🇷", "🇮🇳", "🇩🇪", "🇧🇷", "🇯🇵"}
 
-  # translations_helper.rb: translation_button — details/popup с меню
-  # переводов (globe.svg, for-screen-reader «Translate»).
   def self.translation_button(key : String) : String
     return "" unless (texts = TRANSLATIONS[key]?)
     String.build do |io|

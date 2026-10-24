@@ -1,14 +1,9 @@
-# POST /account/join_code — порт Accounts::JoinCodesController:
-# перегенерация invite-кода (кнопка btn--regenerate в accounts/edit).
-# Только администраторы.
 class Accounts::JoinCodesController < ApplicationController
-  before_action :require_admin
+  before_action :ensure_can_administer
 
-  # Account::Joinable#reset_join_code.
   def create
     account = Account.take.not_nil!
-    account.join_code = Account::Joinable.generate_join_code
-    account.save!
+    account.reset_join_code
     redirect_to edit_account_url
   end
 end

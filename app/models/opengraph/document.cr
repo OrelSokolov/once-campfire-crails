@@ -1,7 +1,3 @@
-# document.rb: og-теги из HTML. Дубликаты — последний выигрывает
-# (Rails Hash[tag-массив]), посторонние og-ключи срезаются до
-# ATTRIBUTES (title, url, image, description); невалидный HTML →
-# пустой результат.
 class Opengraph::Document
   ATTRIBUTE_NAMES = %w(title url image description)
 

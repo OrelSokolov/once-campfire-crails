@@ -4,21 +4,14 @@ class Room < ApplicationRecord
   has_many :messages, foreign_key: "room_id"
   belongs_to :creator, class_name: "User"
 
-  # room.rb референса: opens/closeds/directs/without_directs/ordered.
-  # Референс — equality по type ('Rooms::Open'); STI-порт хранит два
-  # написания (сид — 'Rooms::Open', создание портом — короткое 'Open'),
-  # поэтому условие расширено до IN обеих форм.
+  # STI type is stored in two spellings ('Rooms::Open' from seeds, short 'Open' created by the port), so scope to IN of both.
   scope(:opens)           { where("type IN ('Open', 'Rooms::Open')") }
   scope(:closeds)         { where("type IN ('Closed', 'Rooms::Closed')") }
   scope(:directs)         { where("type IN ('Direct', 'Rooms::Direct')") }
   scope(:without_directs) { where("type NOT IN ('Direct', 'Rooms::Direct')") }
   scope(:ordered)         { order("LOWER(name)") }
 
-  # GlobalID STI-референса: gid строится от класса записи (Rooms::Open/
-  # Rooms::Direct/Rooms::Closed), а не от кристалловского Room — иначе
-  # расходится signed-stream-name turbo-cable-stream-source. type хранит
-  # и полный ('Rooms::Open', сид), и короткий ('Open', создание портом)
-  # вариант — нормализуем к полному.
+  # gid is built from the record's STI class, not Crystal's Room, to keep turbo-cable-stream-source signed names matching.
   def to_gid_param : String
     sti = type.to_s
     sti = "Rooms::#{sti}" unless sti.includes?("::")
@@ -26,15 +19,12 @@ class Room < ApplicationRecord
     Base64.urlsafe_encode(gid, padding: false)
   end
 
-  # dom_id референса: Rooms::Open → rooms_open_<id> (model_name.param_key).
   def dom_id : String
     sti = type.to_s.split("::")[-1].underscore
     "rooms_#{sti}_#{id.not_nil!}"
   end
 
-  # Direct-комната (ping): name IS NULL. Детект по имени, а не type —
-  # type хранит два написания ('Rooms::Direct' сид, 'Direct' создание
-  # портом), все SQL-запросы порта фильтруют так же (WHERE r.name IS NULL).
+  # Direct rooms have name IS NULL; detected by name, not type, since type is stored in two spellings.
   def direct? : Bool
     name.nil?
   end
@@ -49,10 +39,9 @@ class Room < ApplicationRecord
     visible(user)
   end
 
-  # room.rb#destroy_later: комнату у участников отбирает сразу (open
-  # предварительно закрывается, чтобы никто не «вошёл» до джобы), а
-  # сообщения оставляет Room::DestroyJob — удаление их в транзакции
-  # запроса держало бы write-lock базы до последнего сообщения.
+  # Takes the room away from its members at once, and leaves its messages to Room::DestroyJob. Destroying them in
+  # the room's own transaction held the database's write lock, and stopped every other write, until the last one.
+  # An open room is closed first, so that no one who joins the account before the job runs is let in.
   def destroy_later : Nil
     Campfire::ResponseCache.invalidate!
     rid = id.not_nil!

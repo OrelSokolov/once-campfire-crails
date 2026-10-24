@@ -1,21 +1,12 @@
-# PushSubscriptionsHelpers — ERB-хелперы app/views/users/
-# push_subscriptions/index.html.erb: каркас страницы (nav-назад —
-# link_back_to_last_room_visited референса) и разбор User-Agent
-# подписки (UserAgent.parse: browser/version/platform).
-# Включается в Users::PushSubscriptionsController; icon/page_close —
-# ApplicationHelper.
+# PushSubscriptionsHelpers: ERB helpers for app/views/users/push_subscriptions/index.html.erb.
 module PushSubscriptionsHelpers
-  # head + body + nav + main; nav — «Go Back» к последней посещённой
-  # комнате (rooms_helper: link_back_to_last_room_visited).
   def page_open : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("push-subscriptions",
       "Push notification subscriptions",
       nav_html: ChatLayout.nav_back(last_room_visited_path)))
   end
 
-  # _push_subscription.html.erb: <strong>Browser version on Platform</strong>
-  # (useragent-гем). Небраузерный/пустой UA (curl, nil) — пустая строка
-  # (агент не определяется — « on » не печатаем).
+  # Non-browser or empty UA (curl, nil) yields an empty string.
   def user_agent_summary(user_agent : String?) : String
     return "" if user_agent.to_s.empty?
     agent = UserAgent.new(user_agent.to_s)
@@ -23,9 +14,6 @@ module PushSubscriptionsHelpers
     "#{agent.browser} #{agent.version} on #{agent.platform}".strip
   end
 
-  # TrackedRoomVisit (rooms_helper): cookie last_room (если комната
-  # видима пользователю), иначе первая видимая; корень — когда видимых
-  # комнат нет. Как AccountsHelper#last_room_visited_path.
   private def last_room_visited_path : String
     user = current_user.not_nil!
     room = nil
@@ -37,9 +25,9 @@ module PushSubscriptionsHelpers
   end
 end
 
-# Мини-порт useragent-гема для списковой строки подписки: browser —
-# первый известный продукт в UA, version — его токен версии, platform —
-# классификация ApplicationPlatform (application_platform.rb референса).
+# Minimal port of the useragent gem: browser is the first known product
+# token in the UA, version is its version token, platform comes from
+# ApplicationPlatform.
 class UserAgent
   BROWSERS = %w[Firefox FxiOS Chrome Opera MSIE Edg Edge Safari]
 

@@ -1,8 +1,5 @@
 require "./room_channel"
-# TypingNotificationsChannel (typing_notifications_channel.rb
-# оракула): start/stop набора текста — broadcast в стрим комнаты.
-# Клиент (typing_notifications_controller.js + typing_tracker.js)
-# уже портирован и ждёт {action, user:{id,name}}.
+
 class TypingNotificationsChannel < RoomChannel
   def start(data : Hash(String, String)) : Nil
     broadcast_typing("start")

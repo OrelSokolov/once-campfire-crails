@@ -10,9 +10,8 @@ abstract class ApplicationController < ActionController::Base
   include VersionHeaders
   include AllowBrowser
 
-  # turbo-rails engine.rb подключает Turbo::Streams::Broadcasts в
-  # ActionController::Base — контроллеры зовут broadcast_*_to напрямую
-  # (транспорт: Turbo.cable = CampfireCable, тот же, что у Campfire.broadcast).
+  # turbo-rails includes Turbo::Streams::Broadcasts into ActionController::Base, so
+  # controllers call broadcast_*_to directly.
   include Turbo::Streams::Broadcasts
 
   before_action :set_current_request
@@ -21,16 +20,13 @@ abstract class ApplicationController < ActionController::Base
   before_action :reject_banned_ip
   before_action :require_authentication
 
-  # Campfire authentication.rb: protect_from_forgery using: :header_only,
-  # with: :exception — Sec-Fetch-Site-защита Rails 8.2 (без токенов в
-  # формах), бот-ключи в URL (не из браузера) защиту отключают.
+  # Campfire authentication.rb: protect_from_forgery using: :header_only, with:
+  # :exception — the Rails 8.2 Sec-Fetch-Site protection (no form tokens); bot keys
+  # in the URL (non-browser) disable it.
   protect_from_forgery using: :header_only, with: :exception, unless: :bot_request?
 
-  # Оракул (rails-main, lazy-сессии): protect_against_forgery? в контексте
-  # рендера false → формы НЕ содержат embedded authenticity_token (ни у
-  # анонимов, ни у залогиненных — проверено живым оракулом, /session/new и
-  # /account/edit). Turbo/XHR берут токен из csrf_meta_tags; верификация —
-  # Sec-Fetch-Site (header_only), от поля в форме не зависит.
+  # The oracle's forms carry no embedded authenticity_token; Turbo/XHR take the token
+  # from csrf_meta_tags and verification is Sec-Fetch-Site (header_only) only.
   protected def __csrf_token_field(action : String, method : String) : String
     ""
   end

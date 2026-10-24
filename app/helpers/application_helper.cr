@@ -1,19 +1,15 @@
-# ApplicationHelper — общие ERB-хелперы app/views/**, одинаковые у всех
-# контроллеров (иконки, дефолтный page_close, asset-пути). Включается
-# в ApplicationController; SafeString — сырой HTML из ChatLayout без
-# повторного экранирования в <%= %> (как boosts/profiles).
+# Shared ERB helpers for app/views/**, included in ApplicationController.
 module ApplicationHelper
   def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
 
-  # asset-путь пребилда (иконки без width/height и прочие ассеты шаблонов).
+  # Prebuilt asset path (icons without width/height and other template assets).
   def asset(name : String) : String
     ChatLayout.asset(name)
   end
 
-  # layouts/_body_close без контентных блоков (свои футеры —
-  # accounts/searches — перекрывают метод в своих модулях).
+  # layouts/_body_close with no content blocks (accounts/searches override it).
   def page_close : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_close)
   end

@@ -1,8 +1,5 @@
 require "../application_record"
 
-# User::Transferable (user/transferable.rb): transfer_id — signed_id
-# purpose "user/transfer" (срок 4 часа) для авто-логин ссылки
-# /session/transfers/:id.
 class User
   module Transferable
     include ActiveSupport::Concern

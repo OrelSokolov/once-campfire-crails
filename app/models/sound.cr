@@ -1,5 +1,5 @@
-# Звуки /play (sound.rb оракула): каталог BUILTIN, find_by_name.
-# Портировано из ChatLayout (SOUNDS/ChatSound/sound_by_name).
+# /play sounds (oracle sound.rb): BUILTIN catalog + find_by_name,
+# ported from ChatLayout.
 class Sound
   attr_reader name : String
   attr_reader text : String?
@@ -73,7 +73,6 @@ class Sound
     "yodel"       => {text: "📣🗻🙉"},
   }
 
-  # Sound.find_by_name по BUILTIN-индексу.
   def self.find_by_name(name : String) : Sound?
     spec = BUILTIN[name]? || return nil
     sound = Sound.new(name, text: spec[:text]? || nil,

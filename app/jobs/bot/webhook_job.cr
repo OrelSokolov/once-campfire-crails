@@ -1,7 +1,5 @@
 require "../application_job"
 
-# Bot::WebhookJob (bot/webhook_job.rb референса): доставка webhook
-# бота — POST JSON, ответ 200 + text/* → текст-реплай от имени бота.
 class Bot::WebhookJob < ApplicationJob
   def self.perform(data : JSON::Any) : Nil
     webhook_id = data["webhook_id"]?.try(&.to_s.to_i64?)
@@ -82,7 +80,7 @@ class Bot::WebhookJob < ApplicationJob
     end
   end
 
-  # POST JSON; ответ 200 + text/* → текст-реплай от бота, иначе nil.
+  # POST JSON; a 200 text/* response body becomes the bot's reply, else nil.
   private def self.deliver_webhook(url : URI, payload : String) : String?
     client = HTTP::Client.new(url)
     client.connect_timeout = 7.seconds
@@ -98,8 +96,8 @@ class Bot::WebhookJob < ApplicationJob
     end
   end
 
-  # Ответ бота — сообщение от его имени (webhooks: false — как
-  # notifyMessage(result, { webhooks: false }) у express).
+  # The bot's reply is a message created on its behalf (webhooks: false,
+  # as notifyMessage(result, { webhooks: false }) in the express reference).
   private def self.webhook_reply(bot_id : Int64, room_id : Int64, text : String) : Nil
     room = Room.find?(room_id)
     bot = User.find?(bot_id)

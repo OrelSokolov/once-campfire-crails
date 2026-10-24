@@ -1,5 +1,3 @@
-# metadata.rb: og-метаданные ссылки (title/url/image/description) c
-# валидацией; выборка — Metadata::Fetching (metadata/fetching.cr).
 class Opengraph::Metadata
   TWITTER_HOSTS = %w(twitter.com www.twitter.com x.com www.x.com)
   FX_TWITTER_HOST = "fxtwitter.com"
@@ -10,7 +8,6 @@ class Opengraph::Metadata
   property image : String? = nil
   property description : String? = nil
 
-  # validates_presence_of :title, :url, :description (image опционален).
   def valid? : Bool
     !title.to_s.empty? && !url.to_s.empty? && !description.to_s.empty?
   end
@@ -26,10 +23,9 @@ class Opengraph::Metadata
     end
   end
 
-  # sanitize(strip_tags(...)): декодируем entities (Rails-тест
-  # "&#x3c;img...&#x3e;" → тег снимается), снимаем теги; пустое → nil.
-  # Декод — циклом Regex#match (gsub-блок с группами в Crystal 1.21
-  # возвращает мусорные MatchData#[]).
+  # sanitize(strip_tags(...)): decode entities (a Rails test expects "&#x3c;img...&#x3e;" to strip the tag),
+  # then strip tags; empty → nil. Decoding uses a Regex#match loop — a gsub block with groups returns
+  # garbage MatchData#[] on Crystal 1.21.
   ENTITY_REGEX = /&#(x[0-9a-fA-F]+|\d+);/
 
   def self.sanitize(content : String?) : String?
@@ -56,7 +52,6 @@ class Opengraph::Metadata
     out.to_s
   end
 
-  # "x3c" (hex) | "60" (dec) → кодовая точка; иначе nil.
   private def self.entity_codepoint(token : String) : Int64?
     if token.starts_with?('x')
       token[1..].to_i64?(16)

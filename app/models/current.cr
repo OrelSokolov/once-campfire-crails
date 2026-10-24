@@ -1,13 +1,7 @@
-# Порт once-campfire/app/models/current.rb: глобальные per-request
-# атрибуты. Значения живут в классе (ActiveSupport::CurrentAttributes,
-# сброс между запросами — диспетчером railties_cr), сессия/юзер
-# заполняются ApplicationController (аналог concerns/authentication.rb:
-# authenticated_as / bot_authentication), request — before_action
-# :set_current_request (concerns/set_current_request.rb).
-#
-# Отклонение от Rails: атрибуты типизированы (Crystal), кастомный
-# writer `session=` (проставляющий user) заменён явной установкой обоих
-# атрибутов в ApplicationController.
+# Per-request globals (oracle current.rb): session/user are set by ApplicationController,
+# request by set_current_request; reset between requests by the railties_cr dispatcher.
+# Deviation: typed attributes, and the custom `session=` writer that also set user is
+# replaced by setting both attributes explicitly in ApplicationController.
 class Current < ActiveSupport::CurrentAttributes
   attribute session: Session?, user: User?, request: HTTP::Request?
 

@@ -3,30 +3,21 @@ require "json"
 require "openssl"
 require "socket"
 
-# Web Push доставка — порт push-ветки perform из src/jobs.js
-# (once-campfire-express) + vapid-helper/web-push-lib npm:
-#   - шифрование payload aes128gcm (RFC 8188/8291): ECDH P-256 +
-#     HKDF-SHA256 + AES-128-GCM, запись rs=4096, одна запись,
-#     паддинг — только разделитель 0x02;
-#   - VAPID (RFC 8292): JWT ES256 {aud, exp (+12ч), sub},
-#     Authorization: `vapid t=<jwt>, k=<public>`, TTL 2419200,
-#     Content-Type application/octet-stream;
-#   - SSRF-фильтр resolvePublic (opengraph.js publicAddress):
-#     endpoint резолвится заранее, приватные/небраузерные адреса
-#     запрещены, соединение — только с разрешённым IP (DNS-pinning,
-#     SNI/верификация по имени хоста), только https.
-#
-# Криптография — libcrypto (OpenSSL 3) напрямую: stdlib не
-# экспортирует ECDH/ES256-подпись/GCM-тег.
+# Web Push delivery ported from the push branch of src/jobs.js
+# (once-campfire-express) + vapid-helper/web-push-lib npm: aes128gcm
+# payload encryption (RFC 8188/8291), VAPID JWT ES256 (RFC 8292, TTL
+# 2419200), and an SSRF filter (resolvePublic from opengraph.js, https-only
+# with DNS pinning); cryptography goes through libcrypto (OpenSSL 3)
+# directly since stdlib does not export ECDH/ES256 signing/GCM tags.
 module Campfire
   module WebPush
     class Error < Exception
     end
 
-    # ————— Публичное API —————
+    # ————— Public API —————
 
-    # Шифрует payload (RFC 8291) ключами подписки.
-    # p256dh/auth — base64url (с паддингом или без) от клиента.
+    # Encrypts the payload (RFC 8291) with the subscription keys;
+    # p256dh/auth are client-provided base64url (padded or not).
     def self.encrypt(p256dh : String, auth : String, payload : String) : Bytes
       ua_public = decode_key(p256dh) || raise Error.new("invalid p256dh key")
       auth_secret = decode_key(auth) || raise Error.new("invalid auth key")
@@ -46,7 +37,7 @@ module Campfire
         cek = hkdf_sha256(prk_key, salt, "Content-Encoding: aes128gcm\0".to_slice, 16)
         nonce = hkdf_sha256(prk_key, salt, "Content-Encoding: nonce\0".to_slice, 12)
 
-        # Одна запись rs=4096: plaintext + разделитель 0x02 без паддинга
+        # Single rs=4096 record: plaintext + the 0x02 delimiter, no padding.
         ciphertext = aes128gcm_encrypt(cek, nonce, payload.to_slice + Bytes[0x02])
 
         # RFC 8188 §2: salt(16) + rs(4 BE) + idlen(1) + keyid(65) + ciphertext
@@ -62,8 +53,8 @@ module Campfire
       end
     end
 
-    # Authorization-заголовок VAPID (web-push npm v3, aes128gcm-ветка):
-    # `vapid t=<jwt ES256>, k=<public_key>`; audience = origin endpoint'а.
+    # VAPID Authorization header (web-push npm v3, aes128gcm branch):
+    # `vapid t=<jwt ES256>, k=<public_key>`; audience is the endpoint origin.
     def self.vapid_authorization(audience : String, subject : String,
                                  public_key : String, private_key : String) : String
       header = Base64.urlsafe_encode(%({"typ":"JWT","alg":"ES256"}), padding: false)
@@ -84,10 +75,10 @@ module Campfire
       end
     end
 
-    # POST зашифрованного payload на endpoint подписки. Возвращает HTTP-статус;
-    # nil — подписка пропускается (не-https endpoint или приватный адрес,
-    # как resolvePublic-continue в jobs.js). Сетевые ошибки — исключение
-    # (джоба уйдёт в retry). public_only=false — только для локальных тестов.
+    # POSTs the encrypted payload to the subscription endpoint: returns the
+    # HTTP status, nil means the subscription is skipped (non-https endpoint
+    # or private address, as resolvePublic-continue in jobs.js); network
+    # errors raise (the job retries); public_only=false is for local tests only.
     def self.deliver(endpoint : String, p256dh : String, auth : String,
                      payload : String, vapid_public : String, vapid_private : String,
                      vapid_subject : String = "mailto:campfire@example.com",
@@ -125,7 +116,7 @@ module Campfire
 
     # ————— HKDF (RFC 5869, SHA-256) —————
 
-    # Base64url без паддинга (или с ним) ключей подписки/VAPID → байты.
+    # Decodes unpadded (or padded) base64url subscription/VAPID keys to bytes.
     private def self.decode_key(text : String) : Bytes?
       sanitized = text.tr("-_", "+/").gsub(/\s+/, "")
       sanitized += "=" * ((4 - sanitized.size % 4) % 4)
@@ -151,7 +142,7 @@ module Campfire
       okm
     end
 
-    # ————— AES-128-GCM (EVP напрямую: stdlib Cipher не отдаёт тег) —————
+    # ————— AES-128-GCM (raw EVP: stdlib Cipher does not expose the tag) —————
 
     EVP_CTRL_GCM_SET_IVLEN = 0x9
     EVP_CTRL_GCM_GET_TAG   = 0x10
@@ -189,7 +180,7 @@ module Campfire
 
     def self.ecdsa_der_to_raw(der : Bytes) : Bytes
       raise Error.new("bad ECDSA signature") unless der.size >= 8 && der[0] == 0x30
-      pos = 2 # короткая форма длины: подпись всегда < 128 байт
+      pos = 2 # short form length: signatures are always < 128 bytes
       raise Error.new("bad ECDSA signature") unless der[pos] == 0x02
       r_len = der[pos + 1].to_i32
       r = der[pos + 2, r_len]
@@ -199,7 +190,7 @@ module Campfire
       s = der[pos + 2, s_len]? || raise Error.new("bad ECDSA signature")
 
       int_bytes = ->(b : Bytes) do
-        first = b.index { |byte| byte != 0 } || b.size # ведущие нули DER
+        first = b.index { |byte| byte != 0 } || b.size # DER leading zeros
         src = b[first..]
         take = Math.min(src.size, 32)
         src = src[src.size - take, take]
@@ -208,9 +199,9 @@ module Campfire
       int_bytes.call(r) + int_bytes.call(s)
     end
 
-    # ————— SSRF-фильтр (порт publicAddress из opengraph.js) —————
+    # ————— SSRF filter (publicAddress ported from opengraph.js) —————
 
-    # Все адреса хоста должны быть публичными; берём первый.
+    # All of the host's addresses must be public; take the first.
     def self.resolve_public(url : URI, public_only : Bool = true) : String?
       host = url.host.to_s.strip("[]")
       addresses = Socket::Addrinfo.tcp(host, url.port || 443).map(&.ip_address.address)
@@ -234,7 +225,7 @@ module Campfire
                  (a == 198 && b == 51) ||
                  (a == 203 && b == 0))
       end
-      # IPv6: только global unicast (2xxx/3xxx), мапнутые/спец-диапазоны fail closed
+      # IPv6: global unicast (2xxx/3xxx) only; mapped/special ranges fail closed.
       ip = address.downcase
       !ip.includes?('.') && ip.starts_with?("2", "3") &&
         !ip.starts_with?("2001:db8:", "2001:0:", "2002:", "2001:11", "fc", "fd")
@@ -242,7 +233,7 @@ module Campfire
       false
     end
 
-    # ————— Обёртка EC P-256 над libcrypto —————
+    # ————— EC P-256 wrapper over libcrypto —————
 
     NID_X9_62_PRIME256V1     = 415
     POINT_CONVERSION_UNCOMP  = 4
@@ -288,7 +279,7 @@ module Campfire
             LibWebPushCrypto.bn_free(bn)
             raise Error.new("set private key failed")
           end
-          # Публичная точка нужна EVP-провайдеру для операций с ключом
+          # The EVP provider needs the public point for key operations.
           group = LibWebPushCrypto.ec_key_get0_group(key)
           pub = LibWebPushCrypto.ec_point_new(group)
           order = LibWebPushCrypto.bn_new
@@ -309,7 +300,7 @@ module Campfire
         inst
       end
 
-      # Несжатая точка (0x04 || X || Y), 65 байт.
+      # Uncompressed point (0x04 || X || Y), 65 bytes.
       def public_point : Bytes
         group = LibWebPushCrypto.ec_key_get0_group(@key)
         point = LibWebPushCrypto.ec_key_get0_public_key(@key)
@@ -324,7 +315,7 @@ module Campfire
         buf
       end
 
-      # ECDH: общий секрет с точкой пирa (65 байт uncompressed).
+      # ECDH: shared secret with the peer's point (65 bytes uncompressed).
       def shared_secret(peer_point : Bytes) : Bytes
         peer = EcKey.from_public_point(peer_point)
         peer_pkey = LibWebPushCrypto.evp_pkey_new
@@ -332,13 +323,13 @@ module Campfire
         secret = Bytes.new(0)
         ctx = nil
         begin
-          # assign передаёт владение EVP_PKEY → освобождаемого нами EC_KEY
-          # дублируем (иначе двойной EC_KEY_free)
+          # assign transfers ownership to EVP_PKEY, so duplicate the EC_KEY
+          # we free ourselves (otherwise double EC_KEY_free).
           raise Error.new("EC_KEY_dup failed") unless (peer_dup = LibWebPushCrypto.ec_key_dup(peer.key_handle)) &&
             (own_dup = LibWebPushCrypto.ec_key_dup(@key))
           raise Error.new("assign peer key failed") unless LibWebPushCrypto.evp_pkey_assign(peer_pkey, 408, peer_dup) == 1
           raise Error.new("assign own key failed") unless LibWebPushCrypto.evp_pkey_assign(own_pkey, 408, own_dup) == 1
-          # derive-контекст — от собственного приватного ключа
+          # The derive context is built from our own private key.
           ctx = LibWebPushCrypto.evp_pkey_ctx_new(own_pkey, nil)
           raise Error.new("derive_init failed") unless ctx &&
             LibWebPushCrypto.evp_pkey_derive_init(ctx) == 1
@@ -356,7 +347,7 @@ module Campfire
         end
       end
 
-      # ES256 (ECDSA/SHA-256) — DER-подпись входа.
+      # ES256 (ECDSA/SHA-256): DER signature of the input.
       def es256_sign(data : Bytes) : Bytes
         pkey = LibWebPushCrypto.evp_pkey_new
         md_ctx = LibCrypto.evp_md_ctx_new
@@ -377,7 +368,7 @@ module Campfire
         end
       end
 
-      # Сырой указатель EC_KEY (для ec_key_dup).
+      # Raw EC_KEY pointer (for ec_key_dup).
       def key_handle : LibWebPushCrypto::EcKey
         @key
       end
@@ -394,8 +385,8 @@ module Campfire
   end
 end
 
-# Минимальный FFI к libcrypto (отдельный lib-блок: свои имена,
-# внешние символы OpenSSL — конфликтов со stdlib нет).
+# Minimal FFI to libcrypto (separate lib block: own names, external OpenSSL
+# symbols, no conflicts with stdlib).
 @[Link("crypto")]
 lib LibWebPushCrypto
   alias EcKey = Void*

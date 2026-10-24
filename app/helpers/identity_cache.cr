@@ -1,12 +1,9 @@
-# Per-worker кэш аутентификации: session + user по токену из signed
-# cookie — убирает 2 SQL (Session.where + User.find?) с каждого
-# аутентифицированного запроса. Гарантии свежести — те же, что у
-# PageCache: записи живут ровно один DB-epoch (PRAGMA data_version
-# двигается на коммиты любых других соединений/процессов), а собственные
-# write-экшены сбрасывают кэш через Campfire::ResponseCache.invalidate!.
-#
-# Негативные результаты (токен не найден) не кэшируются — битый токен
-# всегда перепроверяется, чтобы ошибочный nil не «залип» до epoch.
+# Per-worker auth cache: session + user by signed-cookie token, saving
+# 2 SQL queries per authenticated request. Freshness guarantees match
+# PageCache: entries live for exactly one DB epoch (PRAGMA data_version
+# moves on commits from any other connection/process); own write actions
+# flush the cache via Campfire::ResponseCache.invalidate!.
+# Negative results (token not found) are not cached.
 module Campfire
   class IdentityCache
     class Entry
@@ -22,17 +19,16 @@ module Campfire
     @@entries = {} of String => Entry
     @@epoch = ""
 
-    # Как и в PageCache: мутации @@entries — чистая память без
-    # yield-точек, атомарны между переключениями фибр; SQL-чтения
-    # выполняются ДО мутаций, а перед записью epoch перепроверяется
-    # (за время SQL другая фибра могла сбросить кэш).
+    # As in PageCache: @@entries mutations are pure memory with no yield
+    # points (atomic across fiber switches); SQL reads run BEFORE the
+    # mutation and the epoch is rechecked before writing.
     def self.lookup(token : String, epoch : String) : Entry?
       if epoch != @@epoch
         @@entries.clear
         @@epoch = epoch
       end
       if (entry = @@entries.delete(token))
-        @@entries[token] = entry # LRU: переставить в конец
+        @@entries[token] = entry # LRU: move to the end
         return entry
       end
       session = Session.where("token = ?", token).take

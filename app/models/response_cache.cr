@@ -1,12 +1,8 @@
 require "compress/gzip"
 require "digest/sha1"
 
-# Whole-page response cache per-worker — порт response_cache.js
-# (once-campfire-express): byte-bounded LRU готовых HTML-страниц;
-# записи валидны ровно один DB-epoch (PRAGMA data_version меняется при
-# коммитах любого другого соединения — HTTP-писатели, jobs-воркер,
-# другие процессы), первый lookup под новым epoch дропает всё.
-# Страница кэшируется вместе с ETag; gzip-представление лениво.
+# A read-only observer sees commits from every writer, including other runtimes.
+# PRAGMA data_version can only be compared on the same persistent connection.
 module Campfire
   class ResponseCache
     class Page
@@ -40,15 +36,11 @@ module Campfire
     @@bytes = 0
     @@epoch = ""
 
-    # Все операции над @@entries — чистая память без yield-точек,
-    # атомарны между переключениями фибр.
-    #
-    # Инвалидация: PRAGMA data_version двигается только на ЧУЖИЕ коммиты
-    # (другие соединения/процессы); собственные записи приложения через пул
-    # не видны — поэтому каждый write-экшен зовёт invalidate! явно.
-    # Сбрасывает и IdentityCache (session+user могли измениться тем же
-    # write-экшеном: профиль, аккаунт, membership), и FragmentCache
-    # (профиль автора и комнаты влияют на DOM фрагментов).
+    # Pure in-memory mutations with no yield points, atomic across fiber switches.
+    # data_version only moves on commits from other connections — this app's own writes
+    # aren't visible through the pool — so every write action resets the epoch explicitly,
+    # along with IdentityCache and FragmentCache (session/user/room/profile changes
+    # affect those caches too).
     def self.invalidate! : Nil
       @@epoch = ""
       Campfire::IdentityCache.reset!
@@ -59,13 +51,12 @@ module Campfire
       conn = ActiveRecord::Base.connection
       conn.query_one("PRAGMA data_version") { |rs| rs.read(Int64) }.to_s
     rescue
-      # при любой проблеме считаем эпоху сменившейся — кэш сбрасывается
+      # On any failure treat the epoch as changed — the cache is dropped.
       Random::Secure.hex(8)
     end
 
-    # Ключ: всё, от чего могут зависеть байты страницы, кроме БД
-    # (БД покрывается epoch): handler, полный URL, заголовки, которые
-    # читает рендер, viewer.
+    # Key: everything the page bytes depend on besides the DB (covered by the epoch):
+    # handler, full URL, headers read by rendering, viewer.
     def self.key(tag : String, request : HTTP::Request, user_id : Int64?) : String
       String.build do |io|
         io << tag << "\0"
@@ -87,7 +78,7 @@ module Campfire
       end
       page = @@entries[key]?
       return nil unless page
-      # LRU: переставить в конец (Hash хранит порядок вставки)
+      # LRU: move to the back (Hash keeps insertion order).
       @@entries.delete(key)
       @@entries[key] = page
       page
@@ -118,5 +109,5 @@ module Campfire
   end
 end
 
-# Короткое имя для контроллеров (PageCache.epoch / PageCache.key / ...).
+# Short alias for controllers (PageCache.epoch / PageCache.key / ...).
 PageCache = Campfire::ResponseCache

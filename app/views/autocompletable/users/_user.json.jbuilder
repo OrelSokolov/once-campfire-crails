@@ -1,6 +1,3 @@
-# Порт autocompletable/users/_user.json.jbuilder референса
-# (routes.js registerUsers): HTML-экранированное имя, подпись,
-# signed-avatar, sgid.
 json.id user.id
 json.name HTML.escape(user.name.to_s)
 json.label user.name

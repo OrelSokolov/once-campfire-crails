@@ -1,16 +1,12 @@
 require "http/client"
 require "xml"
 
-# opengraph/*.cr — unfurl вставленной ссылки (порт
-# once-campfire/app/models/opengraph/*.rb): location/fetch/document/
-# metadata + metadata/fetching.
-#
-# Отклонение от Rails-оракула: restricted_http-гем заменён DNS-резолвом
-# с пиннингом соединения (все адреса хоста обязаны быть публичными,
-# fail closed; коннект — к проверенному IP, TLS/SNI — по имени хоста).
+# Port of the Rails opengraph models (location/fetch/document/metadata + metadata/fetching).
+# Deviation from the Rails oracle: the restricted_http gem is replaced by DNS resolution with
+# connection pinning (all of a host's addresses must be public, fail closed; connect to the
+# verified IP, TLS/SNI by hostname).
 module Opengraph
-  # express opengraph.js publicAddress: публичный IPv4/IPv6?
-  # (fail closed: всё, что не глобально-уникальный адрес — приватно).
+  # express opengraph.js publicAddress: public IPv4/IPv6? (fail closed: anything not globally unique is private).
   def self.public_ip?(address : String) : Bool
     unless address.includes?(':')
       # IPv4
@@ -30,22 +26,19 @@ module Opengraph
       return false if a == 203 && b == 0                    # TEST-NET-3
       true
     else
-      # IPv6: только global unicast (2xxx/3xxx); mapped/special-use
-      # не начинаются с 2/3 — fail closed.
+      # IPv6: global unicast only (2xxx/3xxx); mapped/special-use don't start with 2/3 — fail closed.
       ip = address.downcase
       (ip.starts_with?('2') || ip.starts_with?('3')) &&
         !ip.starts_with?("2001:db8:") && !ip.starts_with?("2001:0") && !ip.starts_with?("2002:")
     end
   end
 
-  # DNS-резолв хоста: публичен, если это литерал-IP или ВСЕ адреса
-  # резолва публичны (express resolvePublic; пустой резолв — приватен).
+  # A host is public if it's an IP literal or ALL resolved addresses are public (empty resolution is private).
   def self.public_host?(host : String) : Bool
     literal = host.starts_with?('[') ? host[1..-2] : host
     return public_ip?(literal) if literal.matches?(/\A\d+\.\d+\.\d+\.\d+\z/) ||
                                   literal.includes?(':')
-    # type: STREAM обязателен: nil-дефолт параметра в stdlib 1.21
-    # не инстанцируется (can't restrict Nil to Type).
+    # type: STREAM is required: the parameter's nil default doesn't instantiate on the Crystal 1.21 stdlib.
     addrs = Socket::Addrinfo.resolve(literal, 80,
       type: Socket::Type::STREAM) rescue return false
     return false if addrs.empty?

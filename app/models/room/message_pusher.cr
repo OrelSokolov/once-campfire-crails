@@ -1,15 +1,6 @@
 require "../application_record"
 
-# Room::MessagePusher (room/message_pusher.rb референса): получатели
-# push-уведомления — активные (User.active) подписчики комнаты,
-# involvement everything ИЛИ mentions+mentionees, кроме создателя и
-# connected-пользователей (Membership.visible.disconnected, TTL 60с);
-# payload — title/body по room_type (direct — имя создателя, shared —
-# имя комнаты), badge непрочитанных (Pool#queue), icon — логотип
-# аккаунта (WebPush::Notification#encoded_message); доставка —
-# WebPush.deliver (aes128gcm + VAPID + DNS-pinning); 404/410 —
-# подписка мертва (удаляем), >=400 — исключение → retry джобы.
-# Без ключей окружения — успешный no-op.
+# Push notifications for a new message; no-op unless VAPID keys are configured.
 class Room
   module MessagePusher
     def self.push(message_id : Int64) : Nil
@@ -28,7 +19,6 @@ class Room
       end
       return unless message
 
-      # messagePlainText: тело сообщения или имя вложения
       body = conn.query_one?(
         "SELECT body FROM action_text_rich_texts WHERE record_type = 'Message' AND record_id = ?",
         message_id) { |rs| rs.read(String) }.to_s
@@ -41,18 +31,14 @@ class Room
           message_id) { |rs| rs.read(String) }.to_s
       end
 
-      # STI-порт пишет короткие имена ("Direct"), reference-сиды — полные
-      # ("Rooms::Direct"); проверяем обе формы.
+      # STI type is stored in two spellings: short ("Direct") from the port, full ("Rooms::Direct") from reference seeds.
       direct = message[:room_type].in?("Direct", "Rooms::Direct")
       title = direct ? message[:creator_name] : message[:room_name]
       message_body = direct ? plain : "#{message[:creator_name]}: #{plain}"
 
-      # push_subscriptions_for_users_involved_in_everything
-      # .or(push_subscriptions_for_mentionable_users(mentionees)) — один
-      # JOIN по relevant_subscriptions (User.active +
-      # Membership.visible.disconnected.where(room).not(creator)); ветка
-      # mentions дополнительно требует упоминания (message.mentionees).
       mentions = Message::Mentionee.mention_ids(body)
+      # Banning keeps the user's subscriptions, so that unbanning brings their notifications back,
+      # but nobody who can't sign in should be sent what's said in their rooms meanwhile.
       subscriptions = conn.query_all(
         "SELECT ps.id, ps.user_id, ps.endpoint, ps.p256dh_key, ps.auth_key, " \
         "m.involvement FROM push_subscriptions ps " \
@@ -73,7 +59,6 @@ class Room
       subscriptions.each do |sub|
         next if sub[:involvement] == "mentions" && !mentions.includes?(sub[:user_id])
         next if sub[:endpoint].nil? || sub[:p256dh].nil? || sub[:auth].nil?
-        # Pool#queue: badge — Membership.unread по каждому получателю
         badges[sub[:user_id]] ||= conn.query_one(
           "SELECT count(*) FROM memberships WHERE user_id = ? AND unread_at IS NOT NULL",
           sub[:user_id], as: Int64)
@@ -96,7 +81,7 @@ class Room
         end
         status = Campfire::WebPush.deliver(sub[:endpoint].not_nil!, sub[:p256dh].not_nil!,
           sub[:auth].not_nil!, payload, vapid_public, vapid_private, subject)
-        # nil — не-https endpoint или приватный адрес: skip (continue у express)
+        # nil means non-https endpoint or private address: skip.
         next unless status
         if {404, 410}.includes?(status)
           conn.exec("DELETE FROM push_subscriptions WHERE id = ?", sub[:id])

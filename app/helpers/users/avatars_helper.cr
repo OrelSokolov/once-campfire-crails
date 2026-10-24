@@ -1,20 +1,16 @@
-# Users::AvatarsHelper — разметка аватаров без вложения (users/avatars/
-# show.svg.erb референса): SVG-инициалы и default-bot-avatar. Включается
-# в Users::AvatarsController; кэширование/отдача — в контроллере.
+# Initials SVG avatars (users/avatars/show.svg.erb of the reference), included
+# in Users::AvatarsController; caching/serving lives in the controller.
 require "digest/crc32"
 
 module Users::AvatarsHelper
-  # users/avatars_helper.rb: AVATAR_COLORS[Zlib.crc32(to_param) % size] —
-  # палитра 18 цветов по CRC32 id (байт-в-байт с Ruby Zlib.crc32).
+  # 18-color palette picked by CRC32 of the id, byte-identical to Ruby's Zlib.crc32.
   AVATAR_COLORS = {"#AF2E1B", "#CC6324", "#3B4B59", "#BFA07A", "#ED8008",
                    "#ED3F1C", "#BF1B1B", "#736B1E", "#D07B53", "#736356",
                    "#AD1D1D", "#BF7C2A", "#C09C6F", "#698F9C", "#7C956B",
                    "#5D618F", "#3B3633", "#67695E"}
 
-  # show.svg.erb референса: квадрат 512 rx=50 с инициалами
-  # (User#initials: scan(/\b\w/).join), цвет — CRC32-палитра; при 3+
-  # инициалах textLength="85%". Байты идентичны выводу ERB (пустая строка
-  # <%=raw %> — 6 пробелов).
+  # 512px rx=50 square with User#initials (scan(/\b\w/).join); with 3+ initials
+  # textLength="85%". Output bytes match the reference ERB render exactly.
   def initials_svg(user : User?) : String
     name = user.try(&.name).to_s
     initials = name.scan(/\b\w/).join

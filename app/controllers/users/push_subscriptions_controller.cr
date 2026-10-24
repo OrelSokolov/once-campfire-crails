@@ -1,15 +1,8 @@
-# /users/me/push_subscriptions — подписки текущего пользователя на Web
-# Push (users/push_subscriptions_controller.rb референса): список,
-# регистрация новой (JS-колокол _bell.html.erb POST-ит
-# {push_subscription:{endpoint,p256dh_key,auth_key}}), удаление.
-# Совпавшая endpoint-тройка — touch существующей подписки (и повторная
-# валидация), иначе create с user_agent; невалидный endpoint — 422.
 class Users::PushSubscriptionsController < ApplicationController
   include PushSubscriptionsHelpers
 
   @push_subscriptions : Array(Push::Subscription) = [] of Push::Subscription
 
-  # Строка списка (users/push_subscriptions/_push_subscription.html.erb).
   compile_partials({
     "users/push_subscriptions/push_subscription" => {
       path: "app/views/users/push_subscriptions/_push_subscription.html.erb",
@@ -33,6 +26,7 @@ class Users::PushSubscriptionsController < ApplicationController
       "user_id = ? AND endpoint = ? AND p256dh_key = ? AND auth_key = ?",
       user.id.not_nil!, endpoint, p256dh, auth).take
     if existing
+      # Existing endpoints must pass current validations
       if existing.valid_subscription?
         existing.touch
         head :ok
@@ -56,7 +50,7 @@ class Users::PushSubscriptionsController < ApplicationController
   end
 
   def destroy
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
     Push::Subscription.where("user_id = ? AND id = ?",
       current_user.not_nil!.id.not_nil!, params["id"].to_s).delete_all
     redirect_to user_push_subscriptions_url

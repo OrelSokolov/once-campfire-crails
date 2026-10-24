@@ -1,20 +1,16 @@
 require "../application_record"
 
-# User::Bannable (user/bannable.rb): бан/разбан — bans из IP-сессий,
-# разлогин, статус banned; контент удаляет RemoveBannedContentJob.
 class User
   module Bannable
-    # User::Bannable#ban (контракт express routes.js): транзакция —
-    # bans из IP-адресов сессий юзера (DISTINCT, без пустых), удаление
-    # сессий (разлогин), статус banned (2). Контент удаляется
-    # асинхронно джобой remove_banned_content — постановка строго
-    # после commit, как notify в MessageCreator.
+    # Ban: bans from the user's session IPs (DISTINCT, no blanks), delete sessions (sign out),
+    # status banned (2). Content is removed asynchronously by the remove_banned_content job —
+    # enqueued strictly after commit, like notify in MessageCreator.
     def ban : Nil
       uid = id.not_nil!
       now = Time.utc
       Campfire::WriteQueue.perform do
         ActiveRecord::Base.transaction do
-          conn = ActiveRecord::Base.__session # pinned-коннект транзакции
+          conn = ActiveRecord::Base.__session # pinned transaction connection
           conn.query_all(
             "SELECT DISTINCT ip_address FROM sessions " \
             "WHERE user_id = ? AND ip_address IS NOT NULL AND ip_address <> ''", uid) do |rs|
@@ -28,14 +24,12 @@ class User
           conn.exec("UPDATE users SET status = 2, updated_at = ? WHERE id = ?", now, uid)
         end
       end
-      # apply_ban референса: close_remote_connections — рвём live-сокеты
-      # забаненного ПОСЛЕ commit (рано закрытый сокет реконнектится и
-      # перечитает ещё живую сессию).
+      # apply_ban of the reference: close_remote_connections — tear the banned user's live
+      # sockets AFTER commit (a socket closed too early reconnects and re-reads the still-live session).
       close_remote_connections
       Campfire::JobQueue.enqueue_batch([{"remove_banned_content", %({"user_id":#{uid}})}])
     end
 
-    # User::Bannable#unban: bans.delete_all + active! (статус 0).
     def unban : Nil
       uid = id.not_nil!
       now = Time.utc

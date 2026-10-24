@@ -1,19 +1,17 @@
-# /join/:code — регистрация по invite-ссылке (референс: routes.js
-# /join/:code + join.eta): GET — форма name/email/password (app/views/
-# joins/show.html.erb), POST — createUser (role=0 + memberships во все
-# Rooms::Open, involvement "mentions") + сессия + redirect на "/".
+# /join/:code — invite-link sign-up (routes.js + join.eta): GET renders the name/email/
+# password form, POST creates the user (role=0 + memberships in every Rooms::Open,
+# involvement "mentions") + session + redirect to "/".
 class JoinsController < ApplicationController
   include JoinsHelpers
 
   skip_before_action :require_authentication
 
-  # show.html.erb: аккаунт invite-ссылки (имя, join_code в action).
+  # The invite link's account for show.html.erb (name, join_code in the action).
   attr_reader account : Account?
 
   def show
-    # Known-issue (PLAN.md): роутер декодирует path-сегменты через
-    # URI.decode_www_form — "+" в join_code превращается в пробел;
-    # пробуем оба варианта, пока фикс не в монорепо.
+    # Known issue (PLAN.md): the router decodes path segments with URI.decode_www_form,
+    # turning "+" in join_code into a space; try both spellings until the fix lands.
     code = params["code"].to_s
     account = Account.where("join_code = ?", code).take ||
               Account.where("join_code = ?", code.gsub(' ', '+')).take
@@ -25,7 +23,7 @@ class JoinsController < ApplicationController
   end
 
   def create
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
     code = params["code"].to_s
     account = Account.where("join_code = ?", code).take ||
               Account.where("join_code = ?", code.gsub(' ', '+')).take
@@ -45,18 +43,10 @@ class JoinsController < ApplicationController
       email_address: email,
       password_digest: Crypto::Bcrypt::Password.create(password, cost: 10).to_s,
       role: 0,
-      status: 0,
       created_at: now, updated_at: now)
+    # Membership in every open room comes from the model's
+    # after_create_commit :grant_membership_to_open_rooms (user.cr).
     user.save!
-
-    # createUser эталона: membership во все Rooms::Open ("mentions").
-    # STI-порт пишет короткий type ('Open'), сид — полный ('Rooms::Open');
-    # scope opens покрывает оба написания.
-    Room.opens.each do |room|
-      Membership.new(room_id: room.id.not_nil!, user_id: user.id.not_nil!,
-        involvement: "mentions", connections: 0,
-        created_at: now, updated_at: now).save!
-    end
 
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
     cookies.signed.set("session_token", session.token.not_nil!,

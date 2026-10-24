@@ -1,17 +1,12 @@
-# Users::SidebarHelper — рендер сайдбара /users/me/sidebar (users/sidebars/
-# _show.html.erb + rooms/_direct|_shared|_direct_placeholder референса):
-# сборка view-моделей ChatERB, turbo-frame-обёртка и layout-каркас.
-# Данные готовит Users::SidebarsController, здесь только разметка.
+# Users::SidebarHelper: renders the /users/me/sidebar page — ChatERB view
+# models, turbo-frame wrapper and layout shell.
 module Users::SidebarHelper
-  # Полная HTML-страница сайдбара (кэшируется PageCache в контроллере).
   def sidebar_page(user : User, placeholders : Array(User)) : Campfire::ResponseCache::Page
     members_by_room = sidebar_direct_members(user)
 
-    # Rails: with_direct_rooms (rooms.updated_at DESC — «свежесть» DM),
-    # with_ordered_room (LOWER(name) ASC); в браузере sorted-list всё равно
-    # пересортирует, но сырой ответ /users/me/sidebar должен совпадать
-    # (сортировка в Crystal, а не SQL — детерминированный порядок при
-    # равных updated_at, ORDER BY его не гарантирует).
+    # Sorted in Crystal rather than SQL: deterministic order on equal
+    # updated_at (ORDER BY does not guarantee it), so the raw
+    # /users/me/sidebar response matches the oracle.
     direct_rooms, shared_rooms = Room.visible_for(user).order("id").to_a
       .partition(&.direct?)
     direct_rooms.sort! { |a, b| b.updated_at.as(Time) <=> a.updated_at.as(Time) }
@@ -35,10 +30,8 @@ module Users::SidebarHelper
       placeholders: placeholders, rooms_stream: HTML.escape(rooms_stream),
       user_rooms_stream: HTML.escape(user_rooms_stream)).sidebar.to_s
 
-    # Turbo-запрос фрейма (браузерный reload) получает голый фрагмент;
-    # обычный GET — полный layout-каркас, как Rails (turbo_frame_tag +
-    # layout при отсутствии заголовка Turbo-Frame): title «Campfire»,
-    # body class admin без «sidebar», пустые nav/footer/aside.
+    # Turbo-frame requests (browser reload) get the bare fragment;
+    # a regular GET gets the full layout shell, as in Rails.
     html = if request.headers["Turbo-Frame"]? == "user_sidebar"
              "<!doctype html>\n<html>\n<head><title>Sidebar</title></head>\n<body>\n" +
                ::Turbo::FramesHelper.turbo_frame_tag("user_sidebar") { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
@@ -77,13 +70,11 @@ module Users::SidebarHelper
     table
   end
 
-  # Membership#unread? референса для комнаты viewer'а.
   private def sidebar_room_unread?(user : User, room_id : Int64) : Bool
     Membership.where("room_id = ?", room_id)
       .where("user_id = ?", user.id.not_nil!).unread.any?
   end
 
-  # data-sorted-list-number сайдбара: epoch updated_at комнаты в мс.
   private def sidebar_epoch_ms(room : Room) : Int64
     t = room.updated_at.as(Time)
     (t.to_unix * 1000) + (t.nanosecond // 1_000_000)

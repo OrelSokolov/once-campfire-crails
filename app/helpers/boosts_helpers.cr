@@ -1,10 +1,7 @@
-# BoostsHelpers — ERB-хелперы app/views/messages/boosts/*.html.erb
-# (index/new). Включается в Messages::BoostsController; общий icon —
-# ApplicationHelper.
+# ERB helpers for app/views/messages/boosts/*.html.erb, included in Messages::BoostsController.
 module BoostsHelpers
-  # index.html.erb: boosts partial. Файл шаблона — без завершающего
-  # перевода строки после <%= boosts_dom %> (byte-parity с референсом:
-  # boosts_dom сам завершает вывод "\n").
+  # index.html.erb: boosts partial. No trailing newline after <%= boosts_dom %> —
+  # byte parity with the reference (boosts_dom itself ends its output with "\n").
   def boosts_dom : ERB::SafeString
     ERB::SafeString.new(ChatLayout.boosts_dom(mid.not_nil!, boosts))
   end

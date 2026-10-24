@@ -1,17 +1,11 @@
-# GET /users/:id — публичный профиль пользователя (user.eta): аватар,
-# имя/bio/email (админу), кнопка Ping (POST /rooms/directs?user_ids[]=),
-# transfer-ссылка (админ, transfer_link.eta), Ban/Remove ban (админ,
-# см. Users::BansController). Разметка — app/views/users/show.html.erb
-# (implicit render).
 class UsersController < ApplicationController
   include UsersHelper
 
-  # show.html.erb: viewer (ветки admin-блоков) и subject профиля.
+  # Data for show.html.erb: the viewer (admin branches) and the profile subject.
   @viewer : User?
   @subject : User?
 
-  # HTML-партиал nav профиля (layout_start Screen "user"): назад +
-  # «Edit my profile» для себя; рендерится обёрткой UsersHelper#user_nav.
+  # Profile nav partial, rendered through the UsersHelper#user_nav wrapper.
   compile_partials({
     "users/nav" => {path: "app/views/users/_nav.html.erb",
                     locals: {"viewer" => User, "subject" => User}},
@@ -20,12 +14,7 @@ class UsersController < ApplicationController
   def show
     viewer = current_user.not_nil!
     @viewer = viewer
-    id = params["id"].to_s.to_i64?
-    subject = id ? User.find?(id) : nil
-    unless subject
-      response.status = :not_found
-      return render(plain: "User not found")
-    end
-    @subject = subject
+    # find-bang: RecordNotFound -> 404 via the middleware rescue ladder
+    @subject = User.all.find(params["id"].to_s)
   end
 end

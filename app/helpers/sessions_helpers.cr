@@ -1,16 +1,10 @@
-# SessionsHelpers — ERB-хелперы app/views/sessions/new.html.erb:
-# head логина без chat-обвязки, flash/alert,
-# логотип аккаунта, лайтбокс. Включается в SessionsController; общий
-# icon/campfire_icon_src — ApplicationHelper.
+# SessionsHelpers: ERB helpers for app/views/sessions/new.html.erb.
 module SessionsHelpers
-  # head без chat-обвязки + turbo-visit-control reload
-  # (layouts/application.html.erb логина).
   def login_head : ERB::SafeString
     ERB::SafeString.new(ChatLayout.head("Sign in", nil, chat: false,
       head_extra: %(<meta name="turbo-visit-control" content="reload">\n)))
   end
 
-  # flash.now[:alert] (application.html.erb:38-48) — после </nav>.
   def flash_html : ERB::SafeString
     return ERB::SafeString.new("") unless login_alert
     ERB::SafeString.new(%(<div class="flash" data-controller="element-removal" data-action="animationend-&gt;element-removal#remove">\n) \
@@ -19,12 +13,10 @@ module SessionsHelpers
                         %(</div>\n<span class="for-screen-reader" role="alert" aria-atomic="true">Too many requests or unauthorized.</span>\n</div>\n))
   end
 
-  # panel shake при неудачном входе (class="panel<%= panel_modifier %>").
   def panel_modifier : String
     login_alert ? " shake" : " "
   end
 
-  # Логотип аккаунта (logos/app-icon.png, fingerprinted asset).
   def logo_src : String
     ChatLayout.fresh_account_logo_path(Account.take)
   end
@@ -37,7 +29,6 @@ module SessionsHelpers
     ERB::SafeString.new(ChatLayout.lightbox_dialog)
   end
 
-  # Бейдж версии (экранируется в <%= %>).
   def version : String
     ENV["APP_VERSION"]? || "parity"
   end

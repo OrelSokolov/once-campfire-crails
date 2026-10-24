@@ -1,7 +1,3 @@
-# GET /users/me/sidebar — сайдбар со списком комнат. Тонкий контроллер
-# (sidebars_controller.rb референса): данные — scope'ы Membership/User,
-# разметка — Users::SidebarHelper + ChatERB (users/sidebars/_show.html.erb),
-# whole-page кэш — PageCache (around_action :cache_read_response).
 class Users::SidebarsController < ApplicationController
   include Users::SidebarHelper
 
@@ -16,11 +12,8 @@ class Users::SidebarsController < ApplicationController
     send_page(page)
   end
 
-  # find_direct_placeholder_users референса: активные коллеги без
-  # существующего ping'а — не из direct-комнат viewer'а и не сам viewer
-  # (where.not(id: ...) референса), порядок created_at, лимит 20 минус
-  # число исключённых. У порта direct-комнаты определяются по
-  # rooms.name IS NULL (type хранит два написания, см. Room#to_gid_param).
+  # Port detects direct rooms via rooms.name IS NULL (the type column
+  # stores two spellings, see Room#to_gid_param).
   private def find_direct_placeholder_users(user : User, direct_room_ids : Array(Int64)) : Array(User)
     exclude_user_ids = user_ids_already_in_direct_rooms_with(direct_room_ids)
     limit = {DIRECT_PLACEHOLDERS - exclude_user_ids.size, 0}.max
@@ -29,7 +22,6 @@ class Users::SidebarsController < ApplicationController
       .order("created_at").limit(limit).to_a
   end
 
-  # Direct-комнаты viewer'а (видимые — как в Room.visible_for).
   private def direct_room_ids(user : User) : Array(Int64)
     Room.visible_for(user).order("id").to_a
       .select(&.direct?).map(&.id.not_nil!)
@@ -44,8 +36,7 @@ class Users::SidebarsController < ApplicationController
       as: {Int64})
   end
 
-  # IN (...)-список для placeholder-запросов; пустой набор → IN (NULL),
-  # как `WHERE false`.
+  # An empty set becomes IN (NULL), which behaves like WHERE false.
   private def in_clause(ids : Array(Int64)) : String
     ids.empty? ? "NULL" : ids.map { "?" }.join(", ")
   end

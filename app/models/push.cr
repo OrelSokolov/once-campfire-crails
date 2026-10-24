@@ -1,4 +1,4 @@
-# push.rb оракула: namespace-модуль Push (table_name_prefix "push_"
-# в Rails; в Crystal таблица фиксируется set_table_name в Subscription).
+# Namespace module Push: Rails uses table_name_prefix "push_"; the port
+# fixes the table with set_table_name in Subscription.
 module Push
 end

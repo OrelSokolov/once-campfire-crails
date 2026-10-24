@@ -1,5 +1,3 @@
-# location.rb: валидация URL (http/https, без userinfo — express
-# resolvePublic, надмножество URI::HTTP-проверки Rails) + публичность.
 class Opengraph::Location
   FILES_AND_MEDIA_URL_REGEX =
     /\bhttps?:\/\/\S+\.(?:zip|tar|tar\.gz|tar\.bz2|tar\.xz|gz|bz2|rar|7z|dmg|exe|msi|pkg|deb|iso|jpg|jpeg|png|gif|bmp|mp4|mov|avi|mkv|wmv|flv|heic|heif|mp3|wav|ogg|aac|wma|webm|ogv|mpg|mpeg)\b/
@@ -17,7 +15,6 @@ class Opengraph::Location
     Opengraph.public_host?(host)
   end
 
-  # read_html: nil для невалидного/медиа-URL и при ошибке сети.
   def read_html(deadline : Time::Instant? = nil) : String?
     return nil unless valid?
     return nil if FILES_AND_MEDIA_URL_REGEX.match(@url)

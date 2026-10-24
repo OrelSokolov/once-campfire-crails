@@ -1,14 +1,21 @@
-# RoomMessagesChannel — авторизация стрима сообщений комнаты (референс:
-# app/channels/room_messages_channel.rb). Комната выводится из
-# верифицированного имени стрима, подписчик не выбирает ни канал, ни
-# комнату; членство проверяется при подписке — отзыв membership останав-
-# ливает доставку.
+require "./room_channel"
+# Authorizes the room message stream when the subscription is made, so that revoking a
+# membership actually stops delivery.
+#
+# Turbo's stock channel verifies only the signature on the stream name. That name carries
+# no expiry and no binding to a user, so one harvested while a member keeps working after
+# the membership is gone. Reconnecting makes it worse rather than better: revoking a
+# membership disconnects the user with reconnect: true, and the client then replays its
+# subscriptions on the fresh socket.
+#
+# The room is derived from the verified stream name rather than taken as a parameter, so
+# there's nothing for a subscriber to point somewhere else. The subscriber also doesn't
+# get to choose the channel: Turbo::StreamsChannel turns these stream names away, so this
+# is the only way onto them. See config/initializers/turbo_streams_authorization.rb.
 class RoomMessagesChannel < ApplicationCable::Channel
   STREAM_SUFFIX = "messages"
 
-  # room_streams_are_authorized.rb: стрим guarded, если его суффикс —
-  # сообщения комнаты (подписка — только через этот канал с проверкой
-  # membership).
+  # True for the stream names this channel exists to guard, whoever is asking.
   def self.guarded_stream?(stream_name : String?) : Bool
     !!stream_name.try { |s| s.split(":", 2)[1]? == STREAM_SUFFIX }
   end
@@ -28,9 +35,6 @@ class RoomMessagesChannel < ApplicationCable::Channel
     Turbo::Streams::StreamName.verified_stream_name(signed)
   end
 
-  # "<b64url(gid)>:messages" → комната, видимая текущему пользователю.
-  # gid может быть STI-классом (Rooms::Open) или базой (Room) — имя модели
-  # не security-граница, граница — membership.
   private def subscribable_room?(stream_name : String) : Bool
     gid_param, suffix = stream_name.split(":", 2)
     return false unless suffix == STREAM_SUFFIX

@@ -1,33 +1,31 @@
 require "./application_record"
 class User < ApplicationRecord
   has_many :memberships, foreign_key: "user_id"
+  has_many :rooms, through: :memberships
   has_many :sessions, foreign_key: "user_id"
   has_many :messages, foreign_key: "creator_id"
   has_many :searches, foreign_key: "user_id", class_name: "Search"
 
   preloadable_attachment :avatar
 
-  # user.rb / user/bot.rb референса: ordered, active (bannable),
-  # active_bots (active.where(role: :bot); в порте role=2, status=0).
+  ar_enum :status, {active: 0, deactivated: 1, banned: 2}, default: :active
+
+  after_create_commit :grant_membership_to_open_rooms
+
   scope(:active)     { where("status = 0") }
   scope(:active_bots) { active.where("role = 2") }
   scope(:ordered)    { order("LOWER(name)") }
 
-  # Rails: User.active.authenticate_by(email_address:, password:) —
-  # bcrypt compare against password_digest (status 0 = active).
-  # authenticate_by при ненайденном юзере всё равно хеширует пароль
-  # (secure_password.rb: "helps mitigate timing-based enumeration") —
-  # порт делает тот же dummy-bcrypt, чтобы ответ на несуществующий
-  # email не отличался по времени от неверного пароля.
+  # authenticate_by hashes the password even for an unknown user (secure_password.rb:
+  # "helps mitigate timing-based enumeration") — the port runs the same dummy bcrypt.
   DUMMY_BCRYPT = Crypto::Bcrypt::Password.create("campfire-timing-guard", cost: 10).to_s
 
   def self.authenticate(email_address : String, password : String) : User?
     user = active.where("email_address = ?", email_address).take
     digest = user ? user.password_digest.to_s : DUMMY_BCRYPT
     if digest.empty?
-      # пустой digest (бот без пароля): bcrypt по ветке nil-user уже
-      # отработал выше только для nil-юзера; здесь дожимаем время
-      # dummy-хешем для одинаковой формы ответа
+      # Empty digest (a bot without a password): spend the dummy-bcrypt time so the
+      # response shape stays uniform.
       digest = DUMMY_BCRYPT
     end
     begin
@@ -38,11 +36,6 @@ class User < ApplicationRecord
     bcrypt.verify(password) && user ? user : nil
   end
 
-  # user.rb:48-49 + 71-72 референса: reset/close_remote_connections —
-  # живые cable-сокеты юзера закрываются через internal channel
-  # (ActionCable::RemoteConnections в шарде action_cable_cr; CableBus
-  # доставляет disconnect во все fork-воркеры). reconnect: true — клиент
-  # перезапустит /cable (логаут), false — не должен (бан/деактивация).
   def reset_remote_connections : Nil
     close_remote_connections reconnect: true
   end
@@ -50,5 +43,18 @@ class User < ApplicationRecord
   def close_remote_connections(reconnect : Bool = false) : Nil
     ActionCable.server.remote_connections
       .where(current_user: id.not_nil!.to_s).disconnect(reconnect: reconnect)
+  end
+
+  private def grant_membership_to_open_rooms : Nil
+    # One statement, which SQLite runs under the write lock (oracle user.rb):
+    # membership in every open room, duplicates skipped. involvement falls
+    # back to the column default ('mentions' — Room#default_involvement).
+    # The port stores the STI type in two spellings, so cover both.
+    now = Time.utc
+    ActiveRecord::Base.connection.exec(
+      "insert into memberships (room_id, user_id, created_at, updated_at) " \
+      "select id, ?, ?, ? from rooms where type in ('Open', 'Rooms::Open') " \
+      "on conflict do nothing",
+      id.not_nil!, now, now)
   end
 end

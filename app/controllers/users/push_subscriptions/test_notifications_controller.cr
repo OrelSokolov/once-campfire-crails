@@ -1,9 +1,3 @@
-# POST /users/me/push_subscriptions/:id/test_notifications — тестовая
-# доставка (users/push_subscriptions/test_notifications_controller.rb
-# референса): title "Campfire Test", body — Random.uuid, path — страница
-# подписок, badge — непрочитанные комнаты пользователя. Доставка —
-# WebPush.deliver синхронно (у референса — пул); без VAPID-ключей
-# окружения — no-op, как у джобы push.
 class Users::PushSubscriptions::TestNotificationsController < ApplicationController
   def create
     user = current_user.not_nil!
@@ -17,8 +11,7 @@ class Users::PushSubscriptions::TestNotificationsController < ApplicationControl
     redirect_to user_push_subscriptions_url
   end
 
-  # WebPush::Pool#deliver + invalid_subscription_handler: 404/410
-  # (ExpiredSubscription) — подписка удаляется; прочие ошибки — лог.
+  # 404/410 (ExpiredSubscription) deletes the subscription; other errors are logged.
   private def deliver(user : User, subscription : Push::Subscription,
                       vapid_public : String, vapid_private : String) : Nil
     badge = ActiveRecord::Base.connection.query_one(

@@ -1,9 +1,5 @@
 require "../application_job"
 
-# Message::BroadcastUnreadRoomJob (message/broadcast_unread_room.rb
-# референса): fanout уведомления «комната непрочитана» по одному на
-# участника (unread OR connected) в стрим UnreadRoomsChannel
-# (user_X_unreads); клиент — rooms_list_controller.js ({roomId, at}).
 class Message::BroadcastUnreadRoomJob < ApplicationJob
   def self.perform(data : JSON::Any) : Nil
     message_id = data["message_id"]?.try(&.to_s.to_i64?)
@@ -16,7 +12,6 @@ class Message::BroadcastUnreadRoomJob < ApplicationJob
     end
     return unless message
 
-    # memberships.unread OR connected — потенциально непрочитавшие.
     user_ids = conn.query_all(
       "SELECT user_id FROM memberships WHERE room_id = ? " \
       "AND (unread_at IS NOT NULL OR connected_at >= ?)",

@@ -1,13 +1,9 @@
 require "../application_record"
 require "../../jobs/web_push"
 
-# Push::Subscription референса (push/subscription.rb): подписка браузера
-# на Web Push — endpoint push-сервиса + ключи шифрования p256dh/auth,
-# user_agent регистрации. Валидация endpoint (validate_endpoint_url):
-# presence, https, порт 443 (дефолтный), whitelist хостов push-сервисов,
-# DNS-резолв без приватных адресов (rebinding-guard; у референса —
-# restricted_http PrivateNetworkGuard, здесь — DNS-проверка без
-# пиннинга, как WebPush.resolve_public — см. PLAN_REMAINING §2).
+# Web Push browser subscription: push-service endpoint + p256dh/auth keys.
+# Endpoint validation uses a plain DNS public-IP check instead of the
+# reference's restricted_http PrivateNetworkGuard.
 class Push::Subscription < ApplicationRecord
   set_table_name "push_subscriptions"
   belongs_to :user
@@ -20,15 +16,13 @@ class Push::Subscription < ApplicationRecord
     notify.windows.com
   ]
 
-  # valid? Rails: endpoint задан и проходит все проверки URL. Вызывается
-  # и для существующих подписок — create референса при совпадении
-  # endpoint-тройки требует повторную валидацию («Existing endpoints
-  # must pass current validations»).
+  # Endpoint must be present and pass current validations — the reference re-validates
+  # existing endpoints on create too ("Existing endpoints must pass current validations").
   def valid_subscription? : Bool
     !endpoint.to_s.empty? && endpoint_error.nil?
   end
 
-  # errors.add(:endpoint, …) референса — текст ошибки или nil.
+  # The reference's errors.add(:endpoint, ...) message text, or nil.
   def endpoint_error : String?
     uri = endpoint_uri
     return "is not a valid URL" unless uri
@@ -38,8 +32,6 @@ class Push::Subscription < ApplicationRecord
     return "resolves to a private or invalid IP address" unless resolves_to_public_ip?
     nil
   end
-
-  # ————— Частные проверки (private у референса) —————
 
   private def endpoint_uri : URI?
     URI.parse(endpoint.to_s)
@@ -55,9 +47,8 @@ class Push::Subscription < ApplicationRecord
     end
   end
 
-  # resolved_endpoint_ip: все A/AAAA-адреса хоста должны быть публичными
-  # (упрощённый PrivateNetworkGuard; resolve_public возвращает nil при
-  # приватном/специальном адресе или ошибке резолва — fail closed).
+  # Simplified PrivateNetworkGuard: every A/AAAA address of the host must be public;
+  # nil on a private/special address or resolve failure — fail closed.
   private def resolves_to_public_ip? : Bool
     return false unless uri = endpoint_uri
     Campfire::WebPush.resolve_public(uri) != nil

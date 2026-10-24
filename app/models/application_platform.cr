@@ -1,9 +1,6 @@
-# Мини-порт useragent 0.16 (ApplicationPlatform референса): только
-# классификация, необходимая pwa-диалогам (browser/system/install
-# instructions). Токены продуктов UA сверяются со списком известных
-# браузеров; headless Chrome («HeadlessChrome/…») в списке отсутствует и
-# потому классифицируется по следующему токену «Safari» — ровно как в
-# ruby-геме, что даёт Safari+Linux в parity-прогоне.
+# Mini-port of the useragent gem: only the classification the pwa dialogs need.
+# Headless Chrome ("HeadlessChrome/…") is not in the browser list and classifies by the
+# next token "Safari", exactly like the gem.
 class ApplicationPlatform
   BROWSERS = %w[Firefox FxiOS Chrome Opera MSIE Edg Edge Safari]
 
@@ -74,8 +71,9 @@ class ApplicationPlatform
     end
   end
 
-  # application_platform.rb: краулеры Apple Messages (og-превью ссылки
-  # iMessage) получают страницу без заголовка «Unsupported browser».
+  # Apple Messages pretends to be Facebook and Twitter bots via spoofed user agent.
+  # We want to avoid showing "Unsupported browser" message when a Campfire link
+  # is shared via Messages.
   def apple_messages? : Bool
     @ua.includes?("facebookexternalhit") || @ua.includes?("Twitterbot")
   end

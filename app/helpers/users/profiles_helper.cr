@@ -1,56 +1,39 @@
-# Users::ProfilesHelper — ERB-хелперы app/views/users/profiles/show.html.erb:
-# head+nav профиля, involvement-чипы со сменой уровня уведомлений,
-# список комнат участия, transfer-блок. Включается в
-# Users::ProfilesController; общий icon/page_close — ApplicationHelper.
+# Users::ProfilesHelper: ERB helpers for app/views/users/profiles/show.html.erb.
 module Users::ProfilesHelper
-  # SafeString: сырой HTML из ChatLayout без повторного экранирования
-  # в <%= %> (как boosts).
-
-  # head + body + nav профиля (back + logout) + main (ChatLayout.page_open).
   def page_open(user : User) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("profile", user.name.to_s,
       nav_html: profile_nav))
   end
 
-  # rooms/involvements/_install_instructions.html.erb — pwa-диалог
-  # (ChatERB-партиал, UA-классификация как у bell-тестов).
   def install_instructions : ERB::SafeString
     ChatERB.new(ua: @ua).render("install_instructions")
   end
 
-  # translation_button (translations_helper) — SafeString для <%= %>.
   def translation_button(key : String) : ERB::SafeString
     ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
-  # fresh_user_avatar_path (avatars_helper): токен-путь с cache-buster.
   def fresh_avatar_path(user : User) : String
     ChatLayout.fresh_user_avatar_path(user.id.not_nil!, user.updated_at)
   end
 
-  # web-share (transfer_link.eta): делиться auto-login-ссылкой; кнопка
-  # скрыта (hidden), показывается стимулусом при поддержке navigator.share.
   def web_share_button(url : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.web_share_button(url))
   end
 
-  # profile_form_with (users/profiles_helper референса): form_with на
-  # user_profile_path, PATCH, scope user (модели FormModel у User нет —
-  # значения полей передаются явным value:).
+  # No FormModel for User in the port: field values are passed
+  # explicitly via value:.
   def profile_form_with(**params,
                         &block : ActionView::Helpers::FormHelper::FormBuilder -> _)
     form_with **params, url: "/users/me/profile", method: "patch",
       scope: "user", data: {controller: "form"}, &block
   end
 
-  # copy_button: иконка copy-paste с классом flex-item-no-shrink (артефакты).
   def copy_button(url : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.copy_button(url, "Copy auto-login link",
       icon_class: "flex-item-no-shrink colorize--black"))
   end
 
-  # room_display_name(room, for_user:) RoomsHelper: обычные комнаты —
-  # имя; direct (name NULL) — имена собеседников через to_sentence.
   def profile_display_name(room : Room, viewer : User) : String
     return room.name.to_s unless room.direct?
     others = User.where(
@@ -60,8 +43,6 @@ module Users::ProfilesHelper
     ChatLayout.display_sentence(others, viewer.name.to_s)
   end
 
-  # Строка списка участия (rooms/_membership.html.erb референса):
-  # ссылка + разделитель + involvement-чип.
   def membership_row(room : Room, membership : Membership,
                      viewer : User) : ERB::SafeString
     name = HTML.escape(profile_display_name(room, viewer))
@@ -75,9 +56,6 @@ module Users::ProfilesHelper
       %(  </span>\n</li>))
   end
 
-  # involvement.html.erb + InvolvementsHelper: пустой turbo-frame с
-  # button_to-формой PUT /rooms/:id/involvement — клик циклически
-  # переключает уровень уведомлений (следующий уровень в action-query).
   def involvement_chip(room : Room, membership : Membership) : ERB::SafeString
     current = membership.involvement.to_s.presence || "mentions"
     nxt = next_involvement(room, current)
@@ -94,9 +72,8 @@ module Users::ProfilesHelper
       %(#{HTML.escape(label)}</span></button></form>\n</turbo-frame>))
   end
 
-  # Involvement#next референса: shared-комнаты проходят полный цикл
-  # mentions→everything→nothing→invisible, direct — только
-  # everything↔nothing (invisible в direct недоступен).
+  # Involvement#next: shared rooms cycle mentions -> everything ->
+  # nothing -> invisible; direct rooms toggle everything <-> nothing.
   private def next_involvement(room : Room, current : String) : String
     return current == "everything" ? "nothing" : "everything" if room.direct?
     case current
@@ -107,8 +84,6 @@ module Users::ProfilesHelper
     end
   end
 
-  # profile_nav: назад + logout (форма на /session с push-подпиской,
-  # sessions#logout:prevent — layout_start.eta).
   def profile_nav : String
     String.build do |io|
       io << ChatLayout.nav_back("/") << "\n"

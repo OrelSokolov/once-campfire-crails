@@ -1,10 +1,5 @@
 require "../application_record"
 
-# Message::Pagination (message/pagination.rb): страница истории —
-# PAGE_SIZE сообщений; before → 40 строго до anchor (вывод ASC),
-# after → 40 строго после, без anchor — последние 40 ASC.
-# Rails Page < Array — в Crystal дженерики не наследуются, поэтому
-# методы возвращают Array(Message) (отклонение зафиксировано в notes).
 class Message
   module Pagination
     PAGE_SIZE = 40
@@ -28,15 +23,15 @@ class Message
         .order("created_at DESC").limit(PAGE_SIZE).to_a.reverse
     end
 
-    # refreshes#show: created_at > since — первая страница (ASC).
     def self.page_created_since(room : Room, since : Time) : Array(Message)
       Message.where(
         "room_id = ? AND created_at > ?", room.id.not_nil!, since)
         .order("created_at ASC").limit(PAGE_SIZE).to_a
     end
 
-    # refreshes#show: updated_at > since — последняя страница сортировки
-    # по created_at (DESC limit PAGE_SIZE → ASC).
+    # Sorting on +created_at, which no index covers, has SQLite find the few messages updated since
+    # through (room_id, updated_at) and sort just those, instead of walking the whole room by
+    # (room_id, created_at) looking for them.
     def self.page_updated_since(room : Room, since : Time) : Array(Message)
       Message.where(
         "room_id = ? AND updated_at > ?", room.id.not_nil!, since)

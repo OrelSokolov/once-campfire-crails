@@ -1,4 +1,5 @@
 require "../application_record"
-# STI-подкласс (колонка type).
+# Rooms for direct message chats between users. These act as a singleton, so a single set of users will
+# always refer to the same direct room.
 class Rooms::Direct < Room
 end

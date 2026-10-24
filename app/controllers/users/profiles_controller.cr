@@ -1,16 +1,6 @@
-# GET/PATCH /users/me/profile — профиль текущего пользователя
-# (референс: users/profiles/show.html.erb + profile.eta): форма
-# name/email/password/bio, список комнат участия и session
-# transfer-ссылка с QR (4 часа действия, purpose "user/transfer").
-# Разметка — app/views/users/profiles/show.html.erb (implicit render),
-# контроллер готовит данные.
 class Users::ProfilesController < ApplicationController
   include Users::ProfilesHelper
 
-  # show.html.erb: user, пары комната-membership для списка участия
-  # (shared по LOWER(name), direct по id — с порядком референса:
-  # сначала shared, разделитель, затем directs), UA для pwa-инструкций,
-  # transfer-ссылка и QR-путь к ней.
   @user : User?
   @shared_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
   @direct_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
@@ -33,7 +23,6 @@ class Users::ProfilesController < ApplicationController
         @shared_memberships << {room, membership}
       end
     end
-    # with_ordered_room: LOWER(name) ASC; directs (name NULL) — по id.
     @shared_memberships.sort_by! { |(room, _)| room.name.to_s.downcase }
     @direct_memberships.sort_by! { |(room, _)| room.id.not_nil! }
     @transfer_url = transfer_url_for(user)
@@ -41,7 +30,7 @@ class Users::ProfilesController < ApplicationController
   end
 
   def update
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
     user = current_user.not_nil!
     user.name = nested("name") unless nested?("name").nil?
     user.email_address = nested("email_address") unless nested?("email_address").nil?
@@ -55,7 +44,6 @@ class Users::ProfilesController < ApplicationController
     redirect_to user_profile_url
   end
 
-  # 4 часа действия, как в референсе (routes.js: 4 * 3600000).
   private def transfer_url_for(user : User) : String
     origin + "/session/transfers/" +
       generate_signed_id(user.id.not_nil!, "user/transfer",

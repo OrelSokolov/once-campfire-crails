@@ -1,10 +1,4 @@
-# GET/PUT /rooms/:id/involvement — turbo-frame колокольчика вовлечённости
-# (референс: rooms/involvements_controller.rb + rooms/involvements/
-# show.html.erb): show — текущее состояние, update — смена (цикл
-# RoomsHelper#next_involvement_for) + редирект на show фрейма.
 class Rooms::InvolvementsController < ApplicationController
-  # show.html.erb (_bell.html.erb — кнопка button_to PUT со следующим
-  # состоянием вовлечённости): комната + membership текущего пользователя.
   def show
     if (membership = current_membership)
       involvement = membership.involvement.to_s.presence || "mentions"
@@ -16,7 +10,6 @@ class Rooms::InvolvementsController < ApplicationController
     end
   end
 
-  # PUT /rooms/:id/involvement — смена вовлечённости, редирект на show.
   def update
     if (membership = current_membership)
       value = params["involvement"].to_s
@@ -29,8 +22,6 @@ class Rooms::InvolvementsController < ApplicationController
     end
   end
 
-  # RoomScoped референса: membership текущего пользователя в комнате
-  # (:id роута) — границы доступа, как у RoomsController#set_room.
   private def current_membership : Membership?
     room_id = params["id"].to_s.to_i64?
     return nil unless room_id

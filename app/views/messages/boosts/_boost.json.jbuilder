@@ -1,5 +1,3 @@
-# Порт messages/boosts/_boost.json.jbuilder референса: id, content,
-# created_at, booster через users/_user, message {id, url}.
 json.id boost.id
 json.content boost.content
 json.created_at ChatLayout.iso8601_ms(boost.created_at.not_nil!)

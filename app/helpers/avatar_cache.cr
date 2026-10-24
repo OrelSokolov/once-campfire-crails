@@ -1,9 +1,7 @@
-# Кэш avatar-ответов per-worker: signed-токен → готовые байты (файл
-# аватара или SVG-инициалы) + Content-Type. Инвалидация — DB-эпоха
-# (PRAGMA data_version, см. PageCache): смена аватара/профиля — чужой
-# коммит, эпоха меняется, первый lookup под новой эпохой дропает всё.
-# Ключи blob'ов контентно-адресованы, перезапись файла по тому же ключу
-# невозможна — кэшировать байты файла по токену безопасно.
+# Per-worker cache of avatar responses: signed token -> ready bytes
+# (avatar file or SVG initials) + Content-Type. Invalidation is the
+# DB epoch (PRAGMA data_version, see PageCache). Blob keys are
+# content-addressed, so caching file bytes by token is safe.
 module Campfire
   class AvatarCache
     class Entry
@@ -17,8 +15,7 @@ module Campfire
 
     OVERHEAD = 256
 
-    # Отдельный от PageCache бюджет: аватары — маленькие бинарники
-    # (десятки КБ), 16 МБ хватает на сотни пользователей.
+    # Budget separate from PageCache: avatars are small binaries.
     def self.budget : Int32
       mb = ENV["CAMPFIRE_AVATAR_CACHE_MB"]?.try(&.to_i?) || 16
       mb.clamp(0, 256) * 1024 * 1024
@@ -28,7 +25,7 @@ module Campfire
     @@bytes = 0
     @@epoch = ""
 
-    # Операции над @@entries — чистая память без yield-точек (как PageCache).
+    # @@entries operations are pure memory with no yield points (as in PageCache).
     def self.get(key : String, epoch : String) : Entry?
       if epoch != @@epoch
         @@entries.clear
@@ -38,7 +35,7 @@ module Campfire
       end
       entry = @@entries[key]?
       return nil unless entry
-      # LRU: переставить в конец (Hash хранит порядок вставки)
+      # LRU: move to the end (Hash keeps insertion order)
       @@entries.delete(key)
       @@entries[key] = entry
       entry
@@ -69,5 +66,5 @@ module Campfire
   end
 end
 
-# Короткое имя для контроллеров.
+# Short alias for controllers.
 AvatarCache = Campfire::AvatarCache

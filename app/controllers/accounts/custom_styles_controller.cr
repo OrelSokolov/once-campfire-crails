@@ -1,14 +1,8 @@
-# /account/custom_styles(/edit) — кастомный CSS аккаунта (референс:
-# routes.js + custom_styles.eta): textarea account[custom_styles],
-# PATCH → UPDATE accounts.custom_styles; layout инжектит <style>
-# (см. ChatLayout.head). Только администратор.
-# Разметка GET — app/views/accounts/custom_styles/edit.html.erb (implicit render).
 class Accounts::CustomStylesController < ApplicationController
   include CustomStylesHelpers
 
-  before_action :require_admin
+  before_action :ensure_can_administer
 
-  # edit.html.erb: аккаунт (текущий CSS в textarea) и viewer.
   @account : Account?
   @user : User?
 
@@ -18,7 +12,7 @@ class Accounts::CustomStylesController < ApplicationController
   end
 
   def update
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
     account = Account.take.not_nil!
     if styles = account_params["custom_styles"]?
       account.custom_styles = styles.to_s
@@ -27,7 +21,7 @@ class Accounts::CustomStylesController < ApplicationController
     redirect_to edit_account_custom_styles_url
   end
 
-  # Strong Parameters: textarea account[custom_styles].
+  # Strong Parameters
   private def account_params : ActionController::Parameters
     params.require(:account).permit(:custom_styles)
   end

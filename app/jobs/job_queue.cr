@@ -5,11 +5,10 @@ require "random/secure"
 require "sqlite3"
 require "uuid"
 
-# Leased-SQLite очередь джобов — порт src/jobs.js (once-campfire-express).
-# Отдельная БД (db/jobs.sqlite3): claim по случайному lease-токену на 120 с,
-# при ошибке retry с экспоненциальным backoff, после 5 попыток status='dead'.
-# Запись батча — синхронно из HTTP-запроса до отправки ответа
-# («persisted before response»). Воркер — JOB_CONCURRENCY фибр (default 3).
+# Leased-SQLite job queue ported from src/jobs.js (once-campfire-express):
+# separate DB, random 120s leases, exponential backoff retries, dead after
+# 5 attempts, synchronous batch writes before the response, JOB_CONCURRENCY
+# worker fibers (default 3).
 module Campfire
   class JobQueue
     class Job
@@ -37,27 +36,23 @@ module Campfire
 
     @@db : DB::Database?
 
-    # Межпроцессная сериализация писателей — flock (WriteQueue): к
-    # SQLite процессы приходят строго по одному, BUSY-ошибки и
-    # «отравление» соединений застрявшими стейтментами (perform_exec
-    # шарда не делает reset при ошибке) не возникают. retry_on_lock —
-    # страховка для внешних писателей (CLI-диагностика и т.п.).
+    # Writers are serialized cross-process via flock in WriteQueue; retry_on_lock
+    # is a safety net for external writers (CLI diagnostics and the like).
     def self.db : DB::Database
       @@db ||= begin
         path = File.expand_path(ENV["CAMPFIRE_JOBS_DB"]? || "db/jobs.sqlite3")
         Dir.mkdir_p(File.dirname(path))
-        # пул 2: writer-фибера (claim/enqueue/finish через WriteQueue)
-        # + фибера периодического чекпоинта
+        # Pool of 2: the writer fiber (claim/enqueue/finish via WriteQueue)
+        # plus the periodic checkpoint fiber.
         database = DB.open("sqlite3://#{path}?max_pool_size=2&max_idle_pool_size=2")
         database.setup_connection do |conn|
-          # Межпроцессная сериализация писателей — flock в WriteQueue:
-          # к SQLite они приходят по одному, busy-хендлер не участвует.
-          # busy_timeout — чистая страховка от внешних писателей (CLI).
+          # busy_timeout is a pure safety net for external writers (CLI);
+          # our own writers go through flock in WriteQueue.
           conn.exec("PRAGMA busy_timeout=10000")
-          # WAL обязателен (DELETE-журнал в fork-конфигурации ловил
-          # "attempt to write a readonly database" на hot journal), но
-          # авто-чекпоинты не завершаются под непрерывными клеймами —
-          # wal_autocheckpoint=0 + PASSIVE-чекпоинт из checkpoint_fiber.
+          # WAL is required (the DELETE journal hit "attempt to write a
+          # readonly database" on hot journals in the fork configuration),
+          # but auto-checkpoints never finish under continuous claims — hence
+          # wal_autocheckpoint=0 plus PASSIVE checkpoints from checkpoint_fiber.
           conn.exec("PRAGMA journal_mode=WAL")
           conn.exec("PRAGMA wal_autocheckpoint=0")
           conn.exec("PRAGMA synchronous=NORMAL")
@@ -67,9 +62,8 @@ module Campfire
       end
     end
 
-    # Периодический PASSIVE-чекпоинт jobs-WAL: без него непрерывные
-    # читатели-клеймы не дают чекпоинтам завершаться, и WAL раздувался
-    # до гигабайта при 0 строк. PASSIVE никого не блокирует.
+    # Periodic PASSIVE checkpoint of the jobs WAL: without it continuous
+    # claim readers keep checkpoints from ever completing.
     def self.start_checkpoint_fiber(interval : Time::Span = 3.seconds) : Nil
       spawn do
         loop do
@@ -83,10 +77,10 @@ module Campfire
       end
     end
 
-    # jobs: массив пар {kind, data} где data — JSON-строка.
-    # BEGIN IMMEDIATE при busy_timeout=0: при конкуренции fork-воркеров
-    # и job-фибр за write-lock SQLITE_BUSY возвращается мгновенно, ожидание
-    # — фиберами retry_on_lock (event-loop воркера не блокируется).
+    # jobs: array of {kind, data} pairs where data is a JSON string;
+    # BEGIN IMMEDIATE with busy_timeout=0 returns SQLITE_BUSY instantly
+    # under fork-worker/fiber contention, waiting happens in retry_on_lock
+    # fibers (the worker event loop is not blocked).
     def self.enqueue_batch(jobs : Array(Tuple(String, String)),
                            at : Float64 = Time.utc.to_unix_f) : Nil
       return if jobs.empty?
@@ -109,11 +103,11 @@ module Campfire
       end
     end
 
-    # Claim через WriteQueue на единственном соединении очереди:
-    # в процессе за jobs write-lock не конкурируют enqueue/claim/finish
-    # (см. write_queue.cr), межпроцессная конкуренция — retry_on_lock.
-    # Сначала SELECT без транзакции: пустой поллинг (клеймы каждые
-    # 250 мс × JOB_CONCURRENCY × воркеры) не трогает write-lock вовсе.
+    # Claim goes through WriteQueue on the queue's single connection: within
+    # the process enqueue/claim/finish do not contend for the jobs write lock
+    # (see write_queue.cr); cross-process contention is handled by retry_on_lock.
+    # A transaction-free SELECT comes first so empty polling never touches
+    # the write lock at all.
     def self.claim(now : Float64 = Time.utc.to_unix_f) : Job?
       Campfire::WriteQueue.perform do
         has_row = db.using_connection do |conn|
@@ -184,18 +178,17 @@ module Campfire
       start_checkpoint_fiber
     end
 
-    # После fork (serverX Cluster): унаследованные sqlite-дескрипторы
-    # нельзя использовать — закрыть и открыть заново лениво.
+    # After fork (serverX Cluster): inherited sqlite handles must not be
+    # used — close and reopen lazily.
     def self.reset! : Nil
       @@db.try(&.close)
       @@db = nil
     end
 
-    # См. комментарий у enqueue_batch: мгновенный SQLITE_BUSY лечится
-    # повтором со свежим снапшотом. 30 коротких попыток: окно конкуренции
-    # суб-миллисекундное, длинные рандомные сны лишь простоивали лок;
-    # "statements in progress" ретраится потому же (застрявший после
-    # ошибки стейтмент самолечится повторным exec на том же соединении).
+    # See the comment on enqueue_batch: instant SQLITE_BUSY is cured by
+    # retrying with a fresh snapshot; 30 short attempts (the contention
+    # window is sub-millisecond); "statements in progress" retries for the
+    # same reason (a stuck statement self-heals on a repeated exec).
     private def self.retry_on_lock(attempts : Int32 = 30, &)
       tries = 0
       loop do
@@ -212,7 +205,7 @@ module Campfire
           raise e
         end
       end
-      raise Exception.new("unreachable") # исключает Nil из типа возврата
+      raise Exception.new("unreachable") # excludes Nil from the return type
     end
 
     def self.worker_loop : Nil
@@ -242,7 +235,7 @@ module Campfire
       end
     end
 
-    # ————— Хендлеры (порт perform из src/jobs.js) —————
+    # ————— Handlers (perform ported from src/jobs.js) —————
 
     def self.perform(kind : String, data : JSON::Any) : Nil
       case kind

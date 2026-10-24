@@ -1,16 +1,11 @@
-# GET /rails/active_storage/blobs/redirect/:token/:filename и
-# .../representations/redirect/:token/:variation/:filename — отдача
-# вложений сообщений (порт storage.js registerStorage): подпись blob_id
-# верификатором с salt "ActiveStorage" (purpose blob_id/variation),
-# авторизация как authorizedBlob (membership комнаты сообщения),
-# servingAttributes (inline для картинок, attachment для остального).
-# Representation переменчивого типа (картинка) — ленивый вариант через
-# Variation шарда (image_processing, vips) с кешем variants/<key>/…;
-# ошибка обработки/чужой тип — отдаётся оригинальный файл.
+# Serves message attachments for the /rails/active_storage redirect routes (storage.js
+# registerStorage): a signed blob_id token (salt "ActiveStorage"), authorizedBlob-style
+# membership authorization, servingAttributes; image representations go through the
+# shard's Variation with a variants/<key>/ cache, falling back to the original file.
 class ActiveStorageController < ApplicationController
   include ActiveStorageAuthentication
 
-  # content-types, которые Rails отдаёт как octet-stream/attachment.
+  # Content types Rails serves as octet-stream/attachment.
   BINARY_TYPES = {
     "text/html", "image/svg+xml", "application/postscript",
     "application/x-shockwave-flash", "text/xml", "application/xml",
@@ -60,21 +55,18 @@ class ActiveStorageController < ApplicationController
     render(html: File.read(path), content_type: content_type)
   end
 
-  # Путь файла на Disk-сервисе (fan-аут гема — DiskService#path_for шарда).
+  # File path on the Disk service (the gem's DiskService#path_for).
   private def disk_path(key : String) : String
     service = ActiveStorage.service
     raise "active storage service is not disk-backed" unless service.is_a?(ActiveStorage::DiskService)
     service.path_for(key)
   end
 
-  # Ленивая обработка варианта (RepresentationsController#edit гема):
-  # transformations из подписанного variation-токена → Variation шарда
-  # → transform через image_processing; результат кешируется на диске
-  # под variants/<blob.key>/<variation.key> (как Variant#processed).
-  # Видео — не variable: это превью (AttachmentPresentation video_
-  # poster_url) — кадр извлекается ffmpeg (ActiveStorage::Preview::
-  # VideoPreviewer: -vf scale=640:-1 -frames:v 1, jpg) и прогоняется
-  # через ту же Variation (webp). nil — обработка упала: оригинал.
+  # Lazy variant processing (the gem's RepresentationsController#edit): transformations
+  # from the signed variation token → the shard's Variation → image_processing transform,
+  # cached on disk under variants/<blob.key>/<variation.key>. Video is not variable: the
+  # preview frame is extracted with ffmpeg and run through the same Variation. nil means
+  # processing failed → the original file.
   private def representation_variant(blob : ActiveStorageBlob,
                                      variation : JSON::Any) : {String, String}?
     transformations = {} of String => ActiveStorage::Variation::Value
@@ -114,12 +106,11 @@ class ActiveStorageController < ApplicationController
     end
     {service.path_for(variant_key), variation.content_type}
   rescue ex : Exception
-    # vips/mini_magick не осилил файл — оригинал (как до подключения
-    # шарда).
+    # vips/mini_magick could not handle the file — the original (as before the shard).
     nil
   end
 
-  # VideoPreviewer#draw референса: первый кадр, 640 по ширине, image2.
+  # The reference's VideoPreviewer#draw: first frame, 640 wide, image2.
   private def extract_video_frame(source_path : String) : String?
     frame_path = File.join(Dir.tempdir, "as_preview_#{Random::Secure.hex(8)}.jpg")
     status = Process.run("ffmpeg", {"-y", "-i", source_path, "-vf", "scale=640:-1",
@@ -133,14 +124,13 @@ class ActiveStorageController < ApplicationController
     nil
   end
 
-  # Расширение источника для transform (фолбок png, как в Variation).
+  # Source extension for transform (png fallback, like Variation).
   private def mimedefault_ext(blob : ActiveStorageBlob) : String
     ext = File.extname(blob.filename.to_s).lchop('.')
     ext.empty? ? "png" : ext
   end
 
-  # Верификатор с salt "ActiveStorage" (sha1, strict_b64 с паддингом —
-  # общий с ChatLayout.storage_verifier).
+  # Verifier with salt "ActiveStorage", shared with ChatLayout.storage_verifier.
   private def storage_verifier
     ChatLayout.storage_verifier
   end
@@ -154,9 +144,8 @@ class ActiveStorageController < ApplicationController
     authorized_blob?(blob, user) ? blob : nil
   end
 
-  # authorizedBlob (storage.js): вложение на User/Account — публично;
-  # на Message/ActionText::RichText — членство в комнате сообщения;
-  # без вложений — владелец из metadata.campfire_upload_user_id.
+  # authorizedBlob (storage.js): User/Account attachments are public; Message/RichText —
+  # membership in the message's room; no attachments — the owner from metadata.campfire_upload_user_id.
   private def authorized_blob?(blob : ActiveStorageBlob, user : User) : Bool
     conn = ActiveRecord::Base.connection
     attachments = conn.query_all(

@@ -1,10 +1,7 @@
 require "../application_job"
 
-# Room::DestroyJob (room/destroy_job.rb референса): комнаты больше нет
-# у участников сразу (членства сняты в destroy_later); сообщения
-# удаляются по одному в собственной транзакции — прочие записи проходят
-# между удалениями. Комната исчезла к моменту джобы — no-op (аналог
-# discard_on ActiveJob::DeserializationError).
+# The room may already be gone by the time the job runs: no-op
+# (the port's analogue of discard_on ActiveJob::DeserializationError).
 class Room::DestroyJob < ApplicationJob
   def self.perform(data : JSON::Any) : Nil
     room_id = data["room_id"]?.try(&.to_s.to_i64?)
@@ -15,8 +12,6 @@ class Room::DestroyJob < ApplicationJob
 
     return unless Room.find?(room_id)
 
-    # Сброс live-подключений бывших участников: их cable-подписки на
-    # стримы комнаты перестают получать сообщения до реконнекта.
     former_member_ids.each do |uid|
       if (user = User.find?(uid))
         user.reset_remote_connections
@@ -36,6 +31,6 @@ class Room::DestroyJob < ApplicationJob
       Message::Broadcasts.broadcast_remove(room_id, mid)
     end
     conn.exec("DELETE FROM rooms WHERE id = ?", room_id)
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
   end
 end

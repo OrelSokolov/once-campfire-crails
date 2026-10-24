@@ -1,8 +1,5 @@
 require "../application_record"
 
-# Message::Searchable (message/searchable.rb): зеркалирование тел
-# сообщений в FTS5-индекс message_search_index + разбор поискового
-# запроса.
 class Message
   module Searchable
     def self.insert_in_index(conn, message_id : Int64, body : String) : Nil
@@ -20,10 +17,8 @@ class Message
       conn.exec("DELETE FROM message_search_index WHERE rowid = ?", message_id)
     end
 
-    # match_terms: каждое слово запроса берётся в кавычки FTS5 (двойные
-    # внутри удваиваются) — иначе запрос из операторов ("AND", "salt
-    # AND", незакрытая кавычка) даёт синтаксическую ошибку FTS5 и 500
-    # вместо выдачи.
+    # Quotes each word, so that FTS5 searches for AND, OR, NOT and NEAR rather than
+    # parsing them as operators, which fails on a query like "AND" or "salt AND".
     def self.match_terms(query : String) : String
       query.split.map { |word| %("#{word.gsub('"', %q(""))}") }.join(" ")
     end

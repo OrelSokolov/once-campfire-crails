@@ -1,13 +1,7 @@
-# GET /searches?q=coffee — поиск по FTS5 (контракт: ID = MATCH с join по
-# membership/email из сида, максимум 100, вывод в порядке ID). Разметка —
-# app/views/searches/index.html.erb (референс: searches/index.html.erb;
-# имя — по экшену порта, см. config/routes.cr).
 class SearchesController < ApplicationController
   include SearchesHelper
 
-  # show.html.erb: запрос, выдача (FTS5), недавние запросы, DB-epoch
-  # (ERB-хелперы SearchesHelper читают их через геттеры);
-  # @return_room — комната возврата (composer, читается шаблоном напрямую).
+  # Getters expose the ivars to the SearchesHelper ERB helpers.
   attr_reader user : User? = nil
   attr_reader query : String = ""
   attr_reader messages : Array(Message) = [] of Message
@@ -15,9 +9,7 @@ class SearchesController < ApplicationController
   attr_reader epoch : String = ""
   @return_room : Int64 = 1_i64
 
-  # HTML-партиалы nav поиска (search_nav.eta/recent_searches.eta): чип
-  # запроса + recents; рендерятся обёртками SearchesHelper#search_nav и
-  # #recent_searches_html (второй используется и в page_close — aside).
+  # Search nav partials, rendered through the SearchesHelper wrappers.
   compile_partials({
     "searches/nav" => {path: "app/views/searches/_nav.html.erb",
                        locals: {"query" => String, "count" => Int32,
@@ -29,9 +21,8 @@ class SearchesController < ApplicationController
   def index
     user = current_user.not_nil!
 
-    # Whole-page cache (как rooms#show): ключ включает query
-    # (?q=...), инвалидация — общий DB-epoch (FTS-индекс и сообщения
-    # меняются только write'ами, все сбрасывают Campfire::ResponseCache.invalidate!).
+    # Whole-page cache (like rooms#show): the key includes the query (?q=...),
+    # invalidated by the shared DB epoch.
     page = cache_page("searches#show", user.id) do
       query = params["q"]?.to_s.strip
 
@@ -50,18 +41,17 @@ class SearchesController < ApplicationController
           .order("id ASC").to_a
       end
 
-      # Recent searches (search.eta/search_nav.eta): 10 последних запросов.
+      # Recent searches: the latest 10 queries.
       recents = ActiveRecord::Base.connection.query_all(
         "SELECT query FROM searches WHERE user_id = ? ORDER BY updated_at DESC LIMIT 10",
         args: [user.id.not_nil!], as: String)
 
-      # Комната возврата (composer в show.html.erb: стрелка «Exit search»).
+      # Return room for the composer (the Exit search arrow).
       return_room = (user.memberships.map(&.room_id.not_nil!).min? ||
                     Room.visible_for(user).order("id").first.try(&.id.not_nil!) || 1).to_i64
 
-      # Список — через fragment-кэш (было Room.find?/User.find?/rich_text
-      # на каждое сообщение, до 100 результатов): хиты без SQL, комнаты и
-      # авторы промахов — по одному IN-запросу на сущность.
+      # Results come from a fragment cache; rooms and authors of cache misses are
+      # fetched with one IN-query per entity.
       @user = user
       @query = query
       @messages = messages
@@ -73,8 +63,6 @@ class SearchesController < ApplicationController
     send_page(page)
   end
 
-  # POST /searches — записать запрос в recents и перейти к выдаче
-  # (routes.js: touch search + redirect /searches?q=...).
   def create
     user = current_user.not_nil!
     query = params["q"]?.to_s.strip
@@ -82,12 +70,11 @@ class SearchesController < ApplicationController
       now = Time.utc
       Search.new(user_id: user.id.not_nil!, query: query,
         created_at: now, updated_at: now).save!
-      Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+      Campfire::ResponseCache.invalidate!
     end
     redirect_to searches_url(q: query)
   end
 
-  # DELETE /searches/clear — очистить recents пользователя.
   def clear
     user = current_user.not_nil!
     ActiveRecord::Base.connection.exec(

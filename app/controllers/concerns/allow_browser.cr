@@ -1,7 +1,3 @@
-# allow_browser.rb: гейт устаревших браузеров (safari 17.2 / chrome 120 /
-# firefox 121 / opera 104) — несовместимым рендерится
-# sessions/incompatible_browser. Unknown-агенты (без токена известного
-# браузера) пропускаются — как allow_browser Rails.
 module AllowBrowser
   VERSION_MINIMUMS = {
     "chrome"  => 120.0,
@@ -25,8 +21,6 @@ module AllowBrowser
         return browser if version && version < minimum
       end
     end
-    # Safari: версия в токене Version/x.y; хромовые UA тоже несут
-    # «Safari/537» — их исключаем.
     if (match = ua.match(/Version\/([\d.]+).*Safari/i)) &&
        !ua.matches?(/Chrome|Chromium|Edg|OPR/i)
       version = match[1].to_f?

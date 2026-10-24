@@ -1,10 +1,5 @@
 require "./application_job"
 
-# RemoveBannedContentJob (remove_banned_content_job.rb референса):
-# User#remove_banned_content — destroy всех сообщений юзера с
-# broadcast_remove каждого. Шаги удаления — как messages#destroy
-# порта (ActionText-тело + FTS5-индекс + строка), boosts —
-# dependent: :destroy референса (express deleteMessage).
 class RemoveBannedContentJob < ApplicationJob
   def self.perform(data : JSON::Any) : Nil
     user_id = data["user_id"]?.try(&.to_s.to_i64?)
@@ -25,6 +20,6 @@ class RemoveBannedContentJob < ApplicationJob
       conn.exec("DELETE FROM messages WHERE id = ?", mid)
       Message::Broadcasts.broadcast_remove(message[:room_id], mid)
     end
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
   end
 end

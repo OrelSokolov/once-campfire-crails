@@ -1,27 +1,26 @@
-# ChatLayout — общий каркас страниц Campfire (порт layout_start/layout_end/
-# composer/message_uncached из templates/eta express-реализации; JS/CSS —
-# пребилд референса в public/assets, фрагменты — app/views/*.html).
+# ChatLayout: shared page shell for Campfire (port of layout_start/
+# layout_end/composer/message_uncached from the express templates; JS/CSS
+# is the reference prebuild in public/assets, fragments in app/views/*.html).
 module ChatLayout
   STYLESHEETS = {{ read_file "#{__DIR__}/../views/stylesheets.html" }}
   IMPORTMAP   = {{ read_file "#{__DIR__}/../views/importmap.html" }}
 
-  # Именованные роуты в статическом контексте: та же таблица имён, что
-  # у *_path-хелперов контроллеров (Routes::UrlHelpers), но без
-  # инстанса — прямой вызов RouteSet#path_for. Выход байт-идентичен
-  # бывшим строковым интерполяциям.
+  # Named routes in a static context: the same name table as the
+  # controllers' *_path helpers (Routes::UrlHelpers), but without an
+  # instance — a direct RouteSet#path_for call. Output is byte-identical
+  # to the former string interpolations.
   def self.route_path(name : String, *values) : String
     CRails.application.routes.path_for(name, values.map(&.to_s).to_a)
   end
 
-  # file_uploader.js читает meta[name=csrf-token] перед fetch; сервер
-  # CSRF не проверяет, поэтому достаточно стабильного значения на процесс.
+  # file_uploader.js reads meta[name=csrf-token] before fetch; the server
+  # does not verify CSRF, so a stable per-process value is enough.
   CSRF_TOKEN = Random::Secure.hex(32)
-  # config/initializers/vapid.rb — credentials бенч-приложения
-  # (детерминированное значение).
+  # config/initializers/vapid.rb — bench app credentials (deterministic).
   VAPID_PUBLIC_KEY = "BIoPd4akjKCmMf6bLDelJ40J5QnaHtttIHNVqfnhiWpR9Vd-9oJxGb7IuVDO3v4dEzJBzWLXOYTo8KHZO3Y_vtY="
 
-  # asset("arrow-up.svg") → "/assets/arrow-up-f96b3895.svg" (manifest
-  # пребилда референса).
+  # asset("arrow-up.svg") -> "/assets/arrow-up-f96b3895.svg" (reference
+  # prebuild manifest).
   def self.asset(name : String) : String
     if entry = manifest[name]?
       "/assets/#{entry}"
@@ -43,12 +42,10 @@ module ChatLayout
     end
   end
 
-  # direct :fresh_account_logo (config/routes.rb референса): account_logo
-  # c cache-busting v=account.updated_at (to_fs(:number)) — смена логотипа
-  # или настроек меняет URL и обходит кэш иконки. size=small — 192px.
-  # Rails SignedGlobalID: подпись "gid://campfire/User/<id>?expires_in"
-  # ключом "signed_global_ids", purpose "attachable" (rails.js sgid).
-  # Общий для контроллера и jbuilder-партиалов — живёт в ChatLayout.
+  # Rails SignedGlobalID: signs "gid://campfire/User/<id>?expires_in" with
+  # the "signed_global_ids" key, purpose "attachable" (rails.js sgid).
+  # Shared by the controller and the jbuilder partials, hence it lives in
+  # ChatLayout.
   def self.attachable_sgid(user_id : Int64) : String
     secret = ENV["SECRET_KEY_BASE"]? ||
              raise RuntimeError.new("SECRET_KEY_BASE is not configured")
@@ -60,9 +57,9 @@ module ChatLayout
       purpose: "attachable")
   end
 
-  # ISO-8601 UTC с миллисекундами — формат Date#toISOString() эталона
-  # и Time#to_json Rails (jbuilder-вьюхи bots-API; доступен и из
-  # партиалов JbuilderTemplate, где контекста контроллера нет).
+  # ISO-8601 UTC with milliseconds — the reference's Date#toISOString()
+  # format and Rails Time#to_json (bots API jbuilder views; also used
+  # from JbuilderTemplate partials with no controller context).
   def self.iso8601_ms(time : Time) : String
     time.to_utc.to_s("%Y-%m-%dT%H:%M:%S.%LZ")
   end
@@ -77,25 +74,26 @@ module ChatLayout
     query.empty? ? "/account/logo" : "/account/logo?#{query.join("&")}"
   end
 
-  # user — Current.user (ApplicationController проставляет до рендера;
-  # между запросами сбрасывается диспетчером, как в Rails).
+  # user is Current.user (set by ApplicationController before render;
+  # reset by the dispatcher between requests, as in Rails).
   def self.head(title : String, room_id : Int64?, chat : Bool,
                 head_extra : String = "") : String
     user = Current.user
     String.build do |io|
       io << "<!DOCTYPE html>\n<html>\n<head>\n<title>" << HTML.escape(title) << "</title>\n"
       io << %(<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, interactive-widget=resizes-content">\n)
-      # layouts/application.html.erb:7-21 — точный порядок метатегов.
-      # csp_meta_tag пуст (CSP не сконфигурирован); csrf-token meta у Rails
-      # нет (защита форм на Sec-Fetch-Site, без токенов).
+      # layouts/application.html.erb:7-21 — exact meta tag order.
+      # csp_meta_tag is empty (CSP not configured); Rails emits no
+      # csrf-token meta (form protection relies on Sec-Fetch-Site, no
+      # tokens).
       io << %(<meta name="view-transition" content="same-origin">\n)
       io << %(<meta name="color-scheme" content="light dark">\n)
       io << %(<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">\n)
       io << %(<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">\n)
       io << %(<meta name="apple-mobile-web-app-capable" content="yes">\n)
       if u = user
-        # current_user_meta_tags: safe_join без разделителя — обе меты в
-        # одной строке; Rails пишет их через tag.meta с самозакрытием.
+        # current_user_meta_tags: safe_join with no separator — both meta
+        # tags on one line; Rails writes them via tag.meta self-closing.
         io << %(<meta name="current-user-id" content="#{u.id}"/>)
         io << %(<meta name="current-user-name" content=") << HTML.escape(u.name.to_s) << %("/>\n)
       end
@@ -111,7 +109,7 @@ module ChatLayout
         io << %(<link rel="apple-touch-icon" href="#{logo}">\n)
       end
       io << STYLESHEETS << "\n"
-      # custom_styles_tag — до importmap (layouts/application.html.erb:30-32)
+      # custom_styles_tag — before the importmap (layouts/application.html.erb:30-32)
       if account && (styles = account.custom_styles.to_s) != ""
         io << %(<style data-turbo-track="reload">) << styles << %(</style>\n)
       end
@@ -125,10 +123,10 @@ module ChatLayout
     end
   end
 
-  # <body> + nav#nav — порт rooms/show/_nav.html.erb: чип текущей
-  # комнаты (btn--reversed room--current), кнопка настроек с иконкой
-  # menu-dots-horizontal, колокольчик вовлечённости. Direct-комнаты
-  # (name NULL): room_display_name — имена остальных участников.
+  # <body> + nav#nav — port of rooms/show/_nav.html.erb: current room
+  # chip (btn--reversed room--current), settings button with the
+  # menu-dots-horizontal icon, involvement bell. Direct rooms
+  # (name NULL): room_display_name — the other members' names.
   def self.body_open(room : Room? = nil,
                      ua : String = "", origin : String = "") : String
     viewer = Current.user
@@ -165,9 +163,10 @@ module ChatLayout
     end
   end
 
-  # edit_room_path(room) референса: STI-полиморфный сегмент роута
-  # (rooms/opens|directs|closeds). Порт пишет и короткий ('Open'), и
-  # полный ('Rooms::Open') type — сид полный, создание через порт — короткий.
+  # Oracle edit_room_path(room): STI-polymorphic route segment
+  # (rooms/opens|directs|closeds). The port writes both short ('Open')
+  # and full ('Rooms::Open') type values — the seed uses full, rooms
+  # created via the port use short.
   def self.room_edit_path(room : Room) : String
     seg = case room.type.to_s.split("::").last?.to_s
           when "Direct" then "directs"
@@ -177,9 +176,9 @@ module ChatLayout
     "/rooms/#{seg}/#{room.id}/edit"
   end
 
-  # Колокольчик вовлечённости — rooms/involvements/_bell.html.erb
-  # (ChatERB): turbo-frame /rooms/N/involvement + notifications-контроллер
-  # + pwa-диалоги инструкций (UA-зависимые партиалы).
+  # Involvement bell — rooms/involvements/_bell.html.erb (ChatERB):
+  # turbo-frame /rooms/N/involvement + notifications controller +
+  # pwa instruction dialogs (UA-dependent partials).
   private def self.involvement_bell(room : Room, viewer : User?,
                                     ua : String = "", origin : String = "") : String
     return "" unless viewer
@@ -208,18 +207,18 @@ module ChatLayout
     end
   end
 
-  # ===== Страничный layout не-chat экранов (layout_start.eta/layout_end.eta)
+  # ===== Page layout for non-chat screens (layout_start.eta/layout_end.eta)
 
-  # <img>-иконка из пребилда ассетов референса. size=nil — без
-  # width/height (Rails image_tag без size). Делегирует в
-  # AssetTagHelper.image_tag (статик-форма): байты на проводе —
-  # `<img src width height aria-hidden class />` (порядок атрибутов и
-  # self-closing слэш нормализуются браузерной сериализацией артефактов,
-  # см. harness/normalize.rb — DOM-эквивалент прежней строки).
+  # <img> icon from the reference asset prebuild. size=nil means no
+  # width/height (Rails image_tag without size). Delegates to the static
+  # AssetTagHelper.image_tag; the wire bytes are `<img src width height
+  # aria-hidden class />` (attribute order and the self-closing slash are
+  # normalized by the artifacts' browser serialization, see
+  # harness/normalize.rb — DOM-equivalent to the previous raw string).
   def self.icon(name : String, size : Int32? = 20, cls : String? = nil) : String
-    # Object-union: вложенный aria-Hash — Hash(String, String), в
-    # Hash(String, AttrVal) не присваивается (инвариантность генериков);
-    # статик-форма image_tag нормализует значения сама.
+    # Object-union: the nested aria Hash is Hash(String, String), which
+    # does not fit Hash(String, AttrVal) (generic invariance); the static
+    # image_tag normalizes the values itself.
     opts = {} of String => String | Hash(String, String)
     opts["aria"] = {"hidden" => "true"}
     opts["size"] = "#{size}x#{size}" if size
@@ -227,25 +226,26 @@ module ChatLayout
     ::ActionView::Helpers::AssetTagHelper.image_tag(asset(name), opts).to_s
   end
 
-  # nav-кнопка «Go Back» (layout_start.eta: form-экраны). Переносы строк —
-  # как в выводе Rails-ERB (артефакты: <div>/<a>/</div> на отдельных строках).
+  # nav "Go Back" button (layout_start.eta: form screens). Line breaks
+  # as in the Rails ERB output (artifacts: <div>/<a>/</div> on separate
+  # lines).
   def self.nav_back(path : String) : String
     %(<div class="flex-item-justify-start">\n<a class="btn" href="#{path}">) +
       icon("arrow-left.svg") +
       %(<span class="for-screen-reader">Go Back</span></a>\n</div>)
   end
 
-  # head + <body class=body_class(+admin)> + nav + main — layout_start для
-  # form/account/profile/bots/... экранов. @body_class референса задают
-  # только отдельные страницы (rooms/show: sidebar, searches: sidebar
-  # searches, signup-экраны: signup) — остальных классов нет.
+  # head + <body class=body_class(+admin)> + nav + main — layout_start
+  # for form/account/profile/bots/... screens. In the reference only a
+  # few pages set @body_class (rooms/show: sidebar, searches:
+  # sidebar searches, signup screens: signup) — no other classes exist.
   def self.page_open(screen : String, title : String,
                      body_class : String? = nil, nav_html : String = "",
                      head_extra : String = "") : String
     user = Current.user
     cls = body_class.to_s
-    # body_classes референса: [body_class, admin].compact.join(" ") —
-    # без ведущего пробела, когда body_class пуст.
+    # Oracle body_classes: [body_class, admin].compact.join(" ") — no
+    # leading space when body_class is empty.
     if user && user.role == 1
       cls = cls.empty? ? "admin" : "#{cls} admin"
     end
@@ -264,7 +264,7 @@ module ChatLayout
     ChatERB.new(footer: footer_html, sidebar: sidebar_html).body_close.to_s
   end
 
-  # Кнопка-иконка QR (transfer_link.eta/invite.eta: lightbox + qr-code.svg).
+  # QR icon button (transfer_link.eta/invite.eta: lightbox + qr-code.svg).
   def self.qr_button(url : String) : String
     %(<a href="#{url}" class="btn" data-lightbox-target="image" ) +
       %(data-action="lightbox#open" data-lightbox-url-value="#{url}">) +
@@ -272,10 +272,10 @@ module ChatLayout
       icon("qr-code.svg", 20, "colorize--black") + %(</a>)
   end
 
-  # Кнопка «копировать» (copy-to-clipboard + copy-paste.svg) —
-  # button_to_copy_to_clipboard: порядок иконки/sr-текста и класс img
-  # задаются блоком вызова (bots: img первой без класса; profile/invite:
-  # span первой с colorize--black).
+  # Copy button (copy-to-clipboard + copy-paste.svg) —
+  # button_to_copy_to_clipboard: the icon/sr-text order and the img class
+  # are decided by the caller (bots: img first without a class;
+  # profile/invite: span first with colorize--black).
   def self.copy_button(content : String, sr_label : String,
                        icon_class : String? = nil, icon_first : Bool = false) : String
     icon_html = icon("copy-paste.svg", 20, icon_class)
@@ -287,9 +287,10 @@ module ChatLayout
       inner + %(\n</button>)
   end
 
-  # web-share (transfer-блок profile/invite/user): делиться auto-login
-  # ссылкой; кнопка скрыта (hidden), стимулус показывает при поддержке
-  # navigator.share. Вызов добавляет хвост «    </div>» (артефакты).
+  # web-share (transfer block of profile/invite/user): share the
+  # auto-login link; the button is hidden, Stimulus reveals it when
+  # navigator.share is supported. The caller appends the "    </div>"
+  # tail (artifacts).
   def self.web_share_button(url : String) : String
     %(<button class="btn" data-action="web-share#share" data-controller="web-share" ) +
       %(data-web-share-text-value="This is your own private sign-in URL, DO NOT SHARE IT. Use it to sign-in on another device or if you get locked out." ) +
@@ -300,11 +301,11 @@ module ChatLayout
       %(\n</button>)
   end
 
-  # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — блок
-  # «Welcome to Campfire» над сообщениями исходной комнаты (Room.original,
-  # пока сообщений в ней не больше PAGE_SIZE): логотип аккаунта, перевод
-  # invite_message, поле invite-ссылки с QR/копированием/sharing и
-  # регенерацией join-кода у администратора.
+  # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — the
+  # "Welcome to Campfire" block above the original room's messages
+  # (Room.original, while it has no more than PAGE_SIZE messages):
+  # account logo, invite_message translation, the invite-link field with
+  # QR/copy/sharing and join-code regeneration for admins.
   def self.system_welcome(origin : String) : String
     user = Current.user
     return "" unless user
@@ -325,7 +326,7 @@ module ChatLayout
       io << %(<p>\n<strong>Welcome to Campfire</strong><br>\n)
       io << %(To invite people to chat, share the join link below.\n</p>\n)
       io << %(</div>\n)
-      # accounts/_invite.html.erb (переносы строк — как в ERB-выводе Rails)
+      # accounts/_invite.html.erb (line breaks as in the Rails ERB output)
       io << %(<div class="flex flex-column align-center gap">\n)
       io << %(<label class="flex flex-column gap full-width" style="--row-gap: 0.5em">\n)
       io << %(<strong id="invite_label" class="invite-label">Share to invite more people</strong>\n)
@@ -366,8 +367,8 @@ module ChatLayout
     end
   end
 
-  # Lightbox-диалог layout'а (все страницы, после </aside>): диалог
-  # просмотра изображений с кнопками close/download/share.
+  # Layout lightbox dialog (all pages, after </aside>): image viewer
+  # dialog with close/download/share buttons.
   def self.lightbox_dialog : String
     String.build do |io|
       io << %(<dialog aria-label="Image Viewer (Press escape to close)" class="lightbox" )
@@ -389,11 +390,11 @@ module ChatLayout
   end
 
   # footer + sidebar (turbo-frame user_sidebar) + app-logo —
-  # layouts/_body_close.html.erb (было body_close/chat-ветка).
-  # users/sidebar_helper.rb#sidebar_turbo_frame_tag: turbo_frame_tag
-  # :user_sidebar с target/data-опциями (статик-форма FramesHelper).
-  # `->` в data-action tag_options экранирует как `-&gt;` — после
-  # HTML-парсинга идентично прежней сырой строке (DOM-нормализация).
+  # layouts/_body_close.html.erb. users/sidebar_helper.rb#
+  # sidebar_turbo_frame_tag: turbo_frame_tag :user_sidebar with
+  # target/data options (static FramesHelper form). The `->` in
+  # data-action is escaped by tag_options as `-&gt;` — identical after
+  # HTML parsing to the previous raw string (DOM normalization).
   def self.chat_sidebar_frame : String
     ::Turbo::FramesHelper.turbo_frame_tag("user_sidebar", "/users/me/sidebar", nil, {
       "target" => "_top",
@@ -406,14 +407,15 @@ module ChatLayout
     }).to_s
   end
 
-  # User#title референса: «name – bio» (bio может быть NULL).
+  # Oracle User#title: "name – bio" (bio may be NULL).
   def self.user_title(name : String?, bio : String?) : String
     bio.to_s.empty? ? name.to_s : "#{name} – #{bio}"
   end
 
-  # fresh_user_avatar_path (avatars_helper референса): публичный путь
+  # fresh_user_avatar_path (oracle avatars_helper): public path
   # /users/<signed_id purpose=user/avatar>/avatar?v=<updated_at YYYYMMDDHHMMSS>.
-  # Токен детерминирован (общий секрет) и байт-в-байт равен Rails-токену.
+  # The token is deterministic (shared secret) and byte-identical to the
+  # Rails token.
   def self.fresh_user_avatar_path(user_id : Int64, updated_at : Time?) : String
     token = CRails.application
       .message_verifier("active_record/signed_id", url_safe: true)
@@ -422,16 +424,16 @@ module ChatLayout
     "/users/#{token}/avatar?v=#{stamp}"
   end
 
-  # room_display_name(room, for_user:) RoomsHelper для direct-комнат:
-  # имена остальных участников через to_sentence; пусто (соль-комната) —
-  # fallback (имя viewer'а).
+  # room_display_name(room, for_user:) RoomsHelper for direct rooms:
+  # the other members' names via to_sentence; empty (solo room) —
+  # fallback (the viewer's name).
   def self.display_sentence(names : Array(String), fallback : String) : String
     joined = sentence(names)
     joined.empty? ? fallback : joined
   end
 
-  # room_display_name(room, for_user: nil) RoomsHelper: обычные комнаты —
-  # имя; direct (name NULL) — имена всех участников через запятую.
+  # room_display_name(room, for_user: nil) RoomsHelper: regular rooms —
+  # the name; direct (name NULL) — all members' names comma-joined.
   def self.room_display_name(room : Room) : String
     if room.direct?
       members = User.where(
@@ -443,9 +445,9 @@ module ChatLayout
     end
   end
 
-  # avatar_tag референса (users/avatars_helper): ссылка на профиль,
-  # img 48×48 по токен-путя с cache-buster. loading — опция image_tag
-  # (directs/edit передаёт loading: :lazy).
+  # avatar_tag of the oracle (users/avatars_helper): profile link,
+  # 48x48 img by token path with cache-buster. loading is an image_tag
+  # option (directs/edit passes loading: :lazy).
   def self.avatar_link(user : User?, loading : String? = nil) : String
     lazy = loading ? %( loading="#{loading}") : ""
     return %(<a class="btn avatar" data-turbo-frame="_top" href="/users/0"><img aria-hidden="true" src="/users/0/avatar" width="48" height="48"></a>) unless user
@@ -457,7 +459,7 @@ module ChatLayout
     end
   end
 
-  # Буст одного сообщения для рендера (boost + booster одним JOIN).
+  # One message boost for rendering (boost + booster in a single JOIN).
   struct BoostEntry
     attr_accessor id : Int64
     attr_accessor content : String
@@ -471,8 +473,8 @@ module ChatLayout
     end
   end
 
-  # Бусты для списка сообщений одним запросом (includes(:booster)),
-  # отсортированы по created_at (boosts.ordered).
+  # Boosts for a message list in one query (includes(:booster)),
+  # sorted by created_at (boosts.ordered).
   def self.boosts_for(message_ids : Array(Int64)) : Hash(Int64, Array(BoostEntry))
     table = {} of Int64 => Array(BoostEntry)
     return table if message_ids.empty?
@@ -490,10 +492,10 @@ module ChatLayout
     table
   end
 
-  # _presentation.html.erb: div id="presentation_message_<id>" с телом
-  # сообщения (target turbo-stream replace при редактировании). Текст —
-  # в обёртке lexxy-content (layouts/action_text/contents/_content),
-  # вложение — без обёртки (message_attachment_presentation).
+  # _presentation.html.erb: div id="presentation_message_<id>" with the
+  # message body (turbo-stream replace target on edit). Text is wrapped
+  # in the lexxy-content wrapper (layouts/action_text/contents/_content),
+  # attachments are not (message_attachment_presentation).
   def self.presentation_dom(mid : Int64, body_html : String,
                             lexxy_wrapper : Bool = true) : String
     inner = lexxy_wrapper ? %(<div class="lexxy-content">\n) + body_html +
@@ -502,44 +504,47 @@ module ChatLayout
       inner + %(</div>\n)
   end
 
-  # Текстовая presentation сообщения: рендер action-text-attachment
-  # (OG-embed из content-атрибута, mention по sgid) + SANITIZE
-  # (HtmlSanitizer — порт финального sanitize оракула перед auto_link:
-  # allowlist тегов/атрибутов, срез event-handler'ов и javascript:-URL)
-  # + autolink URL/email (rails_autolink) + снятие figure-обёртки таблиц
-  # (в DOM референса таблицы идут без lexxy-content__table-wrapper).
-  # См. MessagesHelper#message_presentation / auto_link_text.
+  # Text presentation of a message: action-text-attachment rendering
+  # (OG-embed from the content attribute, mention by sgid) + SANITIZE
+  # (HtmlSanitizer — port of the oracle's final sanitize before
+  # auto_link: tag/attribute allowlist, event handlers and javascript:
+  # URLs stripped) + autolink URLs/emails (rails_autolink) + unwrapping
+  # the table figure wrapper (in the reference DOM tables have no
+  # lexxy-content__table-wrapper).
+  # See MessagesHelper#message_presentation / auto_link_text.
   def self.text_presentation(body : String?) : String
     auto_link(HtmlSanitizer.sanitize(render_embeds(body.to_s)
-      # Живой редактор lexxy кладёт в сериализацию кода data-highlight-
-      # language, когда hljs уже загружен (race на моменте постинга);
-      # в базлайне атрибута нет — срезаем для детерминированного паритета.
+      # The live lexxy editor puts data-highlight-language into the code
+      # serialization when hljs is already loaded (a race at post time);
+      # the baseline has no such attribute — strip it for deterministic
+      # parity.
       .gsub(/ data-highlight-language="[^"]*"/, "")
       .gsub(%q{<figure class="lexxy-content__table-wrapper">}, "")
       .gsub("</figure>", "")))
   end
 
-  # <action-text-attachment> → итоговая разметка:
-  #  * opengraph-embed: рендер партиалом action_text/attachables/
-  #    _opengraph_embed (переносы строк — как в ERB-выводе; sanitize
-  #    срезает figure/actiontext-обёртки и rel, target остаётся).
-  #    Данные — из атрибутов узла (filename/href/url/caption) либо, для
-  #    lexxy-сериализаций, из content-разметки (title-якорь, описание,
-  #    img). URL только абсолютный http(s) на чужой хост (web_url);
-  #    twitter-аватар (pbs.twimg.com/profile_images) даёт модификатор
-  #    og-embed--twitter-avatar;
-  #  * mention: sgid → User → span.mention (sanitize снимает sgid и
-  #    data-turbo-frame, потому их не рендерим);
-  #  * прочие: content-атрибут как есть.
-  # Значения атрибутов содержат сырые «>», поэтому тег разбирается
-  # посимвольно с учётом кавычек, а не регекспом.
+  # <action-text-attachment> -> final markup:
+  #  * opengraph-embed: rendered by the action_text/attachables/
+  #    _opengraph_embed partial (line breaks as in the ERB output;
+  #    sanitize strips the figure/actiontext wrappers and rel, target
+  #    stays). Data comes from the node attributes (filename/href/url/
+  #    caption) or, for lexxy serializations, from the content markup
+  #    (title anchor, description, img). Only absolute http(s) URLs on
+  #    another host (web_url); a twitter avatar
+  #    (pbs.twimg.com/profile_images) adds the og-embed--twitter-avatar
+  #    modifier;
+  #  * mention: sgid -> User -> span.mention (sanitize removes sgid and
+  #    data-turbo-frame, so they are not rendered);
+  #  * others: the content attribute as is.
+  # Attribute values may contain raw ">", so the tag is parsed
+  # character by character with quote handling, not by a regex.
   def self.render_embeds(body : String) : String
     outp = IO::Memory.new
     body = remove_solo_unfurled_link_text(body)
     cursor = 0
-    # индексация байтовая: parse_tag ходит по to_unsafe, byte_slice —
-    # String#index/[] посимвольные, с байтовым курсором они ломаются
-    # на мультибайтном контенте до вложения
+    # Byte indexing: parse_tag walks to_unsafe, byte_slice — String#index/
+    # [] are char-based and break with a byte cursor on multibyte content
+    # before the attachment
     while (start = body.byte_index("<action-text-attachment", cursor))
       attrs, tag_end = parse_tag(body, start)
       outp << body.byte_slice(cursor, start - cursor)
@@ -564,7 +569,7 @@ module ChatLayout
     outp.to_s
   end
 
-  # Разбор одного тега: пары имя/значение до настоящего «>» (вне кавычек).
+  # Parse a single tag: name/value pairs up to the real ">" (outside quotes).
   private def self.parse_tag(html : String, start : Int32) : {Hash(String, String), Int32}
     attrs = {} of String => String
     i = start + "<action-text-attachment".size
@@ -608,9 +613,9 @@ module ChatLayout
     {attrs, html.bytesize}
   end
 
-  # Срезает обёртки, которые снимает финальный sanitize Rails:
-  # figure.attachment…og, actiontext-opengraph-embed и атрибуты
-  # rel/target на якорях (не входят в allowed_attributes).
+  # Strips the wrappers removed by the Rails final sanitize:
+  # figure.attachment…og, actiontext-opengraph-embed and the rel/target
+  # attributes on anchors (not in allowed_attributes).
   private def self.strip_embed_wrappers(html : String) : String
     html.gsub(/<\/?figure\b[^>]*>/, "")
       .gsub(/<\/?actiontext-opengraph-embed\b[^>]*>/, "")
@@ -618,10 +623,10 @@ module ChatLayout
       .strip
   end
 
-  # ————— OG-embed: партиал action_text/attachables/_opengraph_embed —————
+  # ————— OG-embed: action_text/attachables/_opengraph_embed partial —————
 
-  # ActionText::Attachment::OpengraphEmbed#web_url: только абсолютный
-  # http(s)-URL на домене (с точкой, без %-экранирования хоста).
+  # ActionText::Attachment::OpengraphEmbed#web_url: only an absolute
+  # http(s) URL on a domain (with a dot, no %-escaped host).
   private def self.og_web_url(value : String?) : String?
     return nil if (raw = value.to_s.strip).empty?
     return nil unless raw.starts_with?("http://", "https://")
@@ -632,8 +637,8 @@ module ChatLayout
     nil
   end
 
-  # attributes_from_node: атрибуты узла (filename задан) либо разбор
-  # content-разметки (lexxy сериализует детали вложением).
+  # attributes_from_node: node attributes (filename set) or parsing the
+  # content markup (lexxy serializes the details into the attachment).
   private def self.og_attributes(attrs : Hash(String, String), content : String?)
     if (filename = attrs["filename"]?).to_s.empty?
       html = unescape_entities(content.to_s)
@@ -658,9 +663,9 @@ module ChatLayout
     text[0, length - 1] + "…"
   end
 
-  # _opengraph_embed.html.erb после sanitize: без figure/actiontext
-  # обёрток, rel срезан, target="_blank" оставлен (allowed autolink).
-  # Переносы строк — как в выводе ERB-партиала.
+  # _opengraph_embed.html.erb after sanitize: no figure/actiontext
+  # wrappers, rel stripped, target="_blank" kept (allowed autolink).
+  # Line breaks as in the ERB partial output.
   private def self.opengraph_embed_dom(attrs : Hash(String, String),
                                        content : String?) : String
     data = og_attributes(attrs, content)
@@ -672,8 +677,8 @@ module ChatLayout
       io << "\n<div class=\"#{klass}\">\n"
       io << "<div class=\"og-embed__content\">\n<div class=\"og-embed__title\">\n"
       if (href = data[:href])
-        # target="_blank" в DOM добавляет клиент (lexxy) — серверный вывод
-        # Rails его не содержит.
+        # target="_blank" is added by the client (lexxy) in the DOM — the
+        # Rails server output does not contain it.
         io << %(<a href="#{HTML.escape(href)}">) << title << %(</a>\n)
       else
         io << title << "\n"
@@ -689,11 +694,11 @@ module ChatLayout
     end
   end
 
-  # ContentFilters::RemoveSoloUnfurledLinkText: единственный og-embed,
-  # plain-текст тела == его href (twitter-URL нормализуются: x.com →
-  # twitter.com, query срезается) — текст ссылки удаляется. Trix-тела
-  # (есть div): содержимое div заменяется одним вложением; иначе
-  # удаляются абзацы без вложения.
+  # ContentFilters::RemoveSoloUnfurledLinkText: a single og-embed whose
+  # plain body text equals its href (twitter URLs are normalized:
+  # x.com -> twitter.com, query dropped) — the link text is removed.
+  # Trix bodies (with a div): the div content is replaced by the single
+  # attachment; otherwise paragraphs without an attachment are dropped.
   private def self.remove_solo_unfurled_link_text(body : String) : String
     spans = [] of {Int32, Int32}
     cursor = 0
@@ -717,8 +722,9 @@ module ChatLayout
     return body unless normalize_tweet_url(plain) == normalize_tweet_url(href)
 
     if body.includes?("<div")
-      # rindex посимвольный: ищем в байтовом префиксе и конвертируем
-      # индекс (до вложения мультибайта обычно нет, но корректно всегда)
+      # rindex is char-based: search the byte prefix and convert the
+      # index (there is usually no multibyte before the attachment, but
+      # this is always correct)
       prefix = body.byte_slice(0, s)
       div_start = prefix.rindex("<div").try { |ci| prefix.char_index_to_byte_index(ci) }
       return body unless div_start
@@ -744,8 +750,8 @@ module ChatLayout
     url
   end
 
-  # users/_mention.html.erb после sanitize: span.mention с аватаром
-  # (токен-путь, ?v=) и именем; без sgid/data-turbo-frame.
+  # users/_mention.html.erb after sanitize: span.mention with an avatar
+  # (token path, ?v=) and the name; no sgid/data-turbo-frame.
   private def self.mention_dom(sgid : String) : String
     user = mention_user(sgid)
     return "" unless user
@@ -759,15 +765,16 @@ module ChatLayout
     end
   end
 
-  # sgid → User — порт lib/rails_ext/action_text_attachables.rb
-  # (attachable_from_possibly_expired_sgid): подпись НЕ проверяется —
-  # ротация SECRET_KEY_BASE не должна ломать существующие упоминания
-  # User (допустим ТОЛЬКО User, ATTACHABLES_PERMITTED_WITH_INVALID_
-  # SIGNATURES). Конверт бывает двух форм (AS MessageVerifier): новая —
-  # {"data": <gid|b64>}, legacy (сид, Rails 7 Marshal) — {"message":
-  # strict_b64(Marshal-обёртки)}; gid в marshal-байтах вынимается
-  # напрямую (gid://campfire/<model>/<id>, без query), полный парсер
-  # Marshal не нужен.
+  # sgid -> User — port of lib/rails_ext/action_text_attachables.rb
+  # (attachable_from_possibly_expired_sgid): the signature is NOT
+  # verified — SECRET_KEY_BASE rotation must not break existing User
+  # mentions (ONLY User is permitted,
+  # ATTACHABLES_PERMITTED_WITH_INVALID_SIGNATURES). The envelope comes
+  # in two forms (AS MessageVerifier): new — {"data": <gid|b64>},
+  # legacy (seed, Rails 7 Marshal) — {"message":
+  # strict_b64(Marshal wrapper)}; the gid is extracted directly from
+  # the marshal bytes (gid://campfire/<model>/<id>, no query), a full
+  # Marshal parser is not needed.
   def self.mention_user(sgid : String) : User?
     message = sgid.split("--").first?
     return nil unless message
@@ -794,13 +801,13 @@ module ChatLayout
     nil
   end
 
-  # ————— Autolink (порт rails_autolink: auto_link_urls + emails) —————
+  # ————— Autolink (port of rails_autolink: auto_link_urls + emails) —————
 
   AUTO_LINK_RE = /(?:(?:(?:ed2k|ftp|http|https|irc|mailto|news|gopher|nntp|telnet|webcal|xmpp|callto|feed|svn|urn|aim|rsync|tag|ssh|sftp|rtsp|afs|file):\/\/|www\.\w)[^\s<\x{a0}"]+)/imx
 
   AUTO_EMAIL_RE = /(?<![\w.!#$%&'*\/=?^`{|}~+-])[\w.!#$%+-]\.?[\w.!#$%&'*\/=?^`{|}~+-]*@[\w-]+(?:\.[\w-]+)+/
 
-  # escape_once: & не дублируется в уже-сущностях (Rails escape_once).
+  # escape_once: & is not doubled inside existing entities (Rails escape_once).
   private def self.escape_once(text : String) : String
     text.gsub(/&(?!#\d+;|#x[0-9a-fA-F]+;|[a-zA-Z][a-zA-Z0-9]*;)/, "&amp;")
       .gsub("<", "&lt;").gsub(">", "&gt;")
@@ -815,19 +822,19 @@ module ChatLayout
     outp = IO::Memory.new
     cursor = 0
     while match = AUTO_LINK_RE.match_at_byte_index(text, cursor)
-      # MatchData#begin/#end на этом Crystal посимвольные — переводим в
-      # байтовые смещения (курсор match_at_byte_index байтовый)
+      # MatchData#begin/#end are char-based on this Crystal — convert to
+      # byte offsets (the match_at_byte_index cursor is byte-based)
       m_begin = text.char_index_to_byte_index(match.begin.not_nil!).not_nil!
       href = match[0].not_nil!
       m_end = m_begin + href.bytesize
-      # m_begin/m_end/cursor — байтовые; срезы тоже байтовые
+      # m_begin/m_end/cursor are byte-based; slices are byte-based too
       left = text.byte_slice(0, m_begin)
       right = text.byte_slice(m_end, text.bytesize - m_end)
       outp << text.byte_slice(cursor, m_begin - cursor)
       if auto_linked?(left, right)
         outp << href
       else
-        # хвостовая пунктуация не входит в ссылку (rails_autolink)
+        # trailing punctuation is not part of the link (rails_autolink)
         punctuation = [] of String
         while (ch = href[-1]?) && !(ch.alphanumeric? || ch == '_' || ch == '/' || ch == '-' || ch == '=' || ch == ';')
           href = href[0...-1]
@@ -869,7 +876,7 @@ module ChatLayout
     end
   end
 
-  # URL уже внутри <a>…</a> или посреди тега — не линкуем.
+  # URL already inside <a>…</a> or in the middle of a tag — do not link.
   private def self.auto_linked?(left : String, right : String) : Bool
     return true if left =~ /<[^>]+$/ && right =~ /\A[^>]*>/
     if idx = left.rindex(/<a[\s>]/)
@@ -878,7 +885,7 @@ module ChatLayout
     false
   end
 
-  # ————— HTML-сущности (разбор content-атрибута вложений) —————
+  # ————— HTML entities (parsing attachment content attributes) —————
 
   def self.unescape_entities(text : String) : String
     text.gsub(/&(quot|amp|lt|gt|apos|nbsp|#39|#x27);/) do
@@ -895,13 +902,13 @@ module ChatLayout
 
   ChatSound = Sound
 
-  # Sound.find_by_name (app/models/sound.cr): каталог BUILTIN.
+  # Sound.find_by_name (app/models/sound.cr): the BUILTIN catalog.
   def self.sound_by_name(name : String) : Sound?
     Sound.find_by_name(name)
   end
 
-  # Message#sound референса: plain-тело вида «/play <name>» с известным
-  # именем → звук (content_type "sound").
+  # Oracle Message#sound: a plain body of the form "/play <name>" with a
+  # known name -> sound (content_type "sound").
   def self.message_sound(body : String?) : Sound?
 
     plain = body.to_s.gsub(/<[^>]*>/, " ").gsub("&nbsp;", " ").strip
@@ -910,8 +917,8 @@ module ChatLayout
     end
   end
 
-  # message_sound_presentation (MessagesHelper): div.sound с кнопкой 🔊
-  # и текстом/картинкой звука.
+  # message_sound_presentation (MessagesHelper): div.sound with the 🔊
+  # button and the sound's text/image.
   def self.sound_presentation(sound : Sound) : String
     String.build do |io|
       io << %(<div class="sound" data-action="messages:play-&gt;sound#play" data-controller="sound" )
@@ -926,11 +933,11 @@ module ChatLayout
     end
   end
 
-  # DOM одного сообщения — порт _message.html.erb референса: id по
-  # message.id (dom_id; client_message_id — только data-атрибут),
-  # turbo-frame edit_message_<id> вокруг body, presentation div
-  # message_<id>_presentation, бусты (boosts/_boosts). Вложение заменяет
-  # rich-text тело (message_attachment_presentation).
+  # Single message DOM — port of the oracle's _message.html.erb: id from
+  # message.id (dom_id; client_message_id is only a data attribute),
+  # turbo-frame edit_message_<id> around the body, presentation div
+  # message_<id>_presentation, boosts (boosts/_boosts). An attachment
+  # replaces the rich-text body (message_attachment_presentation).
   def self.message_dom(m : Message, room : Room, creator : User?,
                        attachment : Attachment? = nil,
                        boosts : Array(BoostEntry)? = nil,
@@ -948,13 +955,14 @@ module ChatLayout
     else
       text_presentation(m.body.to_s)
     end
-    # message--emoji: plain_text_body.all_emoji? — звук («/play …») не
-    # эмодзи-сообщение, класс по тексту тела, а не по разметке плеера.
+    # message--emoji: plain_text_body.all_emoji? — a sound ("/play …") is
+    # not an emoji message; the class is derived from the body text, not
+    # from the player markup.
     emoji = (attachment.nil? && sound.nil? && all_emoji?(presentation_html)) ? " message--emoji" : ""
     entries = boosts || boosts_for([mid])[mid]? || [] of BoostEntry
 
-    # message_tag rescue → _unrenderable.html.erb: автор записи удалён —
-    # плейсхолдер вместо сообщения (broken room).
+    # message_tag rescue -> _unrenderable.html.erb: the record's author is
+    # deleted — a placeholder instead of the message (broken room).
     unless creator
       return %(<div class="message message--formatted message--failed center">\n) +
              %(<div class="message__body">\n) +
@@ -991,9 +999,9 @@ module ChatLayout
     end
   end
 
-  # message--emoji: непустой plain text без букв и цифр (express allEmoji:
-  # !!plain && !/[\p{L}\p{N}]/u) — только эмодзи/пунктуация; класс даёт
-  # крупный шрифт (messages.css .message--emoji).
+  # message--emoji: non-empty plain text with no letters or digits
+  # (express allEmoji: !!plain && !/[\p{L}\p{N}]/u) — emoji/punctuation
+  # only; the class enables the large font (messages.css .message--emoji).
   private def self.all_emoji?(body_html : String?) : Bool
     return false unless html = body_html
     text = html.gsub(/<[^>]*>/, " ")
@@ -1008,17 +1016,17 @@ module ChatLayout
     saw_char
   end
 
-  # ===== Вложения сообщений (ActiveStorage, storage.js) =====
+  # ===== Message attachments (ActiveStorage, storage.js) =====
 
-  # Вложение сообщения: blob + имя файла (батч-загрузка одним IN).
+  # Message attachment: blob + filename (batch-loaded with a single IN).
   struct Attachment
     attr_accessor blob_id : Int64
     attr_accessor filename : String
     attr_accessor content_type : String
     attr_accessor key : String
-    # width/height из metadata блоба (ImageAnalyzer Rails): Int64 как в
-    # JSON-числе, Float64 — если metadata хранит float; nil — картинки
-    # без анализа (metadata "{}") и все не-картинки.
+    # width/height from the blob metadata (Rails ImageAnalyzer): Int64 as
+    # in a JSON number, Float64 if the metadata stores a float; nil for
+    # unanalyzed images (metadata "{}") and all non-images.
     attr_accessor width : Int64 | Float64 | Nil = nil
     attr_accessor height : Int64 | Float64 | Nil = nil
 
@@ -1034,7 +1042,7 @@ module ChatLayout
     end
   end
 
-  # attachment-блобы для списка сообщений одним запросом.
+  # Attachment blobs for a message list in one query.
   def self.attachments_for(message_ids : Array(Int64)) : Hash(Int64, Attachment)
     table = {} of Int64 => Attachment
     return table if message_ids.empty?
@@ -1058,10 +1066,9 @@ module ChatLayout
   end
 
   def self.storage_verifier
-    # ActiveStorage.verifier референса: MessageVerifier SHA1, strict_b64
-    # с паддингом ('…fQ==--<sha40>'); urlsafe-nopad здесь расходится с
-    # Rails-подписью blob_id (avatar/sgid — другие верификаторы, их не
-    # трогаем).
+    # Oracle ActiveStorage.verifier: MessageVerifier SHA1, strict_b64 with
+    # padding ('…fQ==--<sha40>'); urlsafe-nopad diverges from the Rails
+    # blob_id signature here (avatar/sgid use other verifiers, untouched).
     CRails.application.message_verifier("ActiveStorage",
       digest: :sha1, url_safe: false)
   end
@@ -1073,28 +1080,30 @@ module ChatLayout
   end
 
   # /rails/active_storage/representations/redirect/<blob_id>/<variation>/<filename>
-  # (transforms как у express: 1200×800; format — расширение файла, у
-  # video-постера Rails всегда конвертит кадр в webp).
+  # (transforms as in express: 1200x800; format is the file extension,
+  # except the video poster where Rails always converts the frame to webp).
   def self.representation_url(a : Attachment, format : String? = nil) : String
     token = storage_verifier.generate(a.blob_id, purpose: "blob_id")
     ext = format || File.extname(a.filename).lchop('.')
     fmt = ext.empty? ? "png" : ext
-    # Rails подписывает сами преобразования (объект, не строка):
+    # Rails signs the transforms themselves (an object, not a string):
     # {"_rails":{"data":{"format":..,"resize_to_limit":[..]},"pur":"variation"}}
     variation = storage_verifier.generate(
       ActiveSupport::RawJSON.new(%({"format":"#{fmt}","resize_to_limit":[1200,800]})), purpose: "variation")
     "/rails/active_storage/representations/redirect/#{token}/#{variation}/#{URI.encode_path_segment(a.filename)}"
   end
 
-  # ActiveStorage web_image? (Blob#web_image?): только эти типы проходят
-  # через variant-превью в сообщениях; bmp/tiff/svg и не-картинки —
-  # render_link (file-chip), как в Messages::AttachmentPresentation.
+  # ActiveStorage web_image? (Blob#web_image?): only these types go
+  # through the variant preview in messages; bmp/tiff/svg and
+  # non-images get render_link (file-chip), as in
+  # Messages::AttachmentPresentation.
   WEB_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/gif",
                      "image/webp"}
 
-  # Messages::AttachmentPresentation референса: видео — video с постером
-  # (кадр конвертится в webp), web-картинка — lightbox + img, остальное
-  # (txt, bmp, …) — file-chip c иконкой, download и share.
+  # Oracle Messages::AttachmentPresentation: video — a video tag with a
+  # poster (the frame is converted to webp), web image — lightbox + img,
+  # everything else (txt, bmp, …) — a file-chip with icon, download and
+  # share.
   def self.attachment_presentation(a : Attachment) : String
     url = blob_url(a)
     if a.video?
@@ -1130,13 +1139,14 @@ module ChatLayout
     end
   end
 
-  # Message::THUMBNAIL_MAX_WIDTH/HEIGHT (attachment.rb референса).
+  # Message::THUMBNAIL_MAX_WIDTH/HEIGHT (oracle attachment.rb).
   THUMBNAIL_MAX_WIDTH  = 1200.0
   THUMBNAIL_MAX_HEIGHT = 800.0
 
-  # preview_dimensions: исходные размеры из metadata, уменьшенные до
-  # лимита превью (масштаб — min по двум осям). Целые остаются целыми
-  # (Rails делит Integer/2 без дробной части), уменьшенные — float.
+  # preview_dimensions: original dimensions from metadata, scaled down to
+  # the preview limit (scale is the min over both axes). Integers stay
+  # integers (Rails divides Integer/2 with no fraction), scaled ones are
+  # floats.
   private def self.preview_dimensions(a : Attachment) : {Int64 | Float64, Int64 | Float64}?
     w = a.width
     h = a.height
@@ -1152,10 +1162,10 @@ module ChatLayout
     end
   end
 
-  # inline_media_dimension_constraints: блок media в div-обёртке с
-  # половинной шириной и aspect-ratio; без metadata — обёртка без
-  # ограничений (картинка рисуется натуральным размером, поэтому
-  # обёртка обязательна и там).
+  # inline_media_dimension_constraints: the media block in a div wrapper
+  # with half width and aspect-ratio; without metadata the wrapper has
+  # no constraints (the image renders at natural size, so the wrapper is
+  # required there too).
   private def self.inline_media_dimension_constraints(a : Attachment, content : String) : String
     if (dims = preview_dimensions(a))
       w, h = dims
@@ -1167,14 +1177,14 @@ module ChatLayout
     end
   end
 
-  # Число как в Ruby: Integer — to_s, Float — to_s (кратчайшая
-  # round-trip форма с ".0" у целых).
+  # Number as in Ruby: Integer — to_s, Float — to_s (shortest
+  # round-trip form with ".0" for wholes).
   private def self.number(v : Int64 | Float64) : String
     v.to_s
   end
 
-  # width / 2 из inline_media_dimension_constraints: для Integer —
-  # целочисленное деление, для Float — float.
+  # width / 2 from inline_media_dimension_constraints: integer division
+  # for Integer, float for Float.
   private def self.half(v : Int64 | Float64) : String
     case v
     in Int64   then (v // 2).to_s
@@ -1182,11 +1192,11 @@ module ChatLayout
     end
   end
 
-  # message_actions — порт _actions.html.erb: summary-меню с quick-boosts
-  # (форма на каждую реакцию, submit в turbo-frame message_<id>_boosting),
-  # кнопка кастомного буста (message__boost-btn → new boost frame),
-  # Reply/Download+Share (attachment), Copy link (абсолютный URL),
-  # Edit (edit_message_<id>).
+  # message_actions — port of _actions.html.erb: a summary menu with
+  # quick-boosts (a form per reaction, submit into the
+  # message_<id>_boosting turbo-frame), the custom boost button
+  # (message__boost-btn -> new boost frame), Reply/Download+Share
+  # (attachment), Copy link (absolute URL), Edit (edit_message_<id>).
   private def self.message_actions(mid : Int64, room : Room, permalink : String,
                                    attachment : Attachment?,
                                    base_url : String) : String
@@ -1249,9 +1259,9 @@ module ChatLayout
     end
   end
 
-  # _boosts.html.erb: turbo-frame boosting_message_<id> с контейнером
-  # бустов (boosts_message_<id> — target append-стрима) и lazy-фреймом
-  # new_boost_message_<id> (кнопка «Add a boost»).
+  # _boosts.html.erb: turbo-frame boosting_message_<id> with the boosts
+  # container (boosts_message_<id> — append stream target) and the lazy
+  # new_boost_message_<id> frame ("Add a boost" button).
   def self.boosts_dom(mid : Int64, boosts : Array(BoostEntry)) : String
     String.build do |io|
       io << %(<turbo-frame id="boosting_message_#{mid}">\n)
@@ -1271,8 +1281,8 @@ module ChatLayout
     end
   end
 
-  # _boost.html.erb: буст с аватаром бустера, контентом (клик раскрывает
-  # удаление) и delete-формой (button_to _method=delete).
+  # _boost.html.erb: a boost with the booster's avatar, content (click
+  # reveals delete) and the delete form (button_to _method=delete).
   def self.boost_dom(mid : Int64, b : BoostEntry) : String
     medium = all_emoji?(b.content) ? " txt-medium" : ""
     String.build do |io|
@@ -1300,13 +1310,13 @@ module ChatLayout
     end
   end
 
-  # DOM-список сообщений с fragment-кэшем — порт Rails `render partial:,
-  # collection:, cached:` (rooms/show.html.erb + FragmentCache
-  # референса): хиты берутся из кэша одним проходом до любых SQL;
-  # промахи рендерятся свежо — их комнаты (кроме переданной) и авторы
-  # догружаются одним IN-запросом на сущность — и пишутся в кэш.
-  # Ключ = cache_key_with_version (id + updated_at), свежесть — общий
-  # DB-epoch (см. FragmentCache).
+  # Message list DOM with fragment cache — port of Rails `render
+  # partial:, collection:, cached:` (rooms/show.html.erb + the oracle's
+  # FragmentCache): hits are read from the cache in one pass before any
+  # SQL; misses render fresh — their rooms (besides the passed one) and
+  # authors are loaded with one IN query per entity — and written back
+  # to the cache. Key = cache_key_with_version (id + updated_at),
+  # freshness is the shared DB epoch (see FragmentCache).
   def self.messages_to(io : IO, messages : Array(Message), epoch : String,
                        room : Room? = nil, base_url : String = "") : Nil
     hits = {} of Int64 => String
@@ -1334,7 +1344,7 @@ module ChatLayout
       User.where(id: creator_ids).each { |u| creators[u.id.not_nil!] = u }
     end
 
-    # Вложения и бусты одним IN-запросом на сущность (без N+1).
+    # Attachments and boosts with one IN query per entity (no N+1).
     attachments = attachments_for(messages.map(&.id.not_nil!))
     boosts = boosts_for(messages.map(&.id.not_nil!))
 
@@ -1350,22 +1360,22 @@ module ChatLayout
     end
   end
 
-  # String-обёртка над messages_to (rooms#show: результат уходит в
+  # String wrapper over messages_to (rooms#show: the result goes into
   # message_area).
   def self.messages_html(messages : Array(Message), epoch : String,
                          room : Room? = nil, base_url : String = "") : String
     String.build { |io| messages_to(io, messages, epoch, room, base_url) }
   end
 
-  # message-area целиком (optimistic-шаблон + .messages + стрим-источник
-  # + composer) — room.eta + optimistic.eta. Optimistic-template нужен
-  # messages-контроллеру как target "template".
+  # The whole message-area (optimistic template + .messages + stream
+  # source + composer) — room.eta + optimistic.eta. The optimistic
+  # template is the messages controller's target "template".
   def self.message_area(room : Room, messages_html : String,
                         base_url : String = "") : String
     user = Current.user.not_nil!
     signed_name = HTML.escape(Turbo::Streams::StreamName.signed_stream_name([room, "messages"]))
     # messages_helper.rb:16 — messages_page_url_value: room_messages_url(room)
-    # (абсолютный URL: JS-пагинатор делает new URL(value) без базы).
+    # (absolute URL: the JS paginator does new URL(value) with no base).
     page_url = base_url.empty? ? route_path("room_messages", room.id) : "#{base_url}#{route_path("room_messages", room.id)}"
     String.build do |io|
       io << %(<div id="message-area" class="message-area" contents="true" data-controller="messages presence drop-target" )
@@ -1373,9 +1383,10 @@ module ChatLayout
       io << %(data-messages-first-of-day-class="message--first-of-day" data-messages-formatted-class="message--formatted" )
       io << %(data-messages-me-class="message--me" data-messages-mentioned-class="message--mentioned" )
       io << %(data-messages-threaded-class="message--threaded" data-messages-page-url-value="#{HTML.escape(page_url)}">\n)
-      # messages/_template.html.erb — атрибуты div на отдельных строках,
-      # разметка построчно (включая rails-баг «</div class="position-
-      # relative">» — закрывающий тег с классом, воспроизводим буквально).
+      # messages/_template.html.erb — div attributes on separate lines,
+      # markup line by line (including the rails bug "</div
+      # class=\"position-relative\">" — a closing tag with a class,
+      # reproduced verbatim).
       io << %(<script type="text/template" data-messages-target="template">\n)
       io << %(<div class="message message--me $messageClasses$"\n)
       io << %(id="message_$clientMessageId$"\n)
@@ -1412,8 +1423,9 @@ module ChatLayout
       io << %(</div>\n)
       io << %(</div>\n)
       io << %(</script>\n)
-      # messages_helper.rb:28 — refresh_room_loaded_at_value: epoch обновления
-      # комнаты; id — dom_id комнаты (rooms_open_<id>), URL — абсолютный.
+      # messages_helper.rb:28 — refresh_room_loaded_at_value: the room's
+      # updated_at epoch; id is the room's dom_id (rooms_open_<id>), URL
+      # is absolute.
       refresh_url = base_url.empty? ? "/rooms/#{room.id}/refresh" : "#{base_url}/rooms/#{room.id}/refresh"
       io << %(<div id="messages_#{room.dom_id}" class="messages" data-controller="maintain-scroll refresh-room" )
       io << %(data-action="turbo:before-stream-render@document-&gt;maintain-scroll#beforeStreamRender visibilitychange@document-&gt;refresh-room#visibilityChanged online@window-&gt;refresh-room#online" )

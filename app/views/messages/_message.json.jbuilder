@@ -1,6 +1,3 @@
-# Порт messages/_message.json.jbuilder референса (serializeMessage
-# эталона): id, created_at (ISO-8601 UTC, мс), body {plain_text, html
-# в lexxy-content-обёртке}, creator через users/_user, room {id}, url.
 json.id message.id
 json.created_at ChatLayout.iso8601_ms(message.created_at.not_nil!)
 json.body do

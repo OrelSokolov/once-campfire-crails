@@ -69,6 +69,43 @@
   проверки только создателя.
 - `Rooms::Opens/Closeds#edit/update` на несуществующую комнату: раньше
   head 404 → теперь redirect через set_room (как в оракуле).
+- **Callbacks/enum-миграция моделей (2026-10-24)**: `User` — `ar_enum :status`
+  (+ default :active) и `after_create_commit :grant_membership_to_open_rooms`
+  (SQL insert-select `on conflict do nothing`); `Membership` — enum `prefix:
+  :involved_in` + `after_destroy_commit { user.reset_remote_connections }`;
+  `Rooms::Open` — `after_save_commit :grant_access_to_all_users` (guard
+  `type_previously_changed?(to: "Open")` — порт пишет короткий STI-тип);
+  `Session` — `has_secure_token` + `before_create` last_active_at; `Search` —
+  `after_create :trim_recent_searches`; `Account::Joinable` — before_create
+  join_code + `reset_join_code`. Гранты в rooms/joins/first_run переехали
+  из контроллеров в модели; involvement грантов выровнен с оракулом
+  ('mentions', было 'everything'); revoke в update_room теперь `destroy`
+  (срабатывает after_destroy_commit), insert-гранты — `on conflict do nothing`.
+
+## Коллбэки, не перенесённые в модели (2026-10-24)
+
+- **`Message#after_save :record_creation, if: :previously_new_record?` и
+  `after_create_commit -> { room.push_later(self) }`** — остаются в
+  `MessageCreator`: FTS5-индексу нужен предвычисленный plain text из
+  `body_html` запроса (из модели недоступен), а enqueue задач обязан
+  происходить строго ПОСЛЕ коммита production-транзакции (отдельная queue
+  БД; дедлок на conc=16 — см. message_creator.cr). В модели оставлен
+  только `before_create -> { client_message_id ||= UUID.random.to_s }`.
+- **`Opengraph::Metadata` `before_validation :sanitize_fields`** — модель
+  не ActiveRecord (ActiveModel-объект с property), макросы коллбэков
+  живут в AR::Base; санитизация остаётся class-методом `Metadata.sanitize`.
+- **find-bang в контроллерах (2026-10-24)** — сконвертированы чистые сайты
+  (`UsersController#show`, `Users::Bans`, `Accounts::Users`,
+  `Accounts::Bots` edit/update/destroy, `Accounts::Bots::Keys`):
+  `find?` + ручной 404 → `Relation#find` (RecordNotFound → 404-страница
+  middleware, как rescue-ladder Rails). НЕ конвертированы: `set_room` /
+  `set_message` / `set_boost` (messages, boosts, by_bots) и autocompletable —
+  их лукапы membership-скоупы с выверенными телами ответов, прямого
+  аналога `Current.user.reachable_messages.find` в шарде нет (через
+  has_many :through с source у Relation нет). Класс-уровень
+  `Model.find(String)` отсутствует (только Int) — используем
+  `Model.all.find(str)`; кандидат в следующий патч шарда.
+
 
 ## Структурный паритет (missing-файлы), 2026-10-23 — plans/structure-parity.md
 

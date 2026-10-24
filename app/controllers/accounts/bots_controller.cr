@@ -1,27 +1,18 @@
-# /account/bots — чат-боты (референс: routes.js /account/bots* +
-# bot_form.eta/bots.eta): создание (role=2 + bot_token), список с
-# curl-командами, переименование. Только администратор.
 class Accounts::BotsController < ApplicationController
   include BotsHelpers
 
-  before_action :require_admin
+  before_action :ensure_can_administer
 
-  # index.html.erb: боты + curl-команды по их комнатам.
   @bots : Array(User) = [] of User
   @bot_rooms : Hash(Int64, Array(NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String))))) = {} of Int64 => Array(NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String))))
-  # new.html.erb / edit.html.erb: nil для new, бот для edit.
   @bot : User?
 
-  # GET /account/bots/new — форма (label "Name the bot" через
-  # placeholder; smoke: getByPlaceholder + кнопка "Save changes").
   def new
     @bot = nil
   end
 
-  # POST /account/bots — create: role=2, bot_token = hex(6 байт)
-  # (routes.js: randomBytes(6).toString("hex")).
   def create
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
+    Campfire::ResponseCache.invalidate!
     name = nested("name")
     if name.empty?
       response.status = :unprocessable_entity
@@ -36,10 +27,8 @@ class Accounts::BotsController < ApplicationController
       created_at: now, updated_at: now)
     bot.save!
     sync_webhook(bot.id.not_nil!, nested("webhook_url"))
-    # createUser эталона (domain.js): новый пользователь (включая бота)
-    # получает membership во все Rooms::Open (involvement "mentions").
-    # STI-порт пишет короткий type ('Open'), сид хранит полный
-    # ('Rooms::Open') — scope opens покрывает оба написания.
+    # The port writes short STI types ('Open') while the oracle seed stores full
+    # names ('Rooms::Open'); the opens scope covers both spellings.
     Room.opens.each do |room|
       Membership.new(room_id: room.id.not_nil!, user_id: bot.id.not_nil!,
         involvement: "mentions", connections: 0,
@@ -48,17 +37,12 @@ class Accounts::BotsController < ApplicationController
     redirect_to account_bots_url
   end
 
-  # GET /account/bots — список ботов с curl-командами по комнатам
-  # (bots.eta: заголовок с bot+add, аватары, pencil-edit, поля с
-  # иконками messages-outlined/attachment и copy-кнопками).
   def index
-    # _bot: User.active_bots.ordered.
     @bots = User.active_bots.ordered.to_a
     @bots.each do |bot|
       bid = bot.id.not_nil!
       bot_key = "#{bid}-#{bot.bot_token.to_s}"
-      # _bot.html.erb: bot.rooms.without_directs.ordered — без Direct
-      # (сид: 'Rooms::Direct', наши: 'Direct'), по LOWER(name).
+      # Covers both type spellings: seed 'Rooms::Direct', port 'Direct'.
       rooms = [] of NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String)))
       Room.visible_for(bot).without_directs.ordered.each do |room|
         rid = room.id.not_nil!
@@ -73,20 +57,14 @@ class Accounts::BotsController < ApplicationController
     end
   end
 
-  # GET /account/bots/:id/edit — форма с текущим именем.
   def edit
-    bot = User.where("id = ? AND role = 2 AND status = 0",
-      params["id"].to_s.to_i64).take
-    return head(:not_found) unless bot
-    @bot = bot
+    # find-bang: RecordNotFound -> 404 via the middleware rescue ladder
+    @bot = User.active_bots.find(params["id"].to_s)
   end
 
-  # PATCH /account/bots/:id — rename.
   def update
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
-    bot = User.where("id = ? AND role = 2 AND status = 0",
-      params["id"].to_s.to_i64).take
-    return head(:not_found) unless bot
+    Campfire::ResponseCache.invalidate!
+    bot = User.active_bots.find(params["id"].to_s)
     name = nested("name")
     bot.name = name unless name.empty?
     bot.updated_at = Time.utc
@@ -95,11 +73,11 @@ class Accounts::BotsController < ApplicationController
     redirect_to account_bots_url
   end
 
-  # DELETE /account/bots/:id — удаление бота (bot_form.eta delete-панель).
   def destroy
-    Campfire::ResponseCache.invalidate! # write: сброс whole-page кэша
-    bot = User.where("id = ? AND role = 2", params["id"].to_s.to_i64).take
-    return head(:not_found) unless bot
+    Campfire::ResponseCache.invalidate!
+    # role-only scope: deactivated bots stay deletable (the port hard-deletes;
+    # the oracle soft-deactivates — see notes/style-parity.md)
+    bot = User.where("role = 2").find(params["id"].to_s)
     ActiveRecord::Base.connection.exec(
       "DELETE FROM memberships WHERE user_id = ?", bot.id.not_nil!)
     ActiveRecord::Base.connection.exec(
@@ -108,16 +86,13 @@ class Accounts::BotsController < ApplicationController
     redirect_to account_bots_url
   end
 
-  # ————— приватное контроллера (не для шаблонов) —————
-
   private def nested(key : String) : String
     nested = params["user"]?
     return "" unless nested.is_a?(ActionController::Parameters)
     nested[key]?.to_s
   end
 
-  # Webhook бота (routes.js эталона): пустой URL — удалить, непустой —
-  # единственная запись webhooks для бота.
+  # Empty URL deletes the webhook; a non-empty URL is the bot's single webhook row.
   private def sync_webhook(bot_id : Int64, url : String) : Nil
     conn = ActiveRecord::Base.connection
     if url.empty?

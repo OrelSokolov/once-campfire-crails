@@ -1,7 +1,5 @@
 require "../application_record"
 
-# User::Avatar (user/avatar.rb): публичная ссылка аватара — signed_id
-# purpose "user/avatar"; variant :square см. Users::AvatarsController.
 class User
   module Avatar
     include ActiveSupport::Concern
@@ -18,8 +16,7 @@ class User
 
     class_methods do
       def verify_signed_avatar_token(token : String) : Int64?
-        # express/verifier: digest sha256, fallback sha1 (ср.
-        # verify_signed_id в concerns/authentication).
+        # Verifier digest sha256 with sha1 fallback (see verify_signed_id in concerns/authentication).
         value = CRails.application.message_verifier("active_record/signed_id",
           url_safe: true).verified_any(token, purpose: "user/avatar")
         if value.nil?

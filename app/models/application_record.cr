@@ -1,4 +1,4 @@
-# abstract-база всех моделей (application_record.rb оракула;
-# `abstract?` актив_record_cr walker пропускает при регистрации таблиц).
+# Abstract base for all models (oracle application_record.rb); `abstract?` makes
+# the active_record_cr walker skip it when registering tables.
 abstract class ApplicationRecord < ActiveRecord::Base
 end

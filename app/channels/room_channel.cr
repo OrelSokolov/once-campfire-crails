@@ -1,5 +1,3 @@
-# RoomChannel (room_channel.rb оракула): база каналов комнаты —
-# подписка только на комнату с membership текущего пользователя.
 class RoomChannel < ApplicationCable::Channel
   def subscribed : Nil
     if (@room = find_room)
@@ -13,8 +11,7 @@ class RoomChannel < ApplicationCable::Channel
     @room
   end
 
-  # current_user.rooms.find_by(id: params[:room_id]) — membership
-  # проверяется по строковому connection-identifier.
+  # current_user.rooms.find_by(id: params[:room_id])
   private def find_room : Room?
     uid = current_user_id
     return nil unless uid

@@ -1,12 +1,8 @@
-# GET /webmanifest(.json) — порт PwaController#manifest (pwa/
-# manifest.json.erb): web app manifest с иконками аккаунта
-# (fresh_account_logo) и скриншотами; линкуется из <head> (tag.link
-# rel: "manifest"). allow_unauthenticated_access — манифест публичен.
-# GET /service-worker — JS воркер пуш-нотификаций (pwa/service_worker.js
-# референса): showNotification + setAppBadge на push-событие,
-# notificationclick — переход по data.path. URL стабильный, в корне —
-# потому не ассетный путь (skip_forgery_protection референса; у порта
-# защита header_only, GET не требует токенов).
+# GET /webmanifest(.json) — the web app manifest with the account's icons and
+# screenshots, linked from <head> (tag.link rel: "manifest"); public.
+# GET /service-worker — the push notifications service worker: showNotification +
+# setAppBadge on push, notificationclick navigates to data.path. The URL is stable and
+# at the root, so not an asset path.
 class PwaController < ApplicationController
   skip_before_action :require_authentication
 
@@ -16,8 +12,8 @@ class PwaController < ApplicationController
     render(template: "pwa/manifest.json.jbuilder")
   end
 
-  # Стабильный URL в корне (pwa_controller.rb: "We need a stable URL at
-  # the root, so we can't use the regular asset path here").
+  # Stable URL at the root (pwa_controller.rb: "We need a stable URL at the root, so
+  # we can't use the regular asset path here").
   SERVICE_WORKER_JS = <<-JS
     self.addEventListener("push", async (event) => {
       const data = await event.data.json()

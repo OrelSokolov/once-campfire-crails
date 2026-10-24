@@ -1,28 +1,25 @@
 require "socket"
 
-# Межворкерная шина кабеля для serverX Cluster (эквивалент cluster-IPC
-# «cable-batch» у once-campfire-express): TCP-хаб на loopback, избираемый
-# bind-конкуренцией — первый занявший порт становится хабом, остальные
-# воркеры подключаются клиентами. Broadcast доставляется локально всегда,
-# в шину — только пирам (отправитель себе доставил сам, хаб не эхит
-# сообщение обратно отправителю). Хаб умирает вместе с воркером —
-# клиенты переподключаются, bind-конкуренция выбирает нового хаба.
+# Inter-worker cable bus for serverX Cluster: a TCP hub on loopback elected by
+# a bind race — the first worker to take the port becomes the hub, the others
+# connect as clients. Broadcast is always delivered locally; only peers get it
+# over the bus (the sender already delivered locally, the hub does not echo a
+# frame back to its sender). The hub dies with its worker — clients reconnect
+# and the bind race elects a new hub.
 #
-# Запись в сокет — ТОЛЬКО через выделенную writer-фиберу соединения
-# (Channel(QUEUE_CAPACITY)): request-фиберы никогда не ждут сокет.
-# Прямые записи из многих фибер в один сокет, помимо интерливинга
-# частичных write(2), подвешивали запросы навсегда при потере wakeup-а
-# готовности записи (наблюдали на post-нагрузке ~1 фибера на ~150k
-# запросов: cb-loc-done есть, cb-relay-done нет, Send-Q сокета пуст).
-# Переполнение очереди (пиры отстали на QUEUE_CAPACITY кадров) — сокет
-# закрывается: отставший пи́р переподключается супервизором, живые
-# продолжают работать; канал — только live-обновления, источник правды
-# остаётся в БД.
+# Socket writes MUST go through the connection's dedicated writer fiber
+# (Channel(QUEUE_CAPACITY)): request fibers never wait on the socket. Direct
+# writes from many fibers into one socket, besides interleaving partial
+# write(2)s, hung requests forever when a write-readiness wakeup was lost
+# (observed under post load, ~1 fiber per ~150k requests). On queue overflow
+# (peers lagging by QUEUE_CAPACITY frames) the socket is closed: the lagging
+# peer reconnects via its supervisor, live peers keep going; the channel
+# carries live updates only — the DB remains the source of truth.
 module Campfire
   module CableBus
     QUEUE_CAPACITY = 1024
 
-    # Сокет шины: очередь кадров + writer-фибера + флаг закрытия.
+    # Bus connection: frame queue + writer fiber + closed flag.
     class Connection
       attr_reader socket : TCPSocket
       attr_reader queue : Channel(Tuple(String, String))
@@ -32,8 +29,8 @@ module Campfire
         @queue = Channel(Tuple(String, String)).new(QUEUE_CAPACITY)
       end
 
-      # Поставить кадр в очередь writer-фиберы. false — соединение
-      # закрыто (переполнение/разрыв), вызывающий роняет пир.
+      # Enqueue a frame for the writer fiber; false means the connection is
+      # closed (overflow/teardown) and the caller drops the peer.
       def send_frame(stream : String, payload : String) : Bool
         return false if @closed
         select
@@ -45,8 +42,8 @@ module Campfire
         end
       end
 
-      # Writer-фибера: единственный писатель сокета (нет интерливинга
-      # кадров), полная запись кадра (учёт частичного write(2)).
+      # Writer fiber: the only socket writer (no frame interleaving), writes
+      # each frame fully (accounts for partial write(2)).
       def start_writer : Nil
         spawn do
           loop do
@@ -85,9 +82,9 @@ module Campfire
 
     # ————— API —————
 
-    # Отправить кадр в шину пирам (БЕЗ локальной доставки — её делает
-    # Campfire.broadcast до вызова). No-op без поднятой шины. Никогда
-    # не блокирует вызывающую фиберу дольше отправки в Channel.
+    # Send a frame to peers over the bus (NO local delivery — Campfire.broadcast
+    # does that before the call). No-op without a live bus; never blocks the
+    # calling fiber longer than the Channel send.
     def self.relay(stream : String, payload : String) : Nil
       if (conn = @@client)
         @@client = nil unless conn.send_frame(stream, payload)
@@ -98,7 +95,7 @@ module Campfire
       end
     end
 
-    # ————— Внутреннее —————
+    # ————— Internal —————
 
     private def self.supervisor_loop(port : Int32) : Nil
       loop do
@@ -120,8 +117,8 @@ module Campfire
         rescue
           sleep 0.3.seconds
         end
-        # Соединение с хабом оборвалось (writer закрыл сокет или хаб
-        # умер) — переподключаемся (возможно, уже как новый хаб).
+        # Hub connection lost (writer closed the socket or the hub died) —
+        # reconnect, possibly as the new hub.
         (@@client).try(&.close)
         @@client = nil
       end
@@ -138,7 +135,7 @@ module Campfire
       @@peers.clear
     end
 
-    # Хаб: кадр от пира → рассылка всем остальным (отправителю не эхим).
+    # Hub: frame from a peer is fanned out to every other peer (no echo to sender).
     private def self.hub_peer_loop(peer : Connection) : Nil
       while (frame = read_frame(peer.socket))
         stream, payload = frame
@@ -151,9 +148,9 @@ module Campfire
       @@peers.delete(peer)
     end
 
-    # Клиент: кадр от хаба → локальная доставка кабелем. Напрямую в
-    # pubsub, НЕ через Server#broadcast (CampfireCable): тот ретранслирует
-    # в шину — кадр, пришедший по шине, эхом ушла бы пирам (петля).
+    # Client: frame from the hub is delivered to the cable directly through
+    # pubsub, NOT via Server#broadcast (CampfireCable): that one relays into
+    # the bus — a frame arriving over the bus would echo back to peers (loop).
     private def self.client_loop(sock : TCPSocket) : Nil
       while (frame = read_frame(sock))
         stream, payload = frame
@@ -192,10 +189,9 @@ module Campfire
     end
   end
 
-  # Единая точка broadcast для app-кода: доставку делает CampfireCable
-  # (локальный pubsub + ретрансляция воркерам через шину; см.
-  # config/cable.cr) — relay здесь не дублируем, иначе пиры получили бы
-  # кадр дважды.
+  # Single broadcast entry point for app code: delivery is CampfireCable's job
+  # (local pubsub + relay to workers over the bus; see config/cable.cr) — no
+  # relay here, or peers would receive every frame twice.
   def self.broadcast(stream : String, frame : String) : Nil
     Turbo.cable.broadcast(stream, frame)
   end

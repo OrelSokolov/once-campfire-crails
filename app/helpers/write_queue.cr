@@ -1,28 +1,26 @@
-# Двухуровневая очередь записи для fork-воркеров.
+# Two-level write queue for fork workers.
 #
-# Уровень 1 — в процессе: write-блоки исполняет единственная
-# writer-фибера. Ожидание write-lock'а в busy-хендлере SQLite — сон в
-# C-коде, блокирующий event-loop всего воркера; если лок держит фибера
-# этого же процесса, её COMMIT не может выполниться, пока ждущий спит
-# в C, — лайвлок. Через очередь пишет ровно одна фибера, остальные
-# ждут в Crystal-шедулере.
+# Level 1 — in-process: write blocks run on a single writer fiber. Waiting for
+# the write lock inside the SQLite busy handler sleeps in C code and blocks the
+# whole worker's event loop; if the lock is held by a fiber of this same
+# process, its COMMIT cannot run while the waiter sleeps in C — a livelock.
+# One fiber writes through the queue, the rest wait in the Crystal scheduler.
 #
-# Уровень 2 — между процессами (WEB_CONCURRENCY fork-воркеров):
-# writer-фиберы процессов сериализуются через robust process-shared
-# мьютекс в анонимной разделяемой странице (ActiveSupport::
-# ProcessSharedMutex, модель nginx). Страница и инициализированный
-# мьютекс создаются в master ДО fork (prepare_fork!) и наследуются
-# детьми — файловой системы нет вообще, лок не зависит от того, где
-# лежит база (tmpfs/ext4/тома), inode-очередей flock/fcntl не возникает.
-# Robust-флаг = авто-освобождение при смерти держателя, как у flock.
-# К SQLite писатели приходят строго по одному: busy-хендлер не
-# вызывается, BUSY/«statements in progress» не возникают.
+# Level 2 — between processes (WEB_CONCURRENCY fork workers): the per-process
+# writer fibers serialize on a robust process-shared mutex in an anonymous
+# shared page (ActiveSupport::ProcessSharedMutex, the nginx model). The page
+# and the initialized mutex are created in the master BEFORE fork
+# (prepare_fork!) and inherited by children — no filesystem involved, the lock
+# does not depend on where the database lives, and no flock/fcntl inode
+# queues arise. The robust flag auto-releases the lock when the holder dies,
+# like flock. Writers reach SQLite strictly one at a time: the busy handler is
+# never invoked, no BUSY/"statements in progress" errors.
 #
-# Одна блокировка на всю write-группу (production-транзакция + jobs
-# enqueue) — один хоп на сообщение, дедлок невозможен.
+# One lock per whole write group (production transaction + jobs enqueue) — one
+# hop per message, deadlock impossible.
 module Campfire
   module WriteQueue
-    # Блок + канал пробуждения вызывающей фиберы.
+    # Block + channel to wake the calling fiber.
     class Invocation
       attr_reader wake : Channel(Exception?)
       attr_reader run : Proc(Nil)
@@ -36,10 +34,9 @@ module Campfire
     @@page : ActiveSupport::SharedPage?
     @@mutex : ActiveSupport::ProcessSharedMutex?
 
-    # Разделяемая страница + инициализация мьютекса в master ДО fork
-    # (src/app.cr перед ServerX::Cluster.run). Дети наследуют и
-    # маппинг, и готовый мьютекс — ре-инициализация после fork сломала
-    # бы совместимость процессов.
+    # Shared page + mutex init in the master BEFORE fork (src/app.cr, before
+    # ServerX::Cluster.run). Children inherit both the mapping and the ready
+    # mutex — re-initializing after fork would break cross-process compatibility.
     def self.prepare_fork! : Nil
       return if @@mutex
       page = ActiveSupport::SharedPage.new
@@ -47,8 +44,8 @@ module Campfire
       @@mutex = ActiveSupport::ProcessSharedMutex.init_at(page.pointer)
     end
 
-    # Выполнить write-блок в writer-фибере; результат и ошибки
-    # пробрасываются вызывающей фибере.
+    # Run the write block in the writer fiber; the result and errors are
+    # propagated back to the calling fiber.
     def self.perform(&block : -> T) : T forall T
       ensure_runner
       wake = Channel(Exception?).new
@@ -61,17 +58,17 @@ module Campfire
       result
     end
 
-    # После fork (serverX Cluster) унаследованная writer-фибера мертва:
-    # очередь пересоздаётся и стартует лениво при первой записи в
-    # воркере. Страница и мьютекс наследуются как есть — не трогаем.
+    # After fork (serverX Cluster) the inherited writer fiber is dead: the queue
+    # is recreated and starts lazily on the worker's first write. The page and
+    # mutex are inherited as is — left untouched.
     def self.reset! : Nil
       @@queue = Channel(Invocation).new(256)
       @@runner_started = false
     end
 
-    # Без prepare_fork! (одно-процессный запуск, stdlib-транспорт) —
-    # лениво своя страница: межпроцессного разделения не требуется,
-    # мьютекс в рамках процесса корректен.
+    # Without prepare_fork! (single-process run, stdlib transport) a private
+    # page is created lazily: no cross-process sharing needed, the mutex is
+    # correct within the process.
     private def self.mutex : ActiveSupport::ProcessSharedMutex
       if (m = @@mutex)
         m

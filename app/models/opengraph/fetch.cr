@@ -1,10 +1,7 @@
-# fetch.rb: GET/HEAD с редиректами (лимит 10), общим дедлайном
-# (остаток бюджета на каждый connect/read/write, максимум TIMEOUT —
-# как 7.seconds у Rails) и лимитом тела 5MB.
 class Opengraph::Fetch
   MAX_REDIRECTS = 10
   MAX_BODY_SIZE = 5 * 1024 * 1024 # 5.megabytes
-  TIMEOUT = 7.0
+  TIMEOUT = 7.0 # to connect (TLS included), and for each read and write, as Webhook does
   REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 
   def self.fetch_document(url : URI, deadline : Time::Instant? = nil) : String?
@@ -49,11 +46,9 @@ class Opengraph::Fetch
 
       tls = current.scheme == "https"
       port = current.port || (tls ? 443 : 80)
-      # DNS-пиннинг (restricted_http оракула): один резолв на hop —
-      # все адреса обязаны быть публичными, соединение открывается к
-      # проверенному IP. Повторного резолва внутри HTTP::Client нет,
-      # значит DNS-rebinding (валидация → публичный, коннект →
-      # приватный) закрыт; TLS: SNI/верификация по имени хоста.
+      # DNS pinning (the oracle's restricted_http): one resolve per hop — all addresses must be public,
+      # and the connection is opened to the verified IP. HTTP::Client never re-resolves, so DNS
+      # rebinding (validate → public, connect → private) is closed; TLS SNI/verification by hostname.
       begin
         addrs = Socket::Addrinfo.resolve(host, port, type: Socket::Type::STREAM)
       rescue ex

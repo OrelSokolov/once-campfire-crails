@@ -1,6 +1,5 @@
-# Авторизация cable-соединения: cookie session_token → user (референс:
-# ApplicationCable::Connection + Authentication::SessionLookup).
-# Identifier — id пользователя строкой (порт хранит identifiers строками).
+# Cable connection authorization: cookie session_token → user. The identifier is the
+# user id as a string (the port stores identifiers as strings).
 class ActionCable::Connection
   identified_by :current_user
 
@@ -19,11 +18,7 @@ class ActionCable::Connection
     context = HTTP::Server::Context.new(request, HTTP::Server::Response.new(IO::Memory.new))
     jar = ActionController::Cookies.new(context)
     raw = jar.signed["session_token"]?
-    token = case raw
-            when String then raw
-            when JSON::Any then raw.as_s?
-            else nil
-            end
+    token = Session.token_from_signed_jar(raw)
     return nil unless token
 
     Session.where("token = ?", token).take.try(&.user_id).try(&.to_s)
