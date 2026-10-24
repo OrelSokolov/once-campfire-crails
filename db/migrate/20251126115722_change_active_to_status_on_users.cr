@@ -1,4 +1,4 @@
-class ChangeActiveToStatusOnUsers < ActiveRecord::Migration[8.1]
+class ChangeActiveToStatusOnUsers < ActiveRecord::Migration
   def change
     add_column :users, :status, :integer, default: 0, null: false
 

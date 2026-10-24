@@ -1,7 +1,7 @@
 # Ported from ~/once-campfire (Rails, active_storage). The original
 # backfills service_name from the configured storage service — on a fresh
 # database there are no blobs yet, so the port is schema-only.
-class AddServiceNameToActiveStorageBlobs < ActiveRecord::Migration[6.0]
+class AddServiceNameToActiveStorageBlobs < ActiveRecord::Migration
   def up
     return unless table_exists?(:active_storage_blobs)
 

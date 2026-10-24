@@ -1,8 +1,7 @@
 class WelcomeController < ApplicationController
   include WelcomeHelpers
 
-  @user : User?
-  attr_reader :user
+  attr_reader user : User?
 
   def show
     user = current_user.not_nil!

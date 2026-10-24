@@ -1,4 +1,4 @@
-class AddBioToUsers < ActiveRecord::Migration[7.2]
+class AddBioToUsers < ActiveRecord::Migration
   def change
     change_table :users do |t|
       t.text :bio

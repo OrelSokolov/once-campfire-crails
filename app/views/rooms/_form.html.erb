@@ -1,4 +1,3 @@
-<%= page_open(room ? "Edit settings for #{room.try(&.name).to_s}" : "New chat room", room ? "/rooms/#{room.id.not_nil!}" : "/") %><section class="panel txt-align-center" style="view-transition-name: <%= room ? "edit-room-#{room.id.not_nil!}" : "new-room" %>">
   <%= form_with url: "/rooms/#{kind}#{room ? "/#{room.id.not_nil!}" : ""}", method: (room ? "patch" : "post"), scope: "room" do |form| %>
     <div class="flex align-center gap">
       <% if can_administer %><%= translation_button("room_name") %>
@@ -49,8 +48,4 @@
     </section>
     <% if can_administer %><%= form.button class: "btn btn--reversed txt-large center" do %><%= icon("check.svg") %><span class="for-screen-reader">Save</span><% end %>
     <% end %><% end %>
-</section>
-<% if room && can_administer %><section class="panel txt-align-center">
-  <form action="<%= origin %>/rooms/<%= room.id.not_nil! %>" class="button_to" method="post"><input name="_method" type="hidden" value="delete"><button aria-label="Delete <%= room.name.to_s %>" class="btn btn--negative max-width" data-turbo-confirm="Are you sure you want to delete this room and all messages in it? This can’t be undone." type="submit"><%= icon("trash.svg") %><span class="overflow-ellipsis"><%= room.name.to_s %></span></button></form>
-</section>
-<% end %><%= page_close %>
+

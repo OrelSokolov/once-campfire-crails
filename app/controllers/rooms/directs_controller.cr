@@ -2,13 +2,12 @@ class Rooms::DirectsController < ApplicationController
   include UserIdsParams
   include RoomsHelper
 
-  @user : User?
-  @room : Room?
-  @direct : Bool = false
-  @direct_title : String = ""
-  @direct_members : Array(User) = [] of User
-  # Exposed for RoomsHelper#page_open, which cannot access @user directly.
-  attr_reader :user
+  # Getters expose the ivars to the RoomsHelper ERB helpers.
+  attr_reader user : User?
+  attr_reader room : Room?
+  attr_reader direct : Bool = false
+  attr_reader direct_title : String = ""
+  attr_reader direct_members : Array(User) = [] of User
 
   def new
     @user = current_user.not_nil!

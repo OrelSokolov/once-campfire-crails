@@ -1,4 +1,4 @@
-class AddCustomStylesToAccounts < ActiveRecord::Migration[7.2]
+class AddCustomStylesToAccounts < ActiveRecord::Migration
   def change
     add_column :accounts, :custom_styles, :text
   end

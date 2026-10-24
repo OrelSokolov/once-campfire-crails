@@ -1,4 +1,4 @@
-class AlterUsersAddBotToken < ActiveRecord::Migration[7.2]
+class AlterUsersAddBotToken < ActiveRecord::Migration
   def change
     add_column :users, :bot_token, :string
     add_index :users, :bot_token, unique: true

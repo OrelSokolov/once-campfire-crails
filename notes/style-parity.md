@@ -12,6 +12,10 @@
 - **`%i[ show destroy ]`-литералы** — только `[:show, :destroy]`.
 - **`class << self` / `extend ActiveSupport::Concern`** — модули Crystal
   подключаются напрямую, concern-механика не нужна.
+- **`class X < ActiveRecord::Migration[7.2]`** — парсер Crystal не
+  допускает `[` в позиции superclass (только generic-скобки `Bar(T)`);
+  `Migration.[](version)` в шарде работает как выражение (0.1.15), но
+  форма наследования непереносима — миграции остаются `< ActiveRecord::Migration`.
 
 ## Требуют патчей шардов (план, Фаза 7)
 

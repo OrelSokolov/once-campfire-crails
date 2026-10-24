@@ -1,7 +1,7 @@
 # Ported from ~/once-campfire (Rails, active_storage). The initial schema
 # migration already creates the table — if_not_exists makes this a no-op,
 # like the original (table_exists? guard + if_not_exists: true).
-class CreateActiveStorageVariantRecords < ActiveRecord::Migration[6.0]
+class CreateActiveStorageVariantRecords < ActiveRecord::Migration
   def change
     return unless table_exists?(:active_storage_blobs)
 

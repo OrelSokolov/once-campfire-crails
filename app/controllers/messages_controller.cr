@@ -12,13 +12,12 @@ class MessagesController < ApplicationController
   before_action :ensure_can_administer, only: [:edit, :update, :destroy]
 
   # Getters expose the ivars to the MessagesHelper ERB helpers.
-  attr_reader :room, :message, :mid, :attachment
-  @room : Room?
-  @message : Message?
-  @mid : Int64?
-  @messages : Array(Message) = [] of Message
-  @message_html : String = ""
-  @attachment : ChatLayout::Attachment?
+  attr_reader room : Room?
+  attr_reader message : Message?
+  attr_reader mid : Int64?
+  attr_reader messages : Array(Message) = [] of Message
+  attr_reader message_html : String = ""
+  attr_reader attachment : ChatLayout::Attachment?
 
   def index
     user = current_user.not_nil!

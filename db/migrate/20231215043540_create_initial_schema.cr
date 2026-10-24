@@ -1,4 +1,4 @@
-class CreateInitialSchema < ActiveRecord::Migration[7.2]
+class CreateInitialSchema < ActiveRecord::Migration
   def change
     create_table "accounts", force: :cascade do |t|
       t.string "name", null: false

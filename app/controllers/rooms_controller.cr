@@ -6,19 +6,18 @@ class RoomsController < ApplicationController
   before_action :set_room, only: [:show, :destroy]
   before_action :ensure_can_administer, only: [:destroy]
 
-  @room : Room?
-  @kind : String = ""
-  @user : User?
-  # Getter for RoomsHelper#page_open (the module can't see @user).
-  attr_reader :user
-  @selected : Set(Int64) = Set(Int64).new
-  @is_open : Bool = false
-  @can_administer : Bool = false
-  @users : Array(User) = [] of User
-  @divider : Int32 = 0
-  @direct : Bool = false
-  @direct_title : String = ""
-  @direct_members : Array(User) = [] of User
+  # Getters expose the ivars to the RoomsHelper ERB helpers.
+  attr_reader room : Room?
+  attr_reader kind : String = ""
+  attr_reader user : User?
+  attr_reader selected : Set(Int64) = Set(Int64).new
+  attr_reader is_open : Bool = false
+  attr_reader can_administer : Bool = false
+  attr_reader users : Array(User) = [] of User
+  attr_reader divider : Int32 = 0
+  attr_reader direct : Bool = false
+  attr_reader direct_title : String = ""
+  attr_reader direct_members : Array(User) = [] of User
 
   # Room form partial; locals become the typed arguments of the compiled method.
   compile_partials({
@@ -28,6 +27,48 @@ class RoomsController < ApplicationController
                                "is_open" => Bool, "can_administer" => Bool,
                                "users" => Array(User), "divider" => Int32}},
   }, dedent: true)
+
+  # Room page layouts (rooms/layouts/_new|_edit.html.erb): set @page_title and
+  # content_for :nav, wrap the yielded form in the panel section.
+  compile_layout("__rooms_layout_new", "app/views/rooms/layouts/_new.html.erb", dedent: true)
+  compile_layout("__rooms_layout_edit", "app/views/rooms/layouts/_edit.html.erb", dedent: true)
+
+  # Layout partials' locals (rooms/layouts/_edit renders `room`; local_assigns
+  # is only consulted for :view_transition_name, never passed).
+  @page_title : String? = nil
+  @__layout_locals : Hash(String, Room?) = {} of String => Room?
+
+  # render layout: "rooms/layouts/new|edit" [, locals: {room: @room}] do ... end —
+  # Rails' layout-with-block. The layout sets @page_title and captures the nav
+  # (content_for :nav); the page shell wraps the layout's output.
+  def render(*, layout : String, locals : Hash? = nil, &) : ERB::SafeString
+    case layout
+    when "rooms/layouts/new", "rooms/layouts/edit"
+      @__layout_locals = {"room" => @room}
+      content = ERB::SafeString.new(capture { yield }.to_s)
+      outer = @__erb_buf
+      wrapped = if layout == "rooms/layouts/new"
+                  __rooms_layout_new { content }
+                else
+                  __rooms_layout_edit { content }
+                end
+      @__erb_buf = outer
+      shell = ChatLayout.page_open("room-form", @page_title.not_nil!,
+        nav_html: content_for("nav").to_s)
+      ERB::SafeString.new(shell + wrapped.raw + page_close.raw)
+    else
+      raise ArgumentError.new("Missing layout #{layout.inspect}")
+    end
+  end
+
+  # The edit layout's `room` local (view files pass locals: {"room" => @room}).
+  def room : Room
+    @__layout_locals["room"].not_nil!
+  end
+
+  def local_assigns : Hash(String, Room?)
+    @__layout_locals
+  end
 
   def show
     user = current_user.not_nil!

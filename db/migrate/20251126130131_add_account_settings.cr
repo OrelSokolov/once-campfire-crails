@@ -1,4 +1,4 @@
-class AddAccountSettings < ActiveRecord::Migration[7.2]
+class AddAccountSettings < ActiveRecord::Migration
   def change
     add_column :accounts, :settings, :json
   end

@@ -51,9 +51,34 @@ module RoomsHelper
     end
   end
 
+  # rooms/directs/edit.html.erb shell (the directs edit screen keeps its own
+  # wrapper; the opens/closeds pages moved to rooms/layouts/*).
   def page_open(title : String, back_path : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("room-form", title,
       nav_html: ChatLayout.nav_back(back_path)))
+  end
+
+  # Oracle layouts (rooms/layouts/_new|_edit.html.erb): back to the last
+  # visited room — edit pages to the room itself, new pages to the root
+  # (byte-identical to the previous inline page_open back link).
+  def link_back_to_last_room_visited : ERB::SafeString
+    path = if (r = @room) && (rid = r.id)
+             "/rooms/#{rid}"
+           else
+             "/"
+           end
+    ERB::SafeString.new(
+      %(<a class="btn" href="#{path}">) +
+      icon("arrow-left.svg").raw +
+      %(<span class="for-screen-reader">Go Back</span></a>))
+  end
+
+  # The delete-room form of the edit layout (rooms/layouts/_edit.html.erb).
+  def button_to_delete_room(room : Room) : ERB::SafeString
+    ERB::SafeString.new(
+      %(<form action="#{origin}/rooms/#{room.id.not_nil!}" class="button_to" method="post"><input name="_method" type="hidden" value="delete"><button aria-label="Delete #{room.name.to_s}" class="btn btn--negative max-width" data-turbo-confirm="Are you sure you want to delete this room and all messages in it? This can’t be undone." type="submit">) +
+      icon("trash.svg").raw +
+      %(<span class="overflow-ellipsis">#{room.name.to_s}</span></button></form>))
   end
 
   def avatar_link(member : User) : ERB::SafeString

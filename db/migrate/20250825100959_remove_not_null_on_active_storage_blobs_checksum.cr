@@ -1,4 +1,4 @@
-class RemoveNotNullOnActiveStorageBlobsChecksum < ActiveRecord::Migration[6.0]
+class RemoveNotNullOnActiveStorageBlobsChecksum < ActiveRecord::Migration
   def change
     return unless table_exists?(:active_storage_blobs)
 
