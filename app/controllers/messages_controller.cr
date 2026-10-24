@@ -42,18 +42,7 @@ class MessagesController < ApplicationController
 
     body_html = message_body_param
     client_message_id = message_client_id_param || UUID.random.to_s
-    upload : MessageCreator::UploadedFile? = nil
-    if form = parse_multipart_form
-      if (item = form["message[attachment]"]?).is_a?(MessageCreator::UploadedFile)
-        upload = item
-      end
-      if (cmid = form["message[client_message_id]"]?).is_a?(String) && !cmid.empty?
-        client_message_id = cmid
-      end
-      if (text = form["message[body]"]?).is_a?(String) && !text.empty?
-        body_html = text
-      end
-    end
+    upload = message_attachment_param
 
     # Insert + rich text body + FTS5 index + broadcast + unread + queued notification
     # jobs, all persisted before the response; attachment → blob + attachment row.
@@ -180,50 +169,22 @@ class MessagesController < ApplicationController
     v.nil? || v.to_s.empty? ? nil : v.to_s
   end
 
-  # action_pack_cr parses only JSON and form-urlencoded, so multipart from file_uploader.js
-  # (the file goes straight into the message POST) is parsed here: fields without a filename
-  # are strings, with one — UploadedFile (bytes + content-type).
+  # Multipart file part, parsed by action_pack_cr into params as
+  # ActionController::UploadedFile (filename + content-type + body).
+  private def message_attachment_param : MessageCreator::UploadedFile?
+    if (v = message_params["attachment"]?).is_a?(ActionController::UploadedFile)
+      MessageCreator::UploadedFile.new(v.filename, v.content_type, v.body.to_slice)
+    end
+  end
+
+  # DoS guard: upper bound on the request body (a message with its attachment
+  # goes as a single multipart POST).
   private def upload_too_large? : Bool
     if (length = request.headers["Content-Length"]?.try(&.to_i64?)) &&
        length > MAX_UPLOAD_BYTES
       return true
     end
     false
-  end
-
-  private def parse_multipart_form : Hash(String, String | MessageCreator::UploadedFile)?
-    content_type = request.headers["Content-Type"]?
-    return nil unless content_type.try(&.includes?("multipart/form-data"))
-    match = content_type.not_nil!.match(/boundary=([^";]+)/)
-    return nil unless match
-    boundary = match[1].strip('"')
-
-    raw = raw_request_body
-    return nil if raw.empty?
-    delimiter = "--" + boundary
-    start = raw.index(delimiter)
-    return nil unless start
-    rest = raw[(start + delimiter.size)..]
-
-    form = {} of String => String | MessageCreator::UploadedFile
-    rest.split("\r\n" + delimiter).each do |piece|
-      next if piece.starts_with?("--") # closing --boundary--
-      piece = piece[2..] if piece.starts_with?("\r\n")
-      sep = piece.index("\r\n\r\n")
-      next unless sep
-      headers = piece[0...sep]
-      content = piece[(sep + 4)..]
-      name = headers[/name="([^"]*)"/, 1]?
-      next unless name
-      if (filename = headers[/filename="([^"]*)"/, 1]?) && !filename.empty?
-        ctype = headers[/content-type:\s*([^\r\n]+)/i, 1]?.try(&.strip) ||
-                "application/octet-stream"
-        form[name] = MessageCreator::UploadedFile.new(filename, ctype, content.to_slice)
-      else
-        form[name] = content
-      end
-    end
-    form
   end
 
   # Rough HTML → text for the FTS5 index: word presence is all the contract needs, so strip tags.

@@ -42,18 +42,25 @@
   `self.request_host` (зафиксировано в known-gaps).
 - [x] twinshot review default (compare): 2/129 fail — оба png из soft_check.
 
-## Фаза 3 — тяжёлые патчи фреймворка (НЕ НАЧАТА)
+## Фаза 3 — тяжёлые патчи фреймворка (НАЧАТА 2026-10-24)
 
+- [x] **action_pack.cr 0.2.13**: multipart file params — файловые части →
+      `ActionController::UploadedFile` в params (ActionDispatch::Http::
+      UploadedFile semantics; `Parameters::Value` расширен, permit пропускает
+      файлы как скаляры; спека spec/multipart_spec.cr, полных 181 examples,
+      0 failures / 4 pre-existing errors). Приложение: ручной multipart-парсер
+      в `MessagesController` удалён (~60 строк), create читает
+      `params.require(:message).permit(:body, :attachment, :client_message_id)`;
+      capybara 72 runs / 0 failures, compare 2/129 (оба soft_check png).
 - [ ] **action_pack_cr**: view context + `helper_method` + автоподключение
       `app/helpers/**` → убрать `include XHelper` из контроллеров
       (нарушение AGENTS.md «хелперы никогда в контроллерах»).
 - [ ] **action_view_cr**: tag-билдер (`tag.figure/span/title`, `tag(:meta, ...)`,
       `link_to ... do` с порядком атрибутов оракула, `image_tag` с вложенными
       `aria: {hidden:}`) → путь к переносу HTML из ChatLayout в ERB-партиалы.
-- [ ] **action_pack_cr**: multipart file params — файловые части → UploadedFile
-      в params → убрать ручной парсер в MessagesController.
 - [ ] **active_job_cr**: сериализация аргументов-записей (`perform(room,
-      message)` через GlobalID) + `discard_on` → джобы 1:1.
+      message)` через GlobalID — Locator уже в active_record 0.1.16) +
+      `discard_on` → джобы 1:1.
 
 ## Фаза 4 — средние патчи (НЕ НАЧАТА)
 

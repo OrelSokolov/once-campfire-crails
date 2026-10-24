@@ -127,8 +127,10 @@
 - `app/controllers/application_controller.cr`: `Turbo::Streams::Broadcasts`
   подключается вручную (в Rails это делает turbo-rails engine).
 - `app/controllers/messages_controller.cr`: `MAX_UPLOAD_BYTES` — верхний
-  лимит multipart-тела (защита от DoS); multipart разбирается вручную;
-  nil-narrowing-воркараунд (`target = message`) для замыкания WriteQueue.
+  лимит multipart-тела (защита от DoS); файловые части парсятся
+  action_pack_cr ≥ 0.2.13 в params как `ActionController::UploadedFile`
+  (ручной парсер удалён); nil-narrowing-воркараунд (`target = message`)
+  для замыкания WriteQueue.
 - `app/controllers/messages/by_bots_controller.cr`: HTTP-ответ create —
   turbo-stream append, а не `head :created, location:` (следует
   express-референсу); `created_at` биндится только подзапросом (прямое
