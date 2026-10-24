@@ -67,23 +67,19 @@ class Messages::BoostsController < ApplicationController
     render(plain: "", status: :no_content)
   end
 
+  # Current.user.reachable_messages.find — the oracle's boost authorization
+  # scope (rooms reached through memberships); RecordNotFound → 404 middleware.
   private def set_message
-    message = Message.find?(params["message_id"].to_s.to_i64)
-    if message && Membership.where(
-        "room_id = ? AND user_id = ?", message.room_id.not_nil!,
-        Current.user.not_nil!.id.not_nil!).take
-      @message = message
-    else
-      head(:not_found)
-    end
+    @message = Current.user.not_nil!.reachable_messages
+      .find(params["message_id"].to_s)
   end
 
   private def set_boost
-    @boost = Boost.where(
-      "id = ? AND message_id = ? AND booster_id = ?",
-      params["id"].to_s.to_i64, @message.not_nil!.id.not_nil!,
-      Current.user.not_nil!.id.not_nil!).take
-    head(:not_found) unless @boost
+    # @message.boosts.find_by!(id: ..., booster: Current.user) — the message
+    # association scope plus the booster filter; miss → 404 middleware.
+    @boost = @message.not_nil!.boosts
+      .where("booster_id = ?", Current.user.not_nil!.id.not_nil!)
+      .find(params["id"].to_s)
   end
 
   private def boost_params

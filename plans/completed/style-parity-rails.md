@@ -1,5 +1,19 @@
 # План: выравнивание стиля кода с Rails-оракула (группа `code`)
 
+> **Статус (2026-10-24):** План выполнен в пределах переносимого на
+> Crystal. Фазы 1–4 — полностью (миграции, контроллеры, concerns, доменные
+> методы моделей + callbacks/enum 1:1). Фаза 5 — выполнена частями:
+> предикаты (5.5), fresh_account_logo_path (5.4), раскладка атрибутов (5.3),
+> render layout: do (5.7, через compile_layout erb_cr); 5.1 icon→image_tag
+> и 5.2 form_with model: — непереносимы для byte-parity (см.
+> notes/style-parity.md), 5.6 boosts_dom → render — нет view-слойного
+> render в порте. Фаза 6 — роуты 1:1, комментарии ужаты. Фаза 7: 7.1
+> Migration[] — оказался за пределами парсера Crystal (см. notes), 7.2
+> render layout — сделано, 7.3 has_many do — компромисс
+> Membership.grant_to. Хвост find-bang закрыт через reachable_messages
+> скоуп (2026-10-24). Дефолт-парити: twinshot review default 128/129
+> (единственный фейл — известный пиксельный шум custom-boost.png).
+
 > **Статус (2026-10-22, вечер):** Фазы 1–3 выполнены (миграции, rooms/messages/
 > by_bots/boosts/opens/closeds контроллеры, ApplicationController →
 > concerns, User#administrator?/#can_administer?). Фаза 5 — исследована,

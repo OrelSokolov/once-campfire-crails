@@ -98,6 +98,10 @@
 - **`Opengraph::Metadata` `before_validation :sanitize_fields`** — модель
   не ActiveRecord (ActiveModel-объект с property), макросы коллбэков
   живут в AR::Base; санитизация остаётся class-методом `Metadata.sanitize`.
+- **`has_many :reachable_messages, through: :rooms, source: :messages`**
+  (chained through: `rooms` сам through `memberships`) — шардовый through
+  композируется только над прямым has_many; скоуп написан вручную
+  (`User#reachable_messages`, тот же subquery-паттерн, что `Room.visible`).
 - **find-bang в контроллерах (2026-10-24)** — сконвертированы чистые сайты
   (`UsersController#show`, `Users::Bans`, `Accounts::Users`,
   `Accounts::Bots` edit/update/destroy, `Accounts::Bots::Keys`):

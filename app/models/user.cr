@@ -40,6 +40,16 @@ class User < ApplicationRecord
     close_remote_connections reconnect: true
   end
 
+  # Oracle: has_many :reachable_messages, through: :rooms, source: :messages
+  # (boosts authorization scope). The shard composes through over a direct
+  # has_many only — `rooms` is itself a through association, so the chained
+  # subquery is written out (see notes/style-parity.md).
+  def reachable_messages : ActiveRecord::Relation(Message)
+    Message.where(
+      %(room_id IN (SELECT room_id FROM memberships WHERE user_id = ?)),
+      id || -1_i64)
+  end
+
   def close_remote_connections(reconnect : Bool = false) : Nil
     ActionCable.server.remote_connections
       .where(current_user: id.not_nil!.to_s).disconnect(reconnect: reconnect)
