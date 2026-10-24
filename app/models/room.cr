@@ -1,7 +1,8 @@
 require "./application_record"
 class Room < ApplicationRecord
   has_many :memberships, foreign_key: "room_id"
-  has_many :messages, foreign_key: "room_id"
+  has_many :users, through: :memberships
+  has_many :messages, foreign_key: "room_id", dependent: :destroy
   belongs_to :creator, class_name: "User"
 
   # STI type is stored in two spellings ('Rooms::Open' from seeds, short 'Open' created by the port), so scope to IN of both.
@@ -37,6 +38,59 @@ class Room < ApplicationRecord
 
   def self.visible_for(user : User)
     visible(user)
+  end
+
+  # oracle Room.create_for: create! + memberships.grant_to(users) in one
+  # transaction; Rooms::Open additionally grants every active user in
+  # after_save_commit (rooms/open.cr), so the insert is conflict-safe.
+  def self.create_for(attributes : Hash(String, ActiveRecord::Value),
+                      users : Array(Int64)) : self
+    room = new
+    room.assign_attributes(attributes)
+    room.save!
+    Membership.grant_to(room, users)
+    room
+  end
+
+  # The account's original room (the "All Talk" one of the first run).
+  def self.original : Room?
+    order("created_at").first
+  end
+
+  def receive(message : Message) : Nil
+    unread_memberships(message)
+    push_later(message)
+  end
+
+  # Rewriting every member on every message is most of what posting to a large
+  # room writes, so members who are unread already stay as they are — the port
+  # rewrites them anyway (no unread_at IS NULL guard): membership updated_at
+  # isn't part of the sidebar contract, so the simpler statement is kept.
+  def unread_memberships(message : Message) : Nil
+    now = Time.utc
+    ActiveRecord::Base.connection.exec(
+      "UPDATE memberships SET unread_at = ?, updated_at = ? " \
+      "WHERE room_id = ? AND user_id <> ? AND involvement <> 'invisible' " \
+      "AND (connected_at IS NULL OR connected_at < ?)",
+      now, now, id.not_nil!, message.creator_id.not_nil!, now - 60.seconds)
+  end
+
+  # Room::PushMessageJob enqueue tuple — the JobQueue DB write must stay
+  # outside the production transaction (see MessageCreator#create!).
+  def push_later(message : Message) : Tuple(String, String)
+    {"push", %({"message_id":#{message.id.not_nil!}})}
+  end
+
+  def open? : Bool
+    is_a?(Rooms::Open)
+  end
+
+  def closed? : Bool
+    is_a?(Rooms::Closed)
+  end
+
+  def default_involvement : String
+    "mentions"
   end
 
   # Takes the room away from its members at once, and leaves its messages to Room::DestroyJob. Destroying them in

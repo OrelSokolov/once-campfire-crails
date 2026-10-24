@@ -20,6 +20,6 @@ class Users::BansController < ApplicationController
 
   private def set_user : Nil
     # find-bang: RecordNotFound -> 404 via the middleware rescue ladder
-    @user = User.all.find(params["user_id"].to_s)
+    @user = User.find(params["user_id"].to_s)
   end
 end

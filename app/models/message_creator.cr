@@ -67,12 +67,7 @@ module MessageCreator
   def self.notify(room : Room, message : Message, creator : User,
                   body_html : String, webhooks : Bool) : Array(Tuple(String, String))
     conn = ActiveRecord::Base.__session # pinned connection of the create! transaction
-    now = Time.utc
-    conn.exec(
-      "UPDATE memberships SET unread_at = ?, updated_at = ? " \
-      "WHERE room_id = ? AND user_id <> ? AND involvement <> 'invisible' " \
-      "AND (connected_at IS NULL OR connected_at < ?)",
-      now, now, room.id.not_nil!, creator.id.not_nil!, now - 60.seconds)
+    room.unread_memberships(message)
 
     mentions = Message::Mentionee.mention_ids(body_html)
     direct = room.type == "Direct" # STI port stores short type names
@@ -105,7 +100,7 @@ module MessageCreator
     end
 
     # Room::PushMessageJob: one push job per message; recipients (Room::MessagePusher) are filtered at delivery.
-    jobs << {"push", %({"message_id":#{message.id.not_nil!}})}
+    jobs << room.push_later(message)
     # Message::BroadcastUnreadRoomJob: fan out the unread room to per-user sidebar streams.
     jobs << {"broadcast_unread_room", %({"message_id":#{message.id.not_nil!}})}
     jobs

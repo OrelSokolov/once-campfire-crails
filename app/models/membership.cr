@@ -23,4 +23,16 @@ class Membership < ApplicationRecord
   scope(:without_direct_rooms) { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").where("rooms.name IS NOT NULL") }
   scope(:visible)              { where("involvement != 'invisible'") }
   scope(:unread)               { where("unread_at IS NOT NULL") }
+
+  # memberships.grant_to(users) of the oracle (has_many ... do extension):
+  # insert_all with the room's default involvement, duplicates skipped.
+  def self.grant_to(room : Room, user_ids : Array(Int64)) : Nil
+    now = Time.utc
+    user_ids.each do |uid|
+      ActiveRecord::Base.connection.exec(
+        "insert into memberships (room_id, user_id, involvement, connections, created_at, updated_at) " \
+        "values (?, ?, ?, 0, ?, ?) on conflict do nothing",
+        room.id.not_nil!, uid, room.default_involvement, now, now)
+    end
+  end
 end

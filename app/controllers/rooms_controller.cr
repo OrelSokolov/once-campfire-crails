@@ -114,21 +114,13 @@ class RoomsController < ApplicationController
                   member_ids : Array(Int64),
                   user : User) : Nil
     Campfire::ResponseCache.invalidate!
-    room = klass.new(
-      name: room_params["name"]?.to_s,
-      creator_id: user.id.not_nil!,
-      created_at: Time.utc, updated_at: Time.utc)
-    room.save!
-    # Rooms::Open already granted every active user in after_save_commit
-    # (see rooms/open.cr); grant the remaining selected members —
-    # memberships.grant_to insert_all, duplicates skipped, default involvement.
-    now = Time.utc
-    member_ids.each do |uid|
-      ActiveRecord::Base.connection.exec(
-        "insert into memberships (room_id, user_id, involvement, connections, created_at, updated_at) " \
-        "values (?, ?, 'mentions', 0, ?, ?) on conflict do nothing",
-        room.id.not_nil!, uid, now, now)
-    end
+    # Room.create_for: Rooms::Open grants every active user in after_save_commit
+    # (rooms/open.cr), then the selected members are granted conflict-safe.
+    room = klass.create_for(
+      {"name" => room_params["name"]?.to_s,
+       "creator_id" => user.id.not_nil!,
+       "created_at" => Time.utc, "updated_at" => Time.utc},
+      member_ids)
 
     broadcast_sidebar_link(room)
     redirect_to room_url(room.id)
@@ -157,14 +149,8 @@ class RoomsController < ApplicationController
         end
       end
       have = existing.map(&.user_id.not_nil!).to_set
-      now = Time.utc
-      wanted.each do |uid|
-        next if have.includes?(uid)
-        ActiveRecord::Base.connection.exec(
-          "insert into memberships (room_id, user_id, involvement, connections, created_at, updated_at) " \
-          "values (?, ?, 'mentions', 0, ?, ?) on conflict do nothing",
-          room.id.not_nil!, uid, now, now)
-      end
+      missing = wanted.reject { |uid| have.includes?(uid) }
+      Membership.grant_to(room, missing)
     end
 
     broadcast_sidebar_link(room)

@@ -44,7 +44,7 @@ class Rooms::DirectsController < ApplicationController
       room.save!
       ids.each do |member_id|
         Membership.new(room_id: room.id.not_nil!, user_id: member_id,
-          involvement: "everything", connections: 0,
+          involvement: room.default_involvement, connections: 0,
           created_at: now, updated_at: now).save!
       end
       broadcast_direct_link(room)
