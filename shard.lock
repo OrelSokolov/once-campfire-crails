@@ -3,11 +3,11 @@ version: 2.0
 shards:
   action_cable_cr:
     git: https://github.com/orelsokolov/action_cable.cr.git
-    version: 0.1.3
+    version: 0.1.4
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.11
+    version: 0.2.12
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
@@ -19,7 +19,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.15
+    version: 0.1.16
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git

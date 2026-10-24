@@ -15,6 +15,8 @@ class User < ApplicationRecord
   scope(:active)     { where("status = 0") }
   scope(:active_bots) { active.where("role = 2") }
   scope(:ordered)    { order("LOWER(name)") }
+  # Oracle User::Bannable: visible_to — admins also see banned users.
+  scope(:visible_to) { |user| user.can_administer? ? where("status IN (0, 2)") : where("status = 0") }
 
   # authenticate_by hashes the password even for an unknown user (secure_password.rb:
   # "helps mitigate timing-based enumeration") — the port runs the same dummy bcrypt.

@@ -39,21 +39,9 @@ class RoomMessagesChannel < ApplicationCable::Channel
     gid_param, suffix = stream_name.split(":", 2)
     return false unless suffix == STREAM_SUFFIX
 
-    gid = begin
-      Base64.decode_string(pad64(gid_param.tr("-_", "+/")))
-    rescue
-      return false
-    end
-    return false unless match = gid.match(/\Agid:\/\/campfire\/[\w:]+\/(\d+)\z/)
-    room_id = match[1].to_i64
+    room = GlobalID::Locator.locate(gid_param, only: Room)
+    return false unless room && (uid = current_user_id)
 
-    uid = current_user_id
-    return false unless uid
-
-    Membership.where("room_id = ? AND user_id = ?", room_id, uid).exists?
-  end
-
-  private def pad64(s : String) : String
-    s + "=" * ((4 - s.size % 4) % 4)
+    Membership.where("room_id = ? AND user_id = ?", room.id.not_nil!, uid).exists?
   end
 end

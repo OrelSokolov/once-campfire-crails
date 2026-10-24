@@ -97,7 +97,7 @@ module Campfire
     # Range is not cacheable by definition).
     def call(context)
       request = context.request
-      if request.method == "GET" && !request.headers["Range"]? &&
+      if request.get? && !request.headers["Range"]? &&
          PublicCache.avatar_token_path?(request.path) &&
          (entry = PublicCache.get(PublicCache.key(request)))
         response = context.response

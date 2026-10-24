@@ -110,9 +110,9 @@
   `set_message` / `set_boost` (messages, boosts, by_bots) и autocompletable —
   их лукапы membership-скоупы с выверенными телами ответов, прямого
   аналога `Current.user.reachable_messages.find` в шарде нет (через
-  has_many :through с source у Relation нет). Класс-уровень
-  `Model.find(String)` отсутствует (только Int) — используем
-  `Model.all.find(str)`; кандидат в следующий патч шарда.
+  has_many :through с source у Relation нет). Класс-уровень `Model.find(String)`
+  появился в шарде (base.cr `find(id : Int64 | Int32 | String)`) —
+  паттерны `.all.find(str)` конвертированы (2026-10-24).
 
 
 ## Структурный паритет (missing-файлы), 2026-10-23 — plans/structure-parity.md

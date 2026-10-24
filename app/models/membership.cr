@@ -21,8 +21,11 @@ class Membership < ApplicationRecord
   scope(:with_ordered_room)    { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").order("LOWER(rooms.name)") }
   scope(:with_direct_rooms)    { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").where("rooms.name IS NULL").order("rooms.updated_at DESC") }
   scope(:without_direct_rooms) { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").where("rooms.name IS NOT NULL") }
-  scope(:visible)              { where("involvement != 'invisible'") }
-  scope(:unread)               { where("unread_at IS NOT NULL") }
+  scope(:visible) { where.not(involvement: "invisible") }
+  scope(:unread)  { where.not(unread_at: nil) }
+  # Membership::Connectable scopes (oracle defines them in the concern).
+  scope(:connected)    { where("connected_at >= ?", Time.utc - Connectable::CONNECTION_TTL) }
+  scope(:disconnected) { where("connected_at IS NULL OR connected_at < ?", Time.utc - Connectable::CONNECTION_TTL) }
 
   # memberships.grant_to(users) of the oracle (has_many ... do extension):
   # insert_all with the room's default involvement, duplicates skipped.

@@ -33,13 +33,9 @@ class AccountsController < ApplicationController
     @restrict = account.restrict_room_creation_to_administrators?
     @join_url = origin + "/join/" + account.join_code.to_s
     @qr_path = "/qr_code/" + Base64.urlsafe_encode(@join_url, padding: false)
-    status_scope = user.role == 1 ? "status IN (0, 2)" : "status = 0"
-    # The :ordered scope is ORDER BY LOWER(name); the shard's order() quotes a function
-    # as a column (order_term), so sort in memory instead.
-    @admins = User.where("#{status_scope} AND role = 1").to_a
-      .sort_by(&.name.to_s.downcase)
-    @members = User.where("#{status_scope} AND role = 0").to_a
-      .sort_by(&.name.to_s.downcase)
+    users = User.visible_to(user)
+    @admins = users.where("role = 1").ordered.to_a
+    @members = users.where("role = 0").ordered.to_a
   end
 
   def update

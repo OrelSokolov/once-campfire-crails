@@ -6,6 +6,6 @@ module BlockBannedRequests
   end
 
   private def safe_request? : Bool
-    {"GET", "HEAD"}.includes?(request.method)
+    request.get? || request.head?
   end
 end

@@ -7,6 +7,6 @@ module EmojiHelper
     "❤️" => "Red heart",
     "😂" => "Face with tears of joy",
     "🎉" => "Party popper",
-    "🔥" => "Fire",
+    "🔥" => "Fire"
   }
 end

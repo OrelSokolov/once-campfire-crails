@@ -43,6 +43,20 @@
 
 ## Action Cable / трансляции
 
+- `app/models/current.cr`: `delegate :host, :protocol, to: :request` оракула
+  невоспроизводим — CurrentAttributes порта class-level only (instance-API и
+  method_missing-форвардинг не портированы); остаются ручные
+  `self.request_host` / `self.request_protocol`.
+- `app/models/membership/connectable.cr`: scope-ы :connected/:disconnected
+  объявлены в membership.cr (Crystal `scope` — только в теле класса);
+  `connected_at?`-предиката нет — nil-чтение прямо в `connected?`;
+  `Time.utc - TTL` вместо `CONNECTION_TTL.ago` (`.ago` не портирован).
+- `app/channels/presence_channel.cr`: `membership` ищется через
+  `find_by(user_id:)` (объект в kwargs-where невыделяем);
+  `Campfire::ResponseCache.invalidate!` в `present` — см. кэширование.
+- `app/models/user.cr`: scope `visible_to` объявлен в теле User, не в
+  User::Bannable (ограничение `scope`-макроса).
+
 - `app/channels/application_cable/connection.cr` (+ channel.cr): cable
   identifiers хранятся строками (user id как String).
 - `app/channels/concerns/room_streams_are_authorized.cr`: Crystal без
@@ -124,9 +138,6 @@
 - `app/controllers/rooms_controller.cr`: сравнение по `created_at` —
   субзапрос по id (литеральный Time-бинд sqlite3-шарда сериализуется с
   миллисекундами, якорь deep-link дублировался).
-- `app/controllers/accounts_controller.cr`: scope `:ordered` (ORDER BY
-  LOWER(name)) не expressible в `order()` шарда (order_term квотит функцию
-  как колонку) — сортировка в памяти.
 - `app/controllers/concerns/authorization.cr`: метод называется
   `require_admin`, ответ `render(plain: "forbidden", status: 403)` вместо
   `head :forbidden` (тело ответа отличается).
