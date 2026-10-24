@@ -186,8 +186,13 @@
   не-https/private адресов → skip.
 - `app/jobs/bot/webhook_job.cr`: ответ бота — `webhooks: false` (аналог
   `notifyMessage(result, { webhooks: false })` express).
-- `app/jobs/room/destroy_job.cr`: комната исчезла к моменту джобы → no-op
-  (аналог `discard_on DeserializationError`).
+- `app/jobs/**`: ActiveJob-слой — макрос `serialized(**args)` вместо
+  неявной сериализации Rails; `Bot::WebhookJob` принимает
+  `webhook_id : Int64` + `message` (модели Webhook нет; оракул шлёт
+  `perform(bot, message)`); логика джоб осталась в джобах, а не в моделях
+  (`bot.deliver_webhook` и пр.) — перенос запланирован отдельно (1to1_new,
+  фаза 3). Kind-строки Campfire::JobQueue ("push"/"webhook"/...) —
+  стабильный контракт поверх pending-джоб в БД-очередях.
 
 ## Хелперы / вьюхи
 
@@ -223,6 +228,9 @@
 
 - `app/controllers/concerns/version_headers.cr`: X-Version/X-Rev из ENV
   (аналог инициализатора version.rb), не из `Rails.application.config`.
+- `app/controllers/accounts/custom_styles_controller.cr`: `update` без
+  `notice: "✓"` в redirect_to (flash не портирован); тест гонку Turbo-редиректа
+  закрывает маркером data-parity-sent.
 - `app/controllers/first_runs_controller.cr`: avatar в permit-списке для
   паритета, но загрузка не портирована — FirstRun игнорирует поле.
 - `app/controllers/rooms/involvements_controller.cr`: `update` не делает

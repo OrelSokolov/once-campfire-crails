@@ -1,17 +1,18 @@
 require "../application_job"
 
-# The room may already be gone by the time the job runs: no-op
-# (the port's analogue of discard_on ActiveJob::DeserializationError).
 class Room::DestroyJob < ApplicationJob
-  def self.perform(data : JSON::Any) : Nil
-    room_id = data["room_id"]?.try(&.to_s.to_i64?)
-    return unless room_id
-    former_member_ids = data["former_member_ids"]?.try do |ids|
-      ids.as_a.map(&.to_s.to_i64)
-    end || [] of Int64
+  discard_on ActiveJob::DeserializationError
 
-    return unless Room.find?(room_id)
+  serialized room: Room, former_member_ids: Array(Int64)
 
+  def self.queue_kind : String
+    "room_destroy"
+  end
+
+  # The room may already be gone by the time the job runs — the discarded
+  # DeserializationError covers it.
+  def perform(room : Room, former_member_ids : Array(Int64)) : Nil
+    room_id = room.id.not_nil!
     former_member_ids.each do |uid|
       if (user = User.find?(uid))
         user.reset_remote_connections

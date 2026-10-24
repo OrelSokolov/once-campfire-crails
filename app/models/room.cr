@@ -78,7 +78,7 @@ class Room < ApplicationRecord
   # Room::PushMessageJob enqueue tuple — the JobQueue DB write must stay
   # outside the production transaction (see MessageCreator#create!).
   def push_later(message : Message) : Tuple(String, String)
-    {"push", %({"message_id":#{message.id.not_nil!}})}
+    Room::PushMessageJob.__queue_pair(self, message)
   end
 
   def open? : Bool
@@ -112,6 +112,6 @@ class Room < ApplicationRecord
         ids
       end
     end || [] of Int64
-    Campfire::JobQueue.enqueue_batch([{"room_destroy", %({"room_id":#{rid},"former_member_ids":[#{former_member_ids.join(",")}]})}])
+    Room::DestroyJob.perform_later(self, former_member_ids)
   end
 end

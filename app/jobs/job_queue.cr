@@ -238,13 +238,19 @@ module Campfire
     # ————— Handlers (perform ported from src/jobs.js) —————
 
     def self.perform(kind : String, data : JSON::Any) : Nil
-      case kind
-      when "push"     then Room::PushMessageJob.perform(data)
-      when "webhook"  then Bot::WebhookJob.perform(data)
-      when "remove_banned_content" then RemoveBannedContentJob.perform(data)
-      when "room_destroy"          then Room::DestroyJob.perform(data)
-      when "broadcast_unread_room" then Message::BroadcastUnreadRoomJob.perform(data)
+      klass = case kind
+      when "push"     then Room::PushMessageJob
+      when "webhook"  then Bot::WebhookJob
+      when "remove_banned_content" then RemoveBannedContentJob
+      when "room_destroy"          then Room::DestroyJob
+      when "broadcast_unread_room" then Message::BroadcastUnreadRoomJob
       else                 raise "unknown job #{kind}"
+      end
+      begin
+        klass.__run(data)
+      rescue e : ActiveJob::DeserializationError
+        # discard_on: a vanished record ends the job silently instead of retrying.
+        raise e unless klass.discards?(ActiveJob::DeserializationError)
       end
     end
 

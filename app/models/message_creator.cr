@@ -88,13 +88,7 @@ module MessageCreator
           "SELECT id FROM webhooks WHERE user_id = ?", row[:user_id]) do |rs|
           rs.read(Int64)
         end.each do |webhook_id|
-          data = JSON.build do |j|
-            j.object do
-              j.field "webhook_id", webhook_id
-              j.field "message_id", message.id.not_nil!
-            end
-          end
-          jobs << {"webhook", data}
+          jobs << Bot::WebhookJob.__queue_pair(webhook_id, message)
         end
       end
     end
@@ -102,7 +96,7 @@ module MessageCreator
     # Room::PushMessageJob: one push job per message; recipients (Room::MessagePusher) are filtered at delivery.
     jobs << room.push_later(message)
     # Message::BroadcastUnreadRoomJob: fan out the unread room to per-user sidebar streams.
-    jobs << {"broadcast_unread_room", %({"message_id":#{message.id.not_nil!}})}
+    jobs << Message::BroadcastUnreadRoomJob.__queue_pair(message)
     jobs
   end
 

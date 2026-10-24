@@ -53,13 +53,19 @@ class AccountTest < ParityTest
   def test_custom_styles_apply_to_every_page
     visit "/account/custom_styles/edit"
     fill_in "account[custom_styles]", with: "body { --parity-marker: applied; }"
+    # Tag the live form: the turbo re-render after the PATCH replaces the DOM,
+    # so the tag disappearing means the redirect finished. wait_for_idle alone
+    # still lost the race to the turbo response on the rails target, leaving
+    # the browser on this page after the visit below.
+    page.execute_script "document.querySelector(\"form:has(textarea[name='account[custom_styles]'])\").dataset.paritySent = '1'"
     find("form:has(textarea[name='account[custom_styles]']) button").click
+    assert_selector "[name='account[custom_styles]']", wait: 10
+    assert_no_selector "form[data-parity-sent]", wait: 10
     page.execute_script <<~JS
       const apply = () => {
         if (getComputedStyle(document.body).getPropertyValue("--parity-marker").trim() === "applied") return true
       }
     JS
-    assert_selector "[name='account[custom_styles]']", wait: 10
     # Let the turbo form redirect finish racing before navigating on.
     begin
       page.driver.browser.network.wait_for_idle(timeout: 3)

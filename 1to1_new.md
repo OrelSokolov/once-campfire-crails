@@ -58,9 +58,20 @@
 - [ ] **action_view_cr**: tag-билдер (`tag.figure/span/title`, `tag(:meta, ...)`,
       `link_to ... do` с порядком атрибутов оракула, `image_tag` с вложенными
       `aria: {hidden:}`) → путь к переносу HTML из ChatLayout в ERB-партиалы.
-- [ ] **active_job_cr**: сериализация аргументов-записей (`perform(room,
-      message)` через GlobalID — Locator уже в active_record 0.1.16) +
-      `discard_on` → джобы 1:1.
+- [x] **active_job_cr** (уровень приложения, без шарда): `ApplicationJob` с
+      макросом `serialized(**args)` → `perform_later` / отложенный
+      `__queue_pair` / dispatch `__run`; аргументы-записи сериализуются как
+      `{"_aj_globalid": ...}` (GlobalID::Locator из active_record 0.1.16),
+      примитивы — напрямую; `discard_on`/`discards?` через общий
+      `DISCARD_REGISTRY` (class vars в Crystal не шарятся по иерархии) +
+      наследование регистраций через `macro inherited`. 5 джоб переписаны на
+      инстанс-`perform(record, ...)` 1:1 к оракулу. Kind-строки JobQueue
+      ("push"/"webhook"/...) — стабильный контракт (pending-джобы в очередях
+      БД). verified: tmp/verify_jobs.cr (7/7).
+- [ ] Перенос логики джоб в модели (отдельный пункт): `bot.deliver_webhook`,
+      `message.broadcast_unread_room`, `user.remove_banned_content`,
+      `room.destroy_one_message_at_a_time` / `reset_remote_connections_of` —
+      сейчас логика остаётся в джобах, оракул держит её в моделях.
 
 ## Фаза 4 — средние патчи (НЕ НАЧАТА)
 

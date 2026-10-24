@@ -1,10 +1,14 @@
 require "./application_job"
 
 class RemoveBannedContentJob < ApplicationJob
-  def self.perform(data : JSON::Any) : Nil
-    user_id = data["user_id"]?.try(&.to_s.to_i64?)
-    return unless user_id
+  serialized user: User
 
+  def self.queue_kind : String
+    "remove_banned_content"
+  end
+
+  def perform(user : User) : Nil
+    user_id = user.id.not_nil!
     conn = ActiveRecord::Base.connection
     messages = conn.query_all(
       "SELECT id, room_id FROM messages WHERE creator_id = ? ORDER BY id", user_id) do |rs|

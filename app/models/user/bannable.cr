@@ -27,7 +27,7 @@ class User
       # apply_ban of the reference: close_remote_connections — tear the banned user's live
       # sockets AFTER commit (a socket closed too early reconnects and re-reads the still-live session).
       close_remote_connections
-      Campfire::JobQueue.enqueue_batch([{"remove_banned_content", %({"user_id":#{uid}})}])
+      RemoveBannedContentJob.perform_later(self)
     end
 
     def unban : Nil
