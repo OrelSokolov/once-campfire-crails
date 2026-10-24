@@ -1,4 +1,4 @@
-class CreateBans < ActiveRecord::Migration
+class CreateBans < ActiveRecord::Migration[8.1]
   def change
     create_table :bans do |t|
       t.references :user, null: false, foreign_key: true, type: :integer

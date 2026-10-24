@@ -20,7 +20,8 @@ module AccountsHelper
     ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
-  def logo_src : String
+  # Oracle url-helper name (fresh_account_logo_path).
+  def fresh_account_logo_path : String
     ChatLayout.fresh_account_logo_path(@account)
   end
 

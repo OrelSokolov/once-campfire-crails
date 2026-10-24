@@ -5,7 +5,7 @@
   <%= flash_html %><main id="main-content">
     <section class="txt-align-center">
       <div class="panel<%= panel_modifier %>">
-        <figure class="account-logo avatar center margin-block-end txt-xx-large"><img src="<%= logo_src %>" alt="Account logo" width="300" height="300"></figure>
+        <figure class="account-logo avatar center margin-block-end txt-xx-large"><img src="<%= fresh_account_logo_path %>" alt="Account logo" width="300" height="300"></figure>
         <%= form_with url: "#{origin}/session", class: "flex flex-column gap" do |form| %>
           <fieldset class="flex flex-column gap center-block upad">
             <legend class="txt-large txt-align-center"><strong><%= @account_name %></strong></legend>

@@ -1,12 +1,5 @@
-# Зеркалит once-campfire/config/routes.rb. Матчер линейный (первое
-# совпадение выигрывает), поэтому литеральные сегменты рисуем до
-# динамических: `/users/me/...` до `resources :users`, видовые роуты
-# комнат (`/rooms/opens/...`) до `resources :rooms`.
-#
-# Отличия от Rails-файла помечены комментариями: порт держит один
-# RoomsController на все виды комнат (в Rails — Rooms::Opens и др.),
-# а часть действий названа иначе (searches#show вместо index,
-# sessions/transfers#create на put/patch вместо update).
+# Зеркалит once-campfire/config/routes.rb. Матчер линейный: литеральные
+# сегменты до динамических; отличия от Rails помечены комментариями.
 CRails.application.routes.draw do
   root "welcome#show"
 
@@ -16,8 +9,7 @@ CRails.application.routes.draw do
 
   resource :session, only: [:new, :create, :destroy]
 
-  # В Rails это nested resources :transfers c update; у порта put/patch
-  # создают перенос (sessions/transfers#create) — поэтому явные роуты.
+  # Rails: resources :transfers c update; порт создаёт перенос на put/patch.
   scope path: "session" do
     get   "/transfers/:id", to: "sessions/transfers#show"
     put   "/transfers/:id", to: "sessions/transfers#create"
@@ -49,13 +41,11 @@ CRails.application.routes.draw do
   get "/webmanifest.json", to: "pwa#manifest"
   get "/service-worker", to: "pwa#service_worker"
 
-  # Литеральные /users/me/* — до resources :users (см. шапку). Аватар
-  # ищется по :token, а не :user_id, как в Rails-неймспейсе users.
+  # Литеральные /users/me/* до resources :users; аватар — по :token.
   get "/users/me/sidebar", to: "users/sidebars#show"
   get "/users/me/profile", to: "users/profiles#show", as: "user_profile"
   patch "/users/me/profile", to: "users/profiles#update"
-  # scope defaults: { user_id: "me" } внутри resources :users: подписки
-  # текущего пользователя на Web Push (JS-колокол _bell.html.erb).
+  # scope defaults: { user_id: "me" }: Web Push подписки текущего юзера.
   get    "/users/me/push_subscriptions", to: "users/push_subscriptions#index",
     as: "user_push_subscriptions"
   post   "/users/me/push_subscriptions", to: "users/push_subscriptions#create"
@@ -64,42 +54,33 @@ CRails.application.routes.draw do
     to: "users/push_subscriptions/test_notifications#create"
   get "/users/:token/avatar", to: "users/avatars#show"
   resources :users, only: [:show]
-  # resource :ban внутри resources :users (scope module: "users"):
-  # бан/разбан пользователя — кнопки в users/show.html.erb.
+  # resource :ban внутри resources :users: бан/разбан из users/show.
   post   "/users/:user_id/ban", to: "users/bans#create"
   delete "/users/:user_id/ban", to: "users/bans#destroy"
 
   get "/autocompletable/users", to: "autocompletable/users#index"
 
-  # Виды комнат — как в Rails (`namespace :rooms`): контроллеры
-  # Rooms::Opens/Closeds/Directs; :room_id — имя параметра, которое
-  # читают контроллеры (в Rails для opens/closeds — :id, здесь оставлено
-  # :room_id из порта; URL от этого не зависит).
+  # namespace :rooms как в Rails; :room_id вместо :id — на URL не влияет.
   namespace :rooms do
     resources :opens, only: [:new, :create, :edit, :update], param: :room_id
     resources :closeds, only: [:new, :create, :edit, :update], param: :room_id
     resources :directs, only: [:new, :create]
-    # Настройки direct-комнаты (rooms/directs/edit.html.erb) рендерит
-    # rooms/directs#edit.
+    # Настройки direct-комнаты — rooms/directs#edit.
     get "/directs/:room_id/edit", to: "directs#edit"
   end
 
   resources :rooms, only: [:show, :destroy] do
     resources :messages, except: [:new], param: :message_id
-    # scope module: "rooms" как в Rails: Rooms::RefreshesController и
-    # Rooms::InvolvementsController (resource :refresh/:involvement).
+    # scope module: "rooms": resource :refresh/:involvement как в Rails.
     scope module: "rooms" do
       resource :refresh, only: [:show]
       resource :involvement, only: [:show, :update]
     end
-    # resource :settings, only: :show — в express общий handler для
-    # /rooms/:id/settings и /rooms/:id/involvement (routes.js:597):
-    # алиас GET-ветки involvements#show.
+    # /rooms/:id/settings — алиас GET involvements#show (routes.js:597).
     get "settings", to: "rooms/involvements#show"
     get "@:message_id", to: "rooms#show", as: :at_message
 
-    # Bot-API: /rooms/:id/:bot_key/messages (в Rails — scope path:
-    # ":bot_key" внутри nested с controller: "messages/by_bots").
+    # Bot-API: scope path ":bot_key" с controller: "messages/by_bots".
     scope path: ":bot_key", as: :bot do
       post   "messages", to: "messages/by_bots#create"
       get    "messages", to: "messages/by_bots#index"
@@ -113,8 +94,7 @@ CRails.application.routes.draw do
   end
 
   resources :messages, only: [] of String, param: :message_id do
-    # Boosts — Messages::BoostsController (в Rails — scope module:
-    # "messages" внутри resources :messages).
+    # Boosts: scope module: "messages" внутри resources :messages.
     scope module: "messages" do
       resources :boosts, only: [:new, :index, :create, :destroy]
     end
@@ -123,11 +103,10 @@ CRails.application.routes.draw do
   get "/rails/active_storage/blobs/redirect/:token/:filename", to: "active_storage#blob"
   get "/rails/active_storage/representations/redirect/:token/:variation/:filename", to: "active_storage#representation"
 
-  # unfurl_link: ресурс только create — og-метаданные вставленной
-  # ссылки (unfurl_controller.js шлёт POST {url}).
+  # unfurl_link: только create — og-метаданные ссылки (POST {url}).
   resource :unfurl_link, only: [:create]
 
-  # GET /searches у порта — searches#show (в Rails resources даёт index).
+  # GET /searches — searches#show (Rails resources даёт index).
   get "/searches", to: "searches#index", as: "searches"
   post "/searches", to: "searches#create"
   delete "/searches/clear", to: "searches#clear"

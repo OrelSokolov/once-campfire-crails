@@ -1,4 +1,4 @@
-<%= ERB::SafeString.new(ChatLayout.nav_back(last_room_visited_path(user))) %><% if user.role == 1 %>
+<%= ERB::SafeString.new(ChatLayout.nav_back(last_room_visited_path(user))) %><% if user.administrator? %>
 
   <div class="flex align-center gap flex-item-justify-end">
     <a href="<%= account_bots_path %>" class="btn" style="view-transition-name: chat-bots">

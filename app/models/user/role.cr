@@ -8,6 +8,10 @@ class User
       role == 1
     end
 
+    def bot? : Bool
+      role == 2
+    end
+
     def can_administer?(record : Room? = nil) : Bool
       administrator? || record.try(&.creator) == self || record.try(&.new_record?) == true
     end

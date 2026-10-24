@@ -1,4 +1,4 @@
-class CreateWebhooks < ActiveRecord::Migration
+class CreateWebhooks < ActiveRecord::Migration[7.2]
   def change
     create_table :webhooks do |t|
       t.references :user, null: false, foreign_key: true, type: :integer

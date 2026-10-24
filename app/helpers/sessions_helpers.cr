@@ -17,7 +17,9 @@ module SessionsHelpers
     login_alert ? " shake" : " "
   end
 
-  def logo_src : String
+  # Oracle url-helper name (fresh_account_logo_path): serves the stock icon
+  # or the logo variant, cache-busted by the attachment timestamp.
+  def fresh_account_logo_path : String
     ChatLayout.fresh_account_logo_path(Account.take)
   end
 

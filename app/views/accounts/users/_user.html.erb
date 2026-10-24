@@ -1,7 +1,7 @@
 <% uid = user.id.not_nil! %>
 <% viewer = @user.not_nil! %>
-<% admin = viewer.role == 1 %>
-<% banned = user.status == 2 %>
+<% admin = viewer.administrator? %>
+<% banned = user.banned? %>
 <li class="flex align-center gap margin-none<%= banned ? " banned" : " " %>">
 <figure class="avatar flex-item-no-shrink" style="--avatar-size: 3.75ch;">
 <%= ERB::SafeString.new(ChatLayout.avatar_link(user, "lazy")) %>
@@ -10,11 +10,11 @@
 <div class="overflow-ellipsis fill-shade"><strong><%= user.name.to_s %></strong></div>
 </div>
 <hr class="separator" aria-hidden="true">
-<% if admin && !banned && user.status == 0 %><% unless user.role == 2 %><%= form_with url: "/account/users/#{uid}", method: "patch", scope: "user", data: {controller: "form"} do |form| %>
+<% if admin && !banned && user.active? %><% unless user.bot? %><%= form_with url: "/account/users/#{uid}", method: "patch", scope: "user", data: {controller: "form"} do |form| %>
 <label class="btn txt-small flex-item-no-shrink" for="role_user_<%= uid %>">
-<span class="for-screen-reader">Role: <%= user.role == 1 ? "Administrator" : "Member" %></span>
+<span class="for-screen-reader">Role: <%= user.administrator? ? "Administrator" : "Member" %></span>
 <%= icon("crown.svg") %>
-<%= form.check_box :role, checked: user.role == 1, data: {action: "form#submit"}, hidden: true, id: "role_user_#{uid}", disabled: uid == viewer.id, checked_value: "administrator", unchecked_value: "member" %>
+<%= form.check_box :role, checked: user.administrator?, data: {action: "form#submit"}, hidden: true, id: "role_user_#{uid}", disabled: uid == viewer.id, checked_value: "administrator", unchecked_value: "member" %>
 </label>
 <% end %>
 

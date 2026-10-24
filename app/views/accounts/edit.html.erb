@@ -1,30 +1,33 @@
 <%= page_open(@user.not_nil!) %><section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
-  <% if @user.not_nil!.role == 1 %>
+  <% if @user.not_nil!.administrator? %>
     <div class="align-center center avatar__form gap" data-controller="upload-preview">
       <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "txt--medium", data: {controller: "form"} do |form| %>
         <label class="btn input--file">
           <%= icon("camera.svg") %>
-          <%= form.file_field :logo, class: "input", accept: "image/*", data: {action: "upload-preview#previewImage change->form#submit"} %>
+          <%= form.file_field :logo, class: "input", accept: "image/*",
+                data: {action: "upload-preview#previewImage change->form#submit"} %>
           <span class="for-screen-reader">Upload logo</span>
         </label>
       <% end %>
 
       <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", data: {controller: "form"} do |form| %>
         <label class="btn avatar input--file account-logo txt-xx-large">
-          <img data-upload-preview-target="image" role="presentation" src="<%= logo_src %>" width="48" height="48">
-          <%= form.file_field :logo, class: "input", accept: "image/*", data: {action: "upload-preview#previewImage change->form#submit"} %>
+          <img data-upload-preview-target="image" role="presentation" src="<%= fresh_account_logo_path %>" width="48" height="48">
+          <%= form.file_field :logo, class: "input", accept: "image/*",
+                data: {action: "upload-preview#previewImage change->form#submit"} %>
           <span class="for-screen-reader">Upload logo</span>
         </label>
       <% end %>
 
-      <% if @account.not_nil!.logo_attachment %><%= button_to logo_src, method: "delete", class: "btn btn--negative txt-small avatar__delete-btn" do %><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span><% end %><% end %>
+      <% if @account.not_nil!.logo_attachment %><%= button_to fresh_account_logo_path, method: "delete", class: "btn btn--negative txt-small avatar__delete-btn" do %><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span><% end %><% end %>
     </div>
 
     <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "flex flex-column gap", data: {controller: "form"} do |form| %>
       <div class="flex align-center gap">
         <%= translation_button("account_name") %>
         <label class="flex align-center gap flex-item-grow">
-          <%= form.text_field :name, value: @account.not_nil!.name.to_s, id: "account_name", class: "input txt-large", autocomplete: "off", placeholder: "Name this account", autofocus: true, data: {action: "keydown.enter->form#submit"} %>
+          <%= form.text_field :name, value: @account.not_nil!.name.to_s, id: "account_name", class: "input txt-large", autocomplete: "off", placeholder: "Name this account", autofocus: true,
+                data: {action: "keydown.enter->form#submit"} %>
         </label>
         <%= form.button class: "btn btn--reversed center" do %>
           <%= icon("check.svg") %>
@@ -47,7 +50,7 @@
           </span>
         </label>
       <% end %>    </div>
-  <% else %><figure class="account-logo avatar txt-xx-large center"><img src="<%= logo_src %>" alt="Account logo" width="300" height="300"></figure>
+  <% else %><figure class="account-logo avatar txt-xx-large center"><img src="<%= fresh_account_logo_path %>" alt="Account logo" width="300" height="300"></figure>
     <h1 class="flex-item-grow txt-x-large"><%= @account.not_nil!.name.to_s %></h1>
   <% end %>
   <div class="margin-block pad-inline pad-block-start fill-shade border-radius">
@@ -69,7 +72,7 @@
           <span class="for-screen-reader">Share join link</span>
           <%= icon("share.svg", 20, "colorize--black") %>
         </button>
-        <% if @user.not_nil!.role == 1 %><%= button_to "/account/join_code", class: "btn btn--regenerate" do %>
+        <% if @user.not_nil!.administrator? %><%= button_to "/account/join_code", class: "btn btn--regenerate" do %>
           <%= icon("refresh.svg", 20, "colorize--black") %>
           <span class="for-screen-reader">Regenerate join link</span>
         <% end %><% end %>  </div>

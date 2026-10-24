@@ -19,7 +19,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.14
+    version: 0.1.15
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git

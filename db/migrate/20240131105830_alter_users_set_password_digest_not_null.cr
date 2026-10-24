@@ -1,4 +1,4 @@
-class AlterUsersSetPasswordDigestNotNull < ActiveRecord::Migration
+class AlterUsersSetPasswordDigestNotNull < ActiveRecord::Migration[7.2]
   def change
     execute <<-SQL
       update users set password_digest = '' where password_digest is null;
