@@ -1,5 +1,6 @@
 # BotsHelpers: ERB helpers for app/views/bots/{index,new,edit}.html.erb.
 module BotsHelpers
+  include ActionController::Helper
   def page_open(title : String, back_path : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open(title == "Chat bots" ? "bots" : "bot-form",
       title, nav_html: ChatLayout.nav_back(back_path)))

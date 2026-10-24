@@ -1,5 +1,6 @@
 # SessionsHelpers: ERB helpers for app/views/sessions/new.html.erb.
 module SessionsHelpers
+  include ActionController::Helper
   def login_head : ERB::SafeString
     ERB::SafeString.new(ChatLayout.head("Sign in", nil, chat: false,
       head_extra: %(<meta name="turbo-visit-control" content="reload">\n)))

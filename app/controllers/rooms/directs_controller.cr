@@ -1,6 +1,6 @@
 class Rooms::DirectsController < ApplicationController
   include UserIdsParams
-  include RoomsHelper
+  helper :rooms
 
   # Getters expose the ivars to the RoomsHelper ERB helpers.
   attr_reader user : User?

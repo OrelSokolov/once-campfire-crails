@@ -2,7 +2,7 @@ require "uuid"
 
 class Messages::ByBotsController < ApplicationController
   include RawRequestBody
-  include MessagesHelper
+  helper :messages
 
   skip_before_action :require_authentication
 

@@ -1,7 +1,6 @@
 class RoomsController < ApplicationController
   include RoomScoped
   include UserIdsParams
-  include RoomsHelper
 
   before_action :set_room, only: [:show, :destroy]
   before_action :ensure_can_administer, only: [:destroy]

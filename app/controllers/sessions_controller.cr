@@ -1,5 +1,4 @@
 class SessionsController < ApplicationController
-  include SessionsHelpers
 
   skip_before_action :require_authentication, only: [:new, :create]
 

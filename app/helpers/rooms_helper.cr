@@ -1,4 +1,5 @@
 module RoomsHelper
+  include ActionController::Helper
   def room_page(room : Room, user : User, messages : Array(Message)) : Campfire::ResponseCache::Page
     messages_html = invitation_html(room, user) +
                     ChatLayout.messages_html(messages, db_epoch, room, origin)

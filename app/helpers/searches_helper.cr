@@ -1,4 +1,5 @@
 module SearchesHelper
+  include ActionController::Helper
   def page_open : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("search", "Search",
       body_class: "sidebar searches", nav_html: search_nav(query, messages.size, recents)))

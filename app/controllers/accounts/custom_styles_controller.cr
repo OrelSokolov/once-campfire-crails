@@ -1,5 +1,5 @@
 class Accounts::CustomStylesController < ApplicationController
-  include CustomStylesHelpers
+  helper :custom_styles
 
   before_action :ensure_can_administer
 

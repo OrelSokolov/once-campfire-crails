@@ -1,5 +1,4 @@
 class SearchesController < ApplicationController
-  include SearchesHelper
 
   # Getters expose the ivars to the SearchesHelper ERB helpers.
   attr_reader user : User? = nil

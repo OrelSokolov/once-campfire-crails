@@ -1,5 +1,6 @@
 # Shared ERB helpers for app/views/**, included in ApplicationController.
 module ApplicationHelper
+  include ActionController::Helper
   def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end

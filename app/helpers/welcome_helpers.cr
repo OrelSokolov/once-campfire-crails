@@ -1,5 +1,6 @@
 # ERB helpers for app/views/welcome/show.html.erb (empty "No rooms yet" screen).
 module WelcomeHelpers
+  include ActionController::Helper
   def head : ERB::SafeString
     ERB::SafeString.new(ChatLayout.head("No rooms yet", nil, chat: false))
   end

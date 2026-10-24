@@ -1,5 +1,4 @@
 class UsersController < ApplicationController
-  include UsersHelper
 
   # Data for show.html.erb: the viewer (admin branches) and the profile subject.
   @viewer : User?

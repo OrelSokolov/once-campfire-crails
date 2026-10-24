@@ -1,5 +1,5 @@
 class Sessions::TransfersController < ApplicationController
-  include SessionTransfersHelpers
+  helper :session_transfers
 
   skip_before_action :require_authentication
 

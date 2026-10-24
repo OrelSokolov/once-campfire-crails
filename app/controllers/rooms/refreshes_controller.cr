@@ -2,7 +2,7 @@ class Rooms::RefreshesController < ApplicationController
   @room : Room?
   @new_messages : Array(Message) = [] of Message
   @updated_messages : Array(Message) = [] of Message
-  include RoomsHelper
+  helper :rooms
 
   def show
     room = current_user.not_nil!.rooms.find?(params["id"].to_s)

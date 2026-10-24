@@ -1,5 +1,6 @@
 # AccountsHelper: ERB helpers for app/views/accounts/edit.html.erb.
 module AccountsHelper
+  include ActionController::Helper
   def page_open(user : User) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("account", "Account settings",
       nav_html: account_nav(user)))

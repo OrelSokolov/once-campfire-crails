@@ -52,9 +52,19 @@
       в `MessagesController` удалён (~60 строк), create читает
       `params.require(:message).permit(:body, :attachment, :client_message_id)`;
       capybara 72 runs / 0 failures, compare 2/129 (оба soft_check png).
-- [ ] **action_pack_cr**: view context + `helper_method` + автоподключение
-      `app/helpers/**` → убрать `include XHelper` из контроллеров
-      (нарушение AGENTS.md «хелперы никогда в контроллерах»).
+- [x] **action_pack_cr 0.2.14**: helper wiring — реестр `HELPERS` (маркер
+      `include ActionController::Helper` в модуле app/helpers),
+      конвенционный авт-include в finished-кодегене (`RoomsController →
+      RoomsHelper/RoomsHelpers`, включая абстрактный ApplicationController),
+      `helper :sym` / `helper :all` (Rails API), `helper_method` с
+      валидацией в конце программы (контекст рендера — сам контроллер,
+      поэтому семантически no-op). Приложение: 18 view-хелперов помечены
+      маркером, все `include XHelper` убраны из контроллеров (AGENTS.md),
+      8 неконвенционных пар объявлены `helper :sym`. Спека
+      spec/helper_wiring_spec.cr (3 examples). Ограничение: `helper :all`
+      (Rails-дефолт) пока невозможен — 8 конфликтов имён между
+      crails-обёртками (page_open/page_close/copy_button/…), у оракула их
+      нет; разблокируется после tag-билдера и переноса HTML из ChatLayout.
 - [ ] **action_view_cr**: tag-билдер (`tag.figure/span/title`, `tag(:meta, ...)`,
       `link_to ... do` с порядком атрибутов оракула, `image_tag` с вложенными
       `aria: {hidden:}`) → путь к переносу HTML из ChatLayout в ERB-партиалы.

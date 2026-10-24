@@ -1,6 +1,7 @@
 # Users::SidebarHelper: renders the /users/me/sidebar page — ChatERB view
 # models, turbo-frame wrapper and layout shell.
 module Users::SidebarHelper
+  include ActionController::Helper
   def sidebar_page(user : User, placeholders : Array(User)) : Campfire::ResponseCache::Page
     members_by_room = sidebar_direct_members(user)
 

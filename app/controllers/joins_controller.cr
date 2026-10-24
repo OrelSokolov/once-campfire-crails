@@ -2,7 +2,6 @@
 # password form, POST creates the user (role=0 + memberships in every Rooms::Open,
 # involvement "mentions") + session + redirect to "/".
 class JoinsController < ApplicationController
-  include JoinsHelpers
 
   skip_before_action :require_authentication
 

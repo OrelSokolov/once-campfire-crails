@@ -2,7 +2,6 @@ require "uuid"
 
 class MessagesController < ApplicationController
   include RawRequestBody
-  include MessagesHelper
 
   # Upper bound on the request body: a message with its attachment goes as a single multipart POST.
   MAX_UPLOAD_BYTES = 100 * 1024 * 1024

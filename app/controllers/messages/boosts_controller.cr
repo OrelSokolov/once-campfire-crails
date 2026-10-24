@@ -1,5 +1,5 @@
 class Messages::BoostsController < ApplicationController
-  include BoostsHelpers
+  helper :boosts
 
   before_action :set_message
   before_action :set_boost, only: [:destroy]

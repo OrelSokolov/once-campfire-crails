@@ -1,5 +1,5 @@
 class Users::PushSubscriptionsController < ApplicationController
-  include PushSubscriptionsHelpers
+  helper :push_subscriptions
 
   @push_subscriptions : Array(Push::Subscription) = [] of Push::Subscription
 

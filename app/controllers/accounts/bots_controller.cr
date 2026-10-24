@@ -1,5 +1,5 @@
 class Accounts::BotsController < ApplicationController
-  include BotsHelpers
+  helper :bots
 
   before_action :ensure_can_administer
 

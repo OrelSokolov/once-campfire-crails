@@ -1,5 +1,4 @@
 class FirstRunsController < ApplicationController
-  include FirstRunsHelpers
 
   skip_before_action :require_authentication
   before_action :prevent_repeats

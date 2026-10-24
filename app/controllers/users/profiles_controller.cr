@@ -1,5 +1,4 @@
 class Users::ProfilesController < ApplicationController
-  include Users::ProfilesHelper
 
   @user : User?
   @shared_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)

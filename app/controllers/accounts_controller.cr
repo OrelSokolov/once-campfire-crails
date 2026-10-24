@@ -4,7 +4,6 @@
 require "./application_controller"
 
 class AccountsController < ApplicationController
-  include AccountsHelper
 
   before_action :ensure_can_administer, only: [:update]
 

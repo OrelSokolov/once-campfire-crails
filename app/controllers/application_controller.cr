@@ -1,5 +1,4 @@
 abstract class ApplicationController < ActionController::Base
-  include ApplicationHelper
 
   include Authentication
   include Authorization

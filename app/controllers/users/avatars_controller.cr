@@ -2,7 +2,6 @@
 # PBKDF2-SHA256(secret, "active_record/signed_id", 1000, 64)-derived
 # HMAC-SHA256 key (campfire-express src/rails.js: key()/verifyId).
 class Users::AvatarsController < ApplicationController
-  include Users::AvatarsHelper
 
   skip_before_action :require_authentication # avatars are publicly linked
 

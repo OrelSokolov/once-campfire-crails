@@ -231,6 +231,16 @@
 - `app/controllers/accounts/custom_styles_controller.cr`: `update` без
   `notice: "✓"` в redirect_to (flash не портирован); тест гонку Turbo-редиректа
   закрывает маркером data-parity-sent.
+- `app/helpers/**`: helper wiring через action_pack 0.2.14 (маркер
+  `include ActionController::Helper` + конвенция/`helper :sym`) вместо
+  Rails include-all: 8 конфликтов имён между crails-обёртками
+  (page_open/page_close/copy_button/avatar_link/last_room_visited_path/
+  fresh_account_logo_path/translation_button/version), у оракула этих
+  методов в хелперах нет (page_open и пр. — crails-обёртки над ChatLayout);
+  `helper :all` разблокируется после переноса HTML в ERB-партиалы.
+  `helper_method` — compile-валидация без рантайм-эффекта (контекст рендера
+  = контроллер); оракульные `platform`/`signed_in?`/`last_room_visited`
+  не портированы (crails-хелперы несут свою логику platform через @ua).
 - `app/controllers/first_runs_controller.cr`: avatar в permit-списке для
   паритета, но загрузка не портирована — FirstRun игнорирует поле.
 - `app/controllers/rooms/involvements_controller.cr`: `update` не делает

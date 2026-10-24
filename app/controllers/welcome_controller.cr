@@ -1,5 +1,4 @@
 class WelcomeController < ApplicationController
-  include WelcomeHelpers
 
   attr_reader user : User?
 

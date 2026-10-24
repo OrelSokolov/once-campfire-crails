@@ -1,5 +1,5 @@
 class Users::SidebarsController < ApplicationController
-  include Users::SidebarHelper
+  helper "users/sidebar"
 
   DIRECT_PLACEHOLDERS = 20
 

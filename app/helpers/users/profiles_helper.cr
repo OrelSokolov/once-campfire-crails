@@ -1,5 +1,6 @@
 # Users::ProfilesHelper: ERB helpers for app/views/users/profiles/show.html.erb.
 module Users::ProfilesHelper
+  include ActionController::Helper
   def page_open(user : User) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("profile", user.name.to_s,
       nav_html: profile_nav))

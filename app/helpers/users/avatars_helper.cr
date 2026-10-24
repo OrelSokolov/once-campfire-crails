@@ -3,6 +3,7 @@
 require "digest/crc32"
 
 module Users::AvatarsHelper
+  include ActionController::Helper
   # 18-color palette picked by CRC32 of the id, byte-identical to Ruby's Zlib.crc32.
   AVATAR_COLORS = {"#AF2E1B", "#CC6324", "#3B4B59", "#BFA07A", "#ED8008",
                    "#ED3F1C", "#BF1B1B", "#736B1E", "#D07B53", "#736356",

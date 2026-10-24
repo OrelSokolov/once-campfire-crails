@@ -1,5 +1,6 @@
 # ERB helpers for app/views/messages/{show,edit}.html.erb, included in MessagesController.
 module MessagesHelper
+  include ActionController::Helper
   # create.turbo_stream.erb: append the message DOM to the room container.
   def append_message_stream(room : Room, message_html : String) : String
     %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>) +

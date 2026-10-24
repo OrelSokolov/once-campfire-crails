@@ -1,5 +1,6 @@
 # PushSubscriptionsHelpers: ERB helpers for app/views/users/push_subscriptions/index.html.erb.
 module PushSubscriptionsHelpers
+  include ActionController::Helper
   def page_open : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("push-subscriptions",
       "Push notification subscriptions",
