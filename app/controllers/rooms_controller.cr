@@ -2,6 +2,8 @@ class RoomsController < ApplicationController
   include RoomScoped
   include UserIdsParams
 
+  # rooms/show renders sidebar_turbo_frame_tag (Users::SidebarHelper).
+  helper "users/sidebar"
   before_action :set_room, only: [:show, :destroy]
   before_action :ensure_can_administer, only: [:destroy]
 

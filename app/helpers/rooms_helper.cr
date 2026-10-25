@@ -19,7 +19,7 @@ module RoomsHelper
         ua: request.headers["User-Agent"]?.to_s, origin: origin)
       io << ChatLayout.message_area(room, messages_html, base_url: origin)
       io << ChatLayout.page_close(ChatERB.new(room: room, origin: origin).composer.to_s,
-        ChatLayout.chat_sidebar_frame)
+        sidebar_turbo_frame_tag(src: user_sidebar_path).raw)
     end
     Campfire::ResponseCache::Page.new(html)
   end

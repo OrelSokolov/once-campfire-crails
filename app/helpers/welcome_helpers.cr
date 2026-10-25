@@ -12,6 +12,7 @@ module WelcomeHelpers
   # footer + aside with the user_sidebar turbo-frame + lightbox + app-logo,
   # as in layouts/_body_close (welcome/show: sidebar_turbo_frame_tag(src:)).
   def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close("", ChatLayout.chat_sidebar_frame))
+    ERB::SafeString.new(ChatLayout.page_close("",
+      sidebar_turbo_frame_tag(src: user_sidebar_path).raw))
   end
 end

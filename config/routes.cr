@@ -42,7 +42,7 @@ CRails.application.routes.draw do
   get "/service-worker", to: "pwa#service_worker"
 
   # Литеральные /users/me/* до resources :users; аватар — по :token.
-  get "/users/me/sidebar", to: "users/sidebars#show"
+  get "/users/me/sidebar", to: "users/sidebars#show", as: "user_sidebar"
   get "/users/me/profile", to: "users/profiles#show", as: "user_profile"
   patch "/users/me/profile", to: "users/profiles#update"
   # scope defaults: { user_id: "me" }: Web Push подписки текущего юзера.

@@ -256,6 +256,10 @@
   `web_share_session_button` (Users::ProfilesHelper) зарегистрированы;
   crails-обёртки `copy_button` в accounts/bots/profiles остаются как тонкие
   делегаты до миграции вьюх на блочный API (учтены в конфликтах выше).
+  nav_back (инкремент 3): `link_back_to`/`link_back` — оракульный API в
+  ApplicationHelper, div-обёртки `nav_back`/`nav_back_to` переходные.
+  chat_sidebar_frame (инкремент 4): `sidebar_turbo_frame_tag`
+  (Users::SidebarHelper) — оракульный API, wiring в Rooms/Welcome.
   `helper_method` — compile-валидация без рантайм-эффекта (контекст рендера
   = контроллер); оракульные `platform`/`signed_in?`/`last_room_visited`
   не портированы (crails-хелперы несут свою логику platform через @ua).

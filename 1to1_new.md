@@ -127,9 +127,17 @@
       не резолвился в чистом дереве). verified: сборка 0 ошибок +
       воспроизведение CI-сборки (-Dwithout_mt) в worktree, capybara 72/0,
       compare 2/129 (оба = baseline png custom-boost + mobile).
-- [ ] Инкременты дальше (по нарастающей сложности): chat_sidebar_frame →
-      turbo_frame_tag, head/body_open → layouts/application.html.erb,
-      page_open/page_close → layout-обёртки,
+- [x] Инкремент 4 — chat_sidebar_frame: `Users::SidebarHelper#
+      sidebar_turbo_frame_tag` (оракул 1:1, instance-форма turbo_frame_tag:
+      src/target/data, константа SIDEBAR_FRAME_DATA, перегрузки с блоком и
+      без); роут /users/me/sidebar получил `as: "user_sidebar"`
+      (оракульный user_sidebar_path); reload-ответ сайдбара теперь с
+      полными data-атрибутами, как у оракула (раньше — bare frame,
+      девиация); wiring `helper "users/sidebar"` в Rooms и Welcome;
+      ChatLayout.chat_sidebar_frame удалён. verified: сборка 0 ошибок,
+      capybara 72/0, compare 2/129 (оба = baseline png).
+- [ ] Инкременты дальше (по нарастающей сложности): head/body_open →
+      layouts/application.html.erb, page_open/page_close → layout-обёртки,
       затем messages/boosts/attachments (message_dom — ядро ChatLayout).
 
 ## Фаза 4 — средние патчи (НЕ НАЧАТА)

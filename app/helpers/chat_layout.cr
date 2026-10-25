@@ -321,24 +321,6 @@ module ChatLayout
     end
   end
 
-  # footer + sidebar (turbo-frame user_sidebar) + app-logo —
-  # layouts/_body_close.html.erb. users/sidebar_helper.rb#
-  # sidebar_turbo_frame_tag: turbo_frame_tag :user_sidebar with
-  # target/data options (static FramesHelper form). The `->` in
-  # data-action is escaped by tag_options as `-&gt;` — identical after
-  # HTML parsing to the previous raw string (DOM normalization).
-  def self.chat_sidebar_frame : String
-    ::Turbo::FramesHelper.turbo_frame_tag("user_sidebar", "/users/me/sidebar", nil, {
-      "target" => "_top",
-      "data"   => {
-        "turbo_permanent"         => true,
-        "controller"              => "rooms-list read-rooms turbo-frame",
-        "rooms_list_unread_class" => "unread",
-        "action"                  => "presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload",
-      },
-    }).to_s
-  end
-
   # Oracle User#title: "name – bio" (bio may be NULL).
   def self.user_title(name : String?, bio : String?) : String
     bio.to_s.empty? ? name.to_s : "#{name} – #{bio}"

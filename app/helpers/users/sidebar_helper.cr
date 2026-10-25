@@ -2,6 +2,29 @@
 # models, turbo-frame wrapper and layout shell.
 module Users::SidebarHelper
   include ActionController::Helper
+
+  # Oracle users/sidebar_helper.rb sidebar_turbo_frame_tag: the user_sidebar
+  # frame — src on the first render (rooms/show, welcome/show), block
+  # content on the frame reload (users/sidebars/show).
+  SIDEBAR_FRAME_DATA = {
+    "turbo_permanent"         => true,
+    "controller"              => "rooms-list read-rooms turbo-frame",
+    "rooms_list_unread_class" => "unread",
+    "action"                  => "presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload",
+  }
+
+  def sidebar_turbo_frame_tag(src : String? = nil) : ERB::SafeString
+    turbo_frame_tag "user_sidebar", src: src, target: "_top",
+      data: SIDEBAR_FRAME_DATA
+  end
+
+  def sidebar_turbo_frame_tag(src : String? = nil, &) : ERB::SafeString
+    turbo_frame_tag "user_sidebar", src: src, target: "_top",
+      data: SIDEBAR_FRAME_DATA do
+      yield
+    end
+  end
+
   def sidebar_page(user : User, placeholders : Array(User)) : Campfire::ResponseCache::Page
     members_by_room = sidebar_direct_members(user)
 
@@ -31,23 +54,16 @@ module Users::SidebarHelper
       placeholders: placeholders, rooms_stream: HTML.escape(rooms_stream),
       user_rooms_stream: HTML.escape(user_rooms_stream)).sidebar.to_s
 
-    # Turbo-frame requests (browser reload) get the bare fragment;
-    # a regular GET gets the full layout shell, as in Rails.
+    # Turbo-frame requests (browser reload) get the frame with its block
+    # content; a regular GET gets the full layout shell, as in Rails
+    # (users/sidebars/show renders sidebar_turbo_frame_tag).
     html = if request.headers["Turbo-Frame"]? == "user_sidebar"
              "<!doctype html>\n<html>\n<head><title>Sidebar</title></head>\n<body>\n" +
-               ::Turbo::FramesHelper.turbo_frame_tag("user_sidebar") { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
+               sidebar_turbo_frame_tag { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
                "</body>\n</html>\n"
            else
              ChatLayout.page_open("sidebar", "Campfire") +
-               ::Turbo::FramesHelper.turbo_frame_tag("user_sidebar", nil, nil, {
-                 "target" => "_top",
-                 "data"   => {
-                   "turbo_permanent"         => true,
-                   "controller"              => "rooms-list read-rooms turbo-frame",
-                   "rooms_list_unread_class" => "unread",
-                   "action"                  => "presence:present@window->rooms-list#read read-rooms:read->rooms-list#read turbo:frame-load->rooms-list#loaded refresh-room:visible@window->turbo-frame#reload",
-                 },
-               }) { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
+               sidebar_turbo_frame_tag { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
                ChatLayout.page_close
            end
     Campfire::ResponseCache::Page.new(html)

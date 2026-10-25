@@ -1,4 +1,6 @@
 class WelcomeController < ApplicationController
+  # welcome/show renders sidebar_turbo_frame_tag (Users::SidebarHelper).
+  helper "users/sidebar"
 
   attr_reader user : User?
 
