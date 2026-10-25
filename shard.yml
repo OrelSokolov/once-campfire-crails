@@ -7,22 +7,22 @@ crystal: ">= 1.21.0"
 dependencies:
   railties_cr:
     github: OrelSokolov/railties.cr
-    version: ~> 0.1.5
+    version: ~> 0.1.16
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.11
+    version: ~> 0.1.18
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
     version: ~> 0.1.1
   active_support_cr:
     github: OrelSokolov/active_support.cr
-    version: ~> 0.1.6
+    version: ~> 0.1.11
   attr_reader_cr:
     github: OrelSokolov/attr_reader.cr
     version: ~> 0.1.0
   action_cable_cr:
     github: OrelSokolov/action_cable.cr
-    version: ~> 0.1.1
+    version: ~> 0.1.5
   turbo_cr:
     github: OrelSokolov/turbo.cr
     version: ~> 0.1.1
@@ -33,7 +33,7 @@ dependencies:
     version: ~> 0.1.0
   jbuilder_cr:
     github: OrelSokolov/jbuilder.cr
-    version: ~> 0.1.0
+    version: ~> 0.1.1
   serverx:
     github: OrelSokolov/serverx.cr
     version: ~> 0.2.1

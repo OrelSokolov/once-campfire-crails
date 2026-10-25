@@ -28,6 +28,7 @@ abstract class ApplicationController < ActionController::Base
   before_action :verify_supported_browser
   before_action :reject_banned_ip
   before_action :require_authentication
+  before_action :deny_bots
 
   # Campfire authentication.rb: protect_from_forgery using: :header_only, with:
   # :exception — the Rails 8.2 Sec-Fetch-Site protection (no form tokens); bot keys

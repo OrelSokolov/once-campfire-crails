@@ -4,7 +4,7 @@
 # setAppBadge on push, notificationclick navigates to data.path. The URL is stable and
 # at the root, so not an asset path.
 class PwaController < ApplicationController
-  skip_before_action :require_authentication
+  allow_unauthenticated_access
 
   def manifest
     @account = Account.take

@@ -2,6 +2,27 @@ require "./authentication/session_lookup"
 
 module Authentication
   include SessionLookup
+
+  # class_methods (authentication.rb:14-20): allow_unauthenticated_access /
+  # allow_bot_access as skip_before_action wrappers. `{{ options.double_splat }}`
+  # reifies the resolved named tuple — a raw `**options` would leak the
+  # unresolved Var into the callee's positional splat.
+  macro allow_unauthenticated_access(**options)
+    {% if options.empty? %}
+      skip_before_action :require_authentication
+    {% else %}
+      skip_before_action :require_authentication, {{ options.double_splat }}
+    {% end %}
+  end
+
+  macro allow_bot_access(**options)
+    {% if options.empty? %}
+      skip_before_action :deny_bots
+    {% else %}
+      skip_before_action :deny_bots, {{ options.double_splat }}
+    {% end %}
+  end
+
   @identity_entry : Campfire::IdentityCache::Entry? = nil
   @identity_checked : Bool = false
 
@@ -34,6 +55,12 @@ module Authentication
 
   def require_authentication : Nil
     redirect_to new_session_url unless current_user
+  end
+
+  # authentication.rb:101-103 — bots authenticated via bot_key are forbidden
+  # on regular controllers; the port checks the key directly (bot_request?).
+  def deny_bots : Nil
+    head :forbidden if bot_request?
   end
 
   def start_new_session_for(user : User) : Nil

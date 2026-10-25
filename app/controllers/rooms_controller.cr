@@ -211,7 +211,7 @@ class RoomsController < ApplicationController
     end
     @selected = selected
     @is_open = kind == "opens"
-    @can_administer = room.nil? || user.role == 1 || room.creator_id == user.id
+    @can_administer = room.nil? || user.administrator? || room.creator_id == user.id
     @users = User.active.to_a.sort_by(&.name.to_s.downcase)
     if @is_open
       # opens form: User.active.ordered is just LOWER(name), no selected/others split.

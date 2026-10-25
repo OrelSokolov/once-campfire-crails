@@ -1,7 +1,7 @@
 class Sessions::TransfersController < ApplicationController
   helper :session_transfers
 
-  skip_before_action :require_authentication
+  allow_unauthenticated_access
 
   @token : String = ""
 

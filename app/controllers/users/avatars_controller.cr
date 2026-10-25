@@ -3,7 +3,7 @@
 # HMAC-SHA256 key (campfire-express src/rails.js: key()/verifyId).
 class Users::AvatarsController < ApplicationController
 
-  skip_before_action :require_authentication # avatars are publicly linked
+  allow_unauthenticated_access # avatars are publicly linked
 
   def show
     raw_token = params["token"].to_s

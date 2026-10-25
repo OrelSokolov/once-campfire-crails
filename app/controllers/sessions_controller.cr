@@ -1,6 +1,6 @@
 class SessionsController < ApplicationController
 
-  skip_before_action :require_authentication, only: [:new, :create]
+  allow_unauthenticated_access only: [:new, :create]
 
   rate_limit to: 10, within: 3.minutes, only: [:create], with: :render_rejection
 

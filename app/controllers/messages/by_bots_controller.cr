@@ -4,6 +4,8 @@ class Messages::ByBotsController < ApplicationController
   include RawRequestBody
   helper :messages
 
+
+  allow_bot_access
   skip_before_action :require_authentication
 
   before_action :require_bot, except: [:create]

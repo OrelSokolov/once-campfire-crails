@@ -12,11 +12,7 @@ class Account
     end
 
     private def generate_join_code : String
-      chars = ("A".."Z").to_a + ("a".."z").to_a + ("0".."9").to_a
-      code = String.build do |io|
-        12.times { io << chars.sample(Random::Secure) }
-      end
-      code.scan(/.{4}/).join("-")
+      SecureRandom.alphanumeric(12).scan(/.{4}/).join("-")
     end
   end
 

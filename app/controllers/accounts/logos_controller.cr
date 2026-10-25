@@ -1,5 +1,5 @@
 class Accounts::LogosController < ApplicationController
-  skip_before_action :require_authentication, only: [:show]
+  allow_unauthenticated_access only: [:show]
 
   def show
     account = Account.take
@@ -30,7 +30,7 @@ class Accounts::LogosController < ApplicationController
   def destroy
     Campfire::ResponseCache.invalidate!
     user = current_user.not_nil!
-    return render(plain: "forbidden", status: 403) unless user.role == 1
+    return render(plain: "forbidden", status: 403) unless user.administrator?
     if (attachment = Account.take.try(&.logo_attachment))
       blob_id = attachment.blob_id
       attachment.destroy

@@ -21,8 +21,8 @@ class Accounts::BotsController < ApplicationController
     now = Time.utc
     bot = User.new(
       name: name,
-      role: 2,
-      status: 0,
+      role: :bot,
+      status: :active,
       bot_token: User.generate_bot_token,
       created_at: now, updated_at: now)
     bot.save!

@@ -44,6 +44,27 @@ require "../app/jobs/**"
 # Партиалы — методы JbuilderTemplate без контекста контроллера:
 # origin им недоступен, экшен-шаблон проставляет jb_origin.
 class JbuilderTemplate
+  # CRails::Routes::UrlHelpers cannot be included here directly: its
+  # method_missing macro would shadow Jbuilder's `json.<key>` DSL. A
+  # dedicated context resolves url helpers with jb_origin as the origin.
+  class UrlContext
+    include CRails::Routes::UrlHelpers
+
+    def initialize(@jb_origin : String)
+    end
+
+    def origin : String
+      @jb_origin
+    end
+  end
+
+  # room_message_url(message.room, message) — url helper delegate for
+  # partials (jbuilder context has no request); origin from jb_origin.
+  def room_message_url(room : Room?, message : Message) : String
+    UrlContext.new(jb_origin)
+      .__crails_url_helper("room_message_url", [room, message], {} of Symbol => Nil)
+  end
+
   attr_accessor jb_origin : String = "http://localhost"
 
   compile_partials({

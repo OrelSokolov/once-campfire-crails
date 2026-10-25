@@ -1,5 +1,7 @@
 class Messages::Boosts::ByBotsController < ApplicationController
   include RawRequestBody
+
+  allow_bot_access
   skip_before_action :require_authentication
 
   before_action :require_bot

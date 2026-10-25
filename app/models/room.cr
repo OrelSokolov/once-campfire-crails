@@ -3,7 +3,7 @@ class Room < ApplicationRecord
   has_many :memberships, foreign_key: "room_id"
   has_many :users, through: :memberships
   has_many :messages, foreign_key: "room_id", dependent: :destroy
-  belongs_to :creator, class_name: "User"
+  belongs_to :creator, class_name: "User", default: -> { Current.user }
 
   # STI type is stored in two spellings ('Rooms::Open' from seeds, short 'Open' created by the port), so scope to IN of both.
   scope(:opens)           { where("type IN ('Open', 'Rooms::Open')") }

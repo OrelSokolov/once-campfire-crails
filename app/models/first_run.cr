@@ -15,7 +15,7 @@ class FirstRun
       name: name,
       email_address: email_address,
       password_digest: Crypto::Bcrypt::Password.create(password, cost: 10).to_s,
-      role: 1, # administrator
+      role: :administrator,
       created_at: now, updated_at: now)
     user.errors.add("name", "can't be blank", :blank) if name.empty?
     user.errors.add("email_address", "can't be blank", :blank) if email_address.empty?

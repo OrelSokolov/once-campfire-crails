@@ -1,5 +1,5 @@
 require "./application_record"
 class Boost < ApplicationRecord
   belongs_to :message, touch: true
-  belongs_to :booster, class_name: "User"
+  belongs_to :booster, class_name: "User", default: -> { Current.user }
 end

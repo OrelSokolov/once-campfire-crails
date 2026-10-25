@@ -27,7 +27,7 @@ class Users::PushSubscriptionsController < ApplicationController
       user.id.not_nil!, endpoint, p256dh, auth).take
     if existing
       # Existing endpoints must pass current validations
-      if existing.valid_subscription?
+      if existing.valid?
         existing.touch
         head :ok
       else
@@ -40,8 +40,7 @@ class Users::PushSubscriptionsController < ApplicationController
         p256dh_key: p256dh,
         auth_key: auth,
         user_agent: request.headers["User-Agent"]?)
-      if subscription.valid_subscription?
-        subscription.save!
+      if subscription.save
         head :ok
       else
         head :unprocessable_entity

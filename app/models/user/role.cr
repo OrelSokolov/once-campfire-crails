@@ -1,17 +1,9 @@
 require "../application_record"
 
-# User::Role (user/role.rb): enum role (0 member / 1 administrator /
-# 2 bot) + can_administer?.
+# User::Role (user/role.rb): enum role + can_administer?. The enum itself is
+# declared in user.cr — ar_enum runs only in the class body.
 class User
   module Role
-    def administrator? : Bool
-      role == 1
-    end
-
-    def bot? : Bool
-      role == 2
-    end
-
     def can_administer?(record : Room? = nil) : Bool
       administrator? || record.try(&.creator) == self || record.try(&.new_record?) == true
     end

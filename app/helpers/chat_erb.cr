@@ -207,7 +207,7 @@ class ChatERB
 
   def new_room_allowed? : Bool
     # Current.user.administrator? || !restrict_room_creation_to_administrators?
-    user.role == 1 || !Account.take.try(&.restrict_room_creation_to_administrators?)
+    user.administrator? || !Account.take.try(&.restrict_room_creation_to_administrators?)
   end
 
   # _show.html.erb (not show.html.erb): compiled only here in the ChatERB

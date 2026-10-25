@@ -16,27 +16,28 @@ class Push::Subscription < ApplicationRecord
     notify.windows.com
   ]
 
-  # Endpoint must be present and pass current validations — the reference re-validates
-  # existing endpoints on create too ("Existing endpoints must pass current validations").
-  def valid_subscription? : Bool
-    !endpoint.to_s.empty? && endpoint_error.nil?
-  end
-
-  # The reference's errors.add(:endpoint, ...) message text, or nil.
-  def endpoint_error : String?
-    uri = endpoint_uri
-    return "is not a valid URL" unless uri
-    return "must use HTTPS" unless uri.scheme == "https"
-    return "must use the default HTTPS port" unless uri.port.nil? || uri.port == 443
-    return "is not a permitted push service" unless permitted_endpoint_host?
-    return "resolves to a private or invalid IP address" unless resolves_to_public_ip?
-    nil
-  end
+  validates :endpoint, presence: true
+  validate :validate_endpoint_url
 
   private def endpoint_uri : URI?
     URI.parse(endpoint.to_s)
   rescue URI::Error | ArgumentError
     nil
+  end
+
+  private def validate_endpoint_url : Nil
+    uri = endpoint_uri
+    if uri.nil?
+      errors.add("endpoint", "is not a valid URL")
+    elsif uri.scheme != "https"
+      errors.add("endpoint", "must use HTTPS")
+    elsif !(uri.port.nil? || uri.port == 443)
+      errors.add("endpoint", "must use the default HTTPS port")
+    elsif !permitted_endpoint_host?
+      errors.add("endpoint", "is not a permitted push service")
+    elsif !resolves_to_public_ip?
+      errors.add("endpoint", "resolves to a private or invalid IP address")
+    end
   end
 
   private def permitted_endpoint_host? : Bool

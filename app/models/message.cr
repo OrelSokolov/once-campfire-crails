@@ -5,7 +5,7 @@ require "uuid"
 # the seed database carries both.
 class Message < ApplicationRecord
   belongs_to :room
-  belongs_to :creator, class_name: "User"
+  belongs_to :creator, class_name: "User", default: -> { Current.user }
   has_many :boosts, foreign_key: "message_id"
 
   # The oracle's after_save :record_creation / after_create_commit push live in

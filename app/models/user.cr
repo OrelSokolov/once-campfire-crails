@@ -9,6 +9,9 @@ class User < ApplicationRecord
   preloadable_attachment :avatar
 
   ar_enum :status, {active: 0, deactivated: 1, banned: 2}, default: :active
+  # User::Role (user/role.rb) declares this in the concern; ar_enum runs only
+  # in the class body.
+  ar_enum :role, [ :member, :administrator, :bot ]
 
   after_create_commit :grant_membership_to_open_rooms
 

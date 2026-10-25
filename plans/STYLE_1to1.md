@@ -52,87 +52,130 @@ Crystal, (c) стилистическая проблема порта. План 
   `room_scope` 1:1 в rooms/opens/closeds/directs, lookup в messages/refreshes.
 - [x] `find`/`find?`/`find_by`/`find_by!` на `Relation` и `CollectionProxy`;
   404 по `RecordNotFound` уже есть в railties_cr middleware (rescue-лестница).
-  Осталось: заменить ручные nil-проверки на `find` в ~10 контроллерах.
-- [ ] Callbacks DSL: `before_create`, `after_save, if:`, `after_create_commit`,
+  Заменить ручные nil-проверки на `find` в ~10 контроллерах — хвост закрыт
+  через `reachable_messages`-скоуп (см. notes/style-parity.md, 2026-10-24).
+- [x] Callbacks DSL: `before_create`, `after_save, if:`, `after_create_commit`,
   `after_destroy_commit`, `after_save_commit ... if type_previously_changed?(to:)`
-  + dirty-API (`*_previously_changed?`) (~10 файлов моделей).
-- [ ] `enum` c `prefix:`, `default:` и предикатами: `administrator?`, `banned?`,
-  `active?` вместо `role == 1`, `status == 2` (~6 файлов).
-- [ ] `belongs_to ... default: -> { Current.user }` (message, boost, room).
-- [ ] `has_many ... dependent: :delete_all/:destroy` (+ extension-блоки).
-- [ ] Query API: `where.not(hash)`, `order(LOWER(name))`, scopes, `.merge`, `.or`,
-  `joins(:assoc)`, `pluck`, `update_all`, `insert_all`, `find_each`, `excluding`.
-- [ ] `signed_id(purpose:)` / `find_signed!` / `find_signed` (user/avatar,
-  user/transferable).
-- [ ] `has_secure_token`, `has_secure_password` + `authenticate_by`.
-- [ ] `validates presence:` + `validate` + `errors.add` (push/subscription).
-- [ ] STI-нормализация type: `WHERE type IN ('Open', 'Rooms::Open')` → одно имя.
-- [ ] `ActiveRecord::Migration[7.2]`-версии (пустой модуль-версия, 11 миграций);
-  `t.references` без явного `type: :integer` (вывод из PK, 3 файла).
+  + dirty-API (`*_previously_changed?`) — миграция моделей 2026-10-24
+  (notes/style-parity.md). Исключения (осознанные): Message#record_creation/
+  push_later остаются в MessageCreator (FTS5 + enqueue после коммита),
+  Opengraph::Metadata — не-AR модель — см. notes.
+- [x] `enum` c `prefix:`, `default:` и предикатами: `administrator?`, `banned?`,
+  `active?` — status/involvement (2026-10-24) + role (2026-10-25,
+  active_record.cr v0.1.17 — Symbol/String в `new`); `banned!`/`active!`
+  в Bannable остаются сырым SQL (WriteQueue-транзакция, notes).
+- [x] `belongs_to ... default: -> { Current.user }` (message, boost, room) —
+  active_record_cr v0.1.18 (after_initialize: FK nil + new_record?);
+  применено в message/room/boost (2026-10-25).
+- [x] `has_many ... dependent: :delete_all/:destroy` — шард поддерживает,
+  применено точечно (room.messages); extension-блоки (`has_many do`) —
+  компромисс Membership.grant_to (notes/style-parity.md).
+- [~] Query API: `where.not`/`update_all` — есть и применяются; `.merge`, `.or`,
+  `pluck`, `find_each` — есть в шарде; adoption в app отложен: все сайты
+  оракула (bannable, room#destroy_later, broadcasts, message_pusher) в порте
+  внутри WriteQueue-транзакций на сыром SQL — конверсия совпадает с фазой 3
+  «WriteQueue → AR» (2026-10-25); `joins(:assoc)` —
+  только has_many-конвенция (membership-скоупы на сырых JOIN);
+  `insert_all`/`excluding` — не применены.
+- [~] `signed_id(purpose:)` / `find_signed!` — вручную через MessageVerifier
+  (sha256 + sha1 fallback для legacy express-токенов) в avatar/transferable/
+  authentication; шардовой реализации нет.
+- [x] `has_secure_token` (Session); `has_secure_password`/`authenticate_by` —
+  компромисс: ручной `User.authenticate` с DUMMY_BCRYPT (timing-защита 1:1).
+- [x] `validates presence:` + `validate` + `errors.add` — Push::Subscription
+  (2026-10-25), контроллер на `valid?`/`save`.
+- [ ] STI-нормализация type: `WHERE type IN ('Open', 'Rooms::Open')` —
+  осознанный компромисс (notes/known-gaps.md).
+- [~] `ActiveRecord::Migration[7.2]`-версии — форма наследования непереносима
+  (парсер Crystal); `Migration.[]`-заглушка в шарде есть (0.1.15).
 
 ### 2.2. active_support_cr — мелкие методы (~10 файлов)
-- [ ] `presence`, `blank?`, `present?` для `String?`/Parameters.
-- [ ] `Time.current`, `to_f`, `to_fs(:epoch|:number)` у Time.
-- [ ] `in?`, `many?`, `to_sentence`, `compact_blank`, `.inquiry`.
-- [ ] `SecureRandom.alphanumeric`.
+- [x] `presence`, `blank?`, `present?` для `String?` — в шарде; для
+  `Parameters` — не сделано.
+- [~] `Time.current` — в шарде; `to_fs(:number)` — есть, `:epoch` и `to_f` —
+  нет; в app не используются.
+- [x] `in?`, `many?`, `to_sentence`, `compact_blank` — в шарде (в app
+  применяется точечно); `.inquiry` — нет.
+- [x] `SecureRandom.alphanumeric` — active_support_cr v0.1.11
+  (2026-10-25); joinable 1:1 с оракулом.
 
 ### 2.3. action_pack_cr — контроллерный DSL
-- [ ] `head :no_content` / `head :forbidden` (стабильный, не сбрасывает статус).
-- [ ] `respond_to do |format|`.
-- [ ] `stale?(etag:)`, `expires_in ... public:, stale_while_revalidate:`,
-  `fresh_when` (logos, avatars, qr_code).
-- [ ] `params.require(:x).permit(...)` — strong parameters.
-- [ ] DSL `allow_unauthenticated_access(**options)` / `allow_bot_access` через
-  class_methods concern'а вместо `skip_before_action` (~8 файлов).
-- [ ] `around_action` (для `cache_read_response`) + `before_action, if:/unless:`.
-- [ ] `cookies.signed.permanent[...] = { value:, httponly: }`.
+- [x] `head :no_content` / `head :forbidden` — стабилен, применён
+  (`ensure_can_administer` 1:1); хвост `render(plain: "", status:)` в
+  unfurl/by_bots/boosts/logos — осознанный (тела ответов).
+- [x] `respond_to do |format|` — есть в шарде; в app не используется
+  (update/autocompletable вручную разбирают Accept).
+- [~] `stale?(etag:)`/`fresh_when` — есть в шарде; `expires_in` — нет;
+  logos/cached_responses — ручная механика (ETag/Cache-Control byte-parity).
+- [x] `params.require(:x).permit(...)` — символная форма во всех контроллерах.
+- [x] DSL `allow_unauthenticated_access(**options)` / `allow_bot_access` —
+  макросы в concerns/authentication.cr 1:1 с class_methods оракула
+  (2026-10-25), ~10 контроллеров переведены; добавлен `before_action
+  :deny_bots` (порт-эквивалент через bot_request? — authenticated_by-трекинга
+  нет); by_bots сохраняет порт-специфичный skip require_authentication
+  (require_bot). Макро-грабли `**options`-проброса — notes/style-parity.md.
+- [~] `around_action` + `before_action, if:/unless:` — есть в шарде;
+  page-cache в app вручную (cached_responses).
+- [~] `cookies.signed.permanent[...] = { value:, httponly: }` — hash-форма
+  `[]=` не поддержана; app пишет `cookies.signed.set(...)`.
 
 ### 2.4. action_view_cr — вьюхи (~20 файлов)
-- [ ] `image_tag "x.svg", size: 20, aria: { hidden: "true" }` →
-  `<img aria-hidden width height>`; убрать кастомный `icon()`.
-- [ ] `form_with model: @account, method: :patch` (авто-URL из модели/роутов,
-  авто-scope) (~10 файлов).
-- [ ] `button_to` с блоком, `method: :delete`, скрытым `_method` (~12 файлов);
-  `link_to ... do`.
-- [ ] `content_for :nav/:footer/:sidebar` + `@page_title`/`@body_class` вместо
-  `page_open`/`page_close`.
-- [ ] `render partial:, collection:, as: :user`.
-- [ ] `dom_id(@room, :list)`.
-- [ ] Порядок атрибутов в тег-билдере как у Rails (href последним в `link_to` и
-  т.п.) — сейчас часть хелперов переписана вручную ради byte-parity.
+- [~] `image_tag` — механика есть (пребилд-манифест), `icon()` остаётся
+  для byte-parity (notes/style-parity.md).
+- [ ] `form_with model:` — отложено (byte-parity URL/скопов форм).
+- [~] `button_to` блоком/`method: :delete` — работает и применяется;
+  ~8 мест остаются ручными `<form class="button_to">`; nav — литеральные
+  `<a>` (перенос вместе с HTML из ChatLayout).
+- [~] `content_for :nav/:footer` — точечно; основной механизм
+  `page_open`/`page_close`; `@page_title`/`@body_class` — нет.
+- [~] `render partial:, collection:, as: :user`; `dom_id(@room, :list)` —
+  отложено в фазу 3: сайдбар/профили собираются compile-time (ChatERB/
+  ChatLayout, SidebarDirect), перевод на collection-рендер = разбор
+  мега-хелперов; dom_id(record, prefix) в шарде есть, но STI-записи порта —
+  класс Room (class.name ≠ Rooms::Open), остаются порт-хелперы
+  Room#dom_id/ChatERB#dom_id (2026-10-25, notes/style-parity.md).
 
 ### 2.5. action_cable_cr — каналы (5–6 файлов)
-- [ ] `on_subscribe :present, unless: :subscription_rejected?` /
-  `on_unsubscribe` (callback-DSL).
-- [ ] `broadcast_to @room, action: :start, user: current_user.slice(...)`
-  (kwargs + slice).
-- [ ] GlobalID: `GlobalID.create/locate`, `to_gid_param`,
-  `Locator.locate(gid, only: Room)` — убрать ручной `Base64.urlsafe_encode("gid://...")`.
+- [x] `on_subscribe :present, unless: :subscription_rejected?` /
+  `on_unsubscribe` — presence_channel 1:1.
+- [x] `broadcast_to` kwargs + `current_user.slice(...)` — action_cable_cr
+  v0.1.5 (kwargs-форма + per-type JSON-эмиттер), `Base#slice` —
+  active_record_cr v0.1.18; typing_notifications 1:1, `current_user` в
+  каналах (2026-10-25).
+- [~] GlobalID: `Locator.locate(gid, only:)`/`to_gid_param` — есть;
+  `Room#to_gid_param` вручную (STI-нормализация), `GlobalID.create` нет.
 
 ### 2.6. turbo_cr / jbuilder_cr (~10 файлов)
-- [ ] `turbo_stream.append/remove/replace` (3 turbo_stream-вьюхи).
-- [ ] jbuilder: `json.cache!`, `json.(obj, :attrs)`, url-хелперы вместо
-  `jb_origin + "/rooms/..."`.
+- [~] `turbo_stream.append/remove/replace` — TagBuilder в шарде 1:1;
+  3 turbo_stream-вьюхи остаются на ручных тегах/хелперах.
+- [x] jbuilder: `json.cache!` — jbuilder_cr v0.1.1 (объектная форма,
+  ключ из cache_key); `json.(obj, :attrs)` — `json.extract!` (синтаксис
+  `json.(...)` в Crystal невыразим); url-хелперы `room_message_url(...)`
+  вместо `jb_origin + "/rooms/..."` (делегат UrlContext, action_pack_cr
+  v0.2.15 — публичный __crails_url_helper). `fresh_user_avatar_url` —
+  без `direct`-роутинга (2.7) остаётся ChatLayout-путь (2026-10-25).
 
 ### 2.7. railties_cr — конфиги и роутер
-- [ ] Вложенный роутер: `resource :session do scope module: ... end`,
-  `on: :collection`, `direct :fresh_account_logo`.
-- [ ] `configure do ... end` для config/environments/*.cr.
-- [ ] ActiveJob + GlobalID-сериализация аргументов (`def perform(room, message)`
-  с записями вместо `JSON::Any` + ручной разбор, 6 джобов) — active_job_cr.
+- [~] Вложенный роутер: `scope module:` есть; `on: :collection`,
+  `direct :fresh_account_logo` — нет.
+- [x] `configure do ... end` для config/environments/*.cr — railties_cr
+  v0.1.16 (`configure do |config|`), оба окружения переведены (2026-10-25).
+- [x] ActiveJob + GlobalID-сериализация аргументов — `serialized`-макрос,
+  `_aj_globalid`, джобы принимают записи (компромиссы — notes).
 
 ---
 
 ## Фаза 3. Архитектурное выравнивание (после фаз 1–2)
 
-- [ ] Разобрать мега-хелперы (`ChatLayout`, `messages_page_html`,
-  `compile_partials`) обратно в ERB-партиалы оракула (~35 пропавших партиалов:
-  `_message`, `_boost`, `accounts/bots/_bot`, `rooms/layouts/*`,
-  `layouts/application` и др.).
-- [ ] Убрать двойное именование `Campfire::ResponseCache` /
-  `ResponseCache`-алиасы.
+- [~] Разобрать мега-хелперы (`ChatLayout`, `messages_page_html`,
+  `compile_partials`) обратно в ERB-партиалы оракула — начато (layouts/
+  _lightbox.html.erb, инкремент 1; clipboard/qr_code-хелперы); маппинг
+  «oracle-путь → генератор» в комментариях chat_layout.cr.
+- [x] Убрать двойное именование `Campfire::ResponseCache` /
+  `ResponseCache`-алиасы (осталось только полное имя).
 - [ ] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом
-  write-экшене на around_action-механику оракула.
+  write-экшене на around_action-механику оракула (PRAGMA data_version не видит
+  собственные коммиты — notes/known-gaps.md).
 - [ ] WriteQueue: сырой SQL (`INSERT INTO webhooks`, `UPDATE ... SET body`)
   перевести на AR-методы после 2.1.
 

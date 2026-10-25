@@ -1,6 +1,6 @@
 class FirstRunsController < ApplicationController
 
-  skip_before_action :require_authentication
+  allow_unauthenticated_access
   before_action :prevent_repeats
 
   def show

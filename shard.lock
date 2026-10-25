@@ -3,11 +3,11 @@ version: 2.0
 shards:
   action_cable_cr:
     git: https://github.com/orelsokolov/action_cable.cr.git
-    version: 0.1.4
+    version: 0.1.5
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.14
+    version: 0.2.15
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
@@ -19,7 +19,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.16
+    version: 0.1.18
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git
@@ -27,7 +27,7 @@ shards:
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
-    version: 0.1.10
+    version: 0.1.11
 
   attr_reader_cr:
     git: https://github.com/orelsokolov/attr_reader.cr.git
@@ -59,7 +59,7 @@ shards:
 
   jbuilder_cr:
     git: https://github.com/orelsokolov/jbuilder.cr.git
-    version: 0.1.0
+    version: 0.1.1
 
   marcel_cr: # Overridden
     git: https://github.com/orelsokolov/marcel.cr.git
@@ -75,7 +75,7 @@ shards:
 
   railties_cr:
     git: https://github.com/orelsokolov/railties.cr.git
-    version: 0.1.15
+    version: 0.1.16
 
   redis:
     git: https://github.com/jgaskins/redis.git

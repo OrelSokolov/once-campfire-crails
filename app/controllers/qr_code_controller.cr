@@ -1,7 +1,7 @@
 # GET /qr_code/:id — QR code of a base64url value (<=4096 UTF-8 chars), served as PNG
 # via rqrcode_cr.
 class QrCodeController < ApplicationController
-  skip_before_action :require_authentication
+  allow_unauthenticated_access
 
   def show
     encoded = params["id"].to_s

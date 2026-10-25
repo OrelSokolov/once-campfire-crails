@@ -85,6 +85,11 @@
   из контроллеров в модели; involvement грантов выровнен с оракулом
   ('mentions', было 'everything'); revoke в update_room теперь `destroy`
   (срабатывает after_destroy_commit), insert-гранты — `on conflict do nothing`.
+  2026-10-25: `User` — `ar_enum :role, [:member, :administrator, :bot]`
+  (предикаты `administrator?`/`bot?` вместо `role == 1/2`); Symbol/String
+  в `Model.new(enum_col:)` — active_record.cr v0.1.17. `Push::Subscription` —
+  `validates :endpoint, presence: true` + `validate :validate_endpoint_url`
+  с `errors.add` (вместо ручного `valid_subscription?`).
 
 ## Коллбэки, не перенесённые в модели (2026-10-24)
 
@@ -173,3 +178,64 @@ reopen (glob сортирует `user.cr` раньше `user/avatar.cr`; include
   Opengraph DNS-pinning), script/admin, script/dev, bench/*) —
   soft_check в twinshot.yml; эквиваленты: config/application.cr,
   src/app.cr, tasks/*.rake, bench-workspace/.
+
+## STYLE_1to1 — инкремент 2026-10-25 (фаза 2, хвост)
+
+Закрытые пункты плана (все — патчи шардов по регламенту: lib → проверка →
+myshards → bump → push → пин в shard.yml → shards update → сборка):
+
+- **`SecureRandom.alphanumeric`** — active_support.cr **0.1.11**
+  (`src/secure_random.cr`); joinable: `SecureRandom.alphanumeric(12).scan(/.{4}/).join("-")`
+  1:1 с оракулом.
+- **`CRails.application.configure do |config| ... end`** — railties.cr
+  **0.1.16**; config/environments/{development,production}.cr переведены
+  на блок (блок принимает `config` явно — instance_eval в Crystal нет).
+- **`allow_unauthenticated_access(**options)` / `allow_bot_access`** —
+  DSL-макросы в concerns/authentication.cr 1:1 с class_methods оракула;
+  ~10 контроллеров переведены с `skip_before_action :require_authentication`;
+  добавлен `before_action :deny_bots` (+`deny_bots` через `bot_request?` —
+  в порте нет authenticated_by-трекинга, см. ниже). by_bots-контроллеры
+  сохраняют порт-специфичный `skip_before_action :require_authentication`
+  (бот-аутентификация через `require_bot`, не через require_authentication,
+  как в оракуле).
+  Грабли макросов: проброс `**options` из макроса в макрос через сырой
+  `**options` кладёт неразрешённый Splat-узел в позиционный splat адресата
+  (в-filter `__skip_` с пустым именем); правильный паттерн —
+  `{% if options.empty? %} ... {% else %} ..., {{ options.double_splat }}{% end %}`.
+- **`belongs_to ... default: -> { Current.user }`** — active_record.cr
+  **0.1.18** (after_initialize: FK nil + new_record? → присваивание
+  ассоциации из proc); применено в message/room/boost (creator/booster).
+- **`broadcast_to` kwargs-форма** — action_cable.cr **0.1.5**:
+  `broadcast_to room, action: :start, user: current_user.slice(:id, :name)`;
+  явный per-type JSON-эмиттер (PG::Numeric не имеет to_json(builder), а
+  union-диспетчеризация Object#to_json(io) уходит в builder). Каналы:
+  `current_user` в ApplicationCable::Channel (по current_user_id),
+  typing_notifications 1:1 с оракулом.
+- **`Base#slice(*attrs)`** — active_record.cr 0.1.18 (ActiveSupport
+  Object#slice для записей).
+- **jbuilder** — jbuilder.cr **0.1.1**: объектная форма `json.cache! user do`
+  (ключ из `cache_key` записи); партиалы users/_user, messages/_message,
+  messages/boosts/_boost переведены на `json.cache!` + `json.extract!`
+  + `room_message_url(...)` вместо `jb_origin + "/rooms/..."`.
+  Компромиссы: `json.extract! obj, ...` вместо синтаксически невозможного
+  `json.(obj, ...)`; `as_local:` вместо `as:` (ключевое слово Crystal);
+  `fresh_user_avatar_url` остаётся `jb_origin + ChatLayout.fresh_user_avatar_path`
+  (нужен `direct`-роутинг — см. 2.7). Url-хелперы в партиалах — через
+  делегат `JbuilderTemplate::UrlContext` (включать UrlHelpers в сам
+  JbuilderTemplate нельзя: его method_missing-макрос затирает DSL Jbuilder);
+  для этого `__crails_url_helper` стал публичным — action_pack.cr **0.2.15**.
+
+Отложено (переносится в фазу 3 / отдельные инкременты):
+
+- **2.4 collection-рендер/dom_id** — сайдбар/профили собираются
+  compile-time через ChatERB/ChatLayout (SidebarDirect-снапшоты); перевод
+  на `render partial: collection:` = разбор мега-хелперов (фаза 3,
+  инкременты уже идут). `dom_id(record, prefix)` в шарде есть, но STI-записи
+  порта — класс Room с type-колонкой, class.name даёт "room", так что
+  остаются порт-хелперы Room#dom_id / ChatERB#dom_id / route_key.
+- **2.1 adoption `.or/.pluck/.merge/find_each`** — все сайты оракула
+  (bannable, room#destroy_later, broadcasts, message_pusher) в порте
+  живут внутри WriteQueue-транзакций на сыром SQL; конверсия = фаза 3
+  «WriteQueue → AR-методы», отдельно не делается.
+- **Фаза 3** (ResponseCache around_action, WriteQueue → AR) — не начата
+  в этом инкременте.

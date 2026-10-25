@@ -3,7 +3,7 @@
 # involvement "mentions") + session + redirect to "/".
 class JoinsController < ApplicationController
 
-  skip_before_action :require_authentication
+  allow_unauthenticated_access
 
   # The invite link's account for show.html.erb (name, join_code in the action).
   attr_reader account : Account?
@@ -41,7 +41,7 @@ class JoinsController < ApplicationController
       name: name,
       email_address: email,
       password_digest: Crypto::Bcrypt::Password.create(password, cost: 10).to_s,
-      role: 0,
+      role: :member,
       created_at: now, updated_at: now)
     # Membership in every open room comes from the model's
     # after_create_commit :grant_membership_to_open_rooms (user.cr).
