@@ -7,14 +7,12 @@ class Users::BansController < ApplicationController
   def create
     user = @user.not_nil!
     user.ban
-    Campfire::ResponseCache.invalidate!
     redirect_to user_path(user.id.not_nil!)
   end
 
   def destroy
     user = @user.not_nil!
     user.unban
-    Campfire::ResponseCache.invalidate!
     redirect_to user_path(user.id.not_nil!)
   end
 

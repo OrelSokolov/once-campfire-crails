@@ -155,7 +155,6 @@ class RoomsController < ApplicationController
   def create_room(klass : Rooms::Open.class | Rooms::Closed.class,
                   member_ids : Array(Int64),
                   user : User) : Nil
-    Campfire::ResponseCache.invalidate!
     # Room.create_for: Rooms::Open grants every active user in after_save_commit
     # (rooms/open.cr), then the selected members are granted conflict-safe.
     room = klass.create_for(
@@ -172,7 +171,6 @@ class RoomsController < ApplicationController
   # (opens don't rebuild membership), broadcast prepend with the same id so Turbo
   # deduplicates and moves the link.
   def update_room : Nil
-    Campfire::ResponseCache.invalidate!
     room = @room.not_nil!
     if name = room_params["name"]?
       room.name = name.to_s

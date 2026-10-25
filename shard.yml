@@ -10,7 +10,7 @@ dependencies:
     version: ~> 0.1.16
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.18
+    version: ~> 0.1.19
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
     version: ~> 0.1.1

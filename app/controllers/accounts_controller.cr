@@ -38,7 +38,6 @@ class AccountsController < ApplicationController
   end
 
   def update
-    Campfire::ResponseCache.invalidate!
     account = set_account
     if name = account_params["name"]?
       account.name = name.to_s

@@ -6,7 +6,7 @@ require "uuid"
 class Message < ApplicationRecord
   belongs_to :room
   belongs_to :creator, class_name: "User", default: -> { Current.user }
-  has_many :boosts, foreign_key: "message_id"
+  has_many :boosts, foreign_key: "message_id", dependent: :destroy
 
   # The oracle's after_save :record_creation / after_create_commit push live in
   # MessageCreator instead: the index insert needs the pre-computed plain text
@@ -14,6 +14,10 @@ class Message < ApplicationRecord
   # enqueueing must stay outside the production transaction (see
   # message_creator.cr and notes/style-parity.md).
   before_create -> { self.client_message_id ||= UUID.random.to_s } # Bots don't care
+
+  # FTS5 row goes with the message (oracle: after_destroy_commit
+  # :remove_from_index in Message::Searchable).
+  after_destroy_commit :remove_from_index
 
   has_rich_text :body
   preloadable_attachment :attachment

@@ -49,7 +49,6 @@ class Users::PushSubscriptionsController < ApplicationController
   end
 
   def destroy
-    Campfire::ResponseCache.invalidate!
     Push::Subscription.where("user_id = ? AND id = ?",
       current_user.not_nil!.id.not_nil!, params["id"].to_s).delete_all
     redirect_to user_push_subscriptions_url

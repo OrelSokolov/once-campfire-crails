@@ -12,7 +12,6 @@ class Accounts::BotsController < ApplicationController
   end
 
   def create
-    Campfire::ResponseCache.invalidate!
     name = nested("name")
     if name.empty?
       response.status = :unprocessable_entity
@@ -63,7 +62,6 @@ class Accounts::BotsController < ApplicationController
   end
 
   def update
-    Campfire::ResponseCache.invalidate!
     bot = User.active_bots.find(params["id"].to_s)
     name = nested("name")
     bot.name = name unless name.empty?
@@ -74,7 +72,6 @@ class Accounts::BotsController < ApplicationController
   end
 
   def destroy
-    Campfire::ResponseCache.invalidate!
     # role-only scope: deactivated bots stay deletable (the port hard-deletes;
     # the oracle soft-deactivates — see notes/style-parity.md)
     bot = User.where("role = 2").find(params["id"].to_s)

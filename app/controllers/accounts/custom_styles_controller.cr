@@ -12,7 +12,6 @@ class Accounts::CustomStylesController < ApplicationController
   end
 
   def update
-    Campfire::ResponseCache.invalidate!
     account = Account.take.not_nil!
     if styles = account_params["custom_styles"]?
       account.custom_styles = styles.to_s

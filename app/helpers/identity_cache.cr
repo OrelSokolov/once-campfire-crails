@@ -1,8 +1,8 @@
 # Per-worker auth cache: session + user by signed-cookie token, saving
 # 2 SQL queries per authenticated request. Freshness guarantees match
 # PageCache: entries live for exactly one DB epoch (PRAGMA data_version
-# moves on commits from any other connection/process); own write actions
-# flush the cache via Campfire::ResponseCache.invalidate!.
+# moves on commits from any other connection/process — the observer
+# connection sees this app's own writes too, no manual flushing).
 # Negative results (token not found) are not cached.
 module Campfire
   class IdentityCache

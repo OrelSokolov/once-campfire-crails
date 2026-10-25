@@ -28,7 +28,6 @@ class Messages::BoostsController < ApplicationController
     content = boost_params["content"]?.to_s
     return head(:unprocessable_content) if content.empty?
 
-    Campfire::ResponseCache.invalidate!
     mid = message.id.not_nil!
     now = Time.utc
     boost = Campfire::WriteQueue.perform do
@@ -55,7 +54,6 @@ class Messages::BoostsController < ApplicationController
     message = @message.not_nil!
     boost = @boost.not_nil!
 
-    Campfire::ResponseCache.invalidate!
     mid = message.id.not_nil!
     Campfire::WriteQueue.perform do
       boost.destroy

@@ -3,6 +3,7 @@ class User < ApplicationRecord
   has_many :memberships, foreign_key: "user_id"
   has_many :rooms, through: :memberships
   has_many :sessions, foreign_key: "user_id"
+  has_many :bans, foreign_key: "user_id"
   has_many :messages, foreign_key: "creator_id"
   has_many :searches, foreign_key: "user_id", class_name: "Search"
 

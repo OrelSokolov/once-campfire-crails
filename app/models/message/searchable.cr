@@ -17,10 +17,16 @@ class Message
       conn.exec("DELETE FROM message_search_index WHERE rowid = ?", message_id)
     end
 
+    # after_destroy_commit :remove_from_index — the instance form.
+    def remove_from_index : Nil
+      Searchable.remove_from_index(ActiveRecord::Base.connection, id.not_nil!)
+    end
+
     # Quotes each word, so that FTS5 searches for AND, OR, NOT and NEAR rather than
     # parsing them as operators, which fails on a query like "AND" or "salt AND".
     def self.match_terms(query : String) : String
       query.split.map { |word| %("#{word.gsub('"', %q(""))}") }.join(" ")
     end
   end
+  include Searchable
 end

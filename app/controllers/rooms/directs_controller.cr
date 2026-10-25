@@ -30,7 +30,6 @@ class Rooms::DirectsController < ApplicationController
   end
 
   def create
-    Campfire::ResponseCache.invalidate!
     user = current_user.not_nil!
     ids = selected_user_ids.unshift(user.id.not_nil!).uniq!
     ids.reject! { |id| User.where("id = ? AND status = 0", id).take.nil? }

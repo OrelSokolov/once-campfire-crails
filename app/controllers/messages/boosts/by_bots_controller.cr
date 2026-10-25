@@ -23,7 +23,6 @@ class Messages::Boosts::ByBotsController < ApplicationController
       return head(:unprocessable_content)
     end
 
-    Campfire::ResponseCache.invalidate!
     now = Time.utc
     @boost = Campfire::WriteQueue.perform do
       record = Boost.new(message_id: mid, booster_id: bot.id.not_nil!,
@@ -45,7 +44,6 @@ class Messages::Boosts::ByBotsController < ApplicationController
     message = @message.not_nil!
     boost = @boost.not_nil!
 
-    Campfire::ResponseCache.invalidate!
     Campfire::WriteQueue.perform do
       boost.destroy
     end

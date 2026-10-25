@@ -239,3 +239,57 @@ myshards → bump → push → пин в shard.yml → shards update → сбо�
   «WriteQueue → AR-методы», отдельно не делается.
 - **Фаза 3** (ResponseCache around_action, WriteQueue → AR) — не начата
   в этом инкременте.
+
+## STYLE_1to1 — фаза 3: WriteQueue → AR + ResponseCache observer, 2026-10-25
+
+**ResponseCache**: ручные `Campfire::ResponseCache.invalidate!` (32 вызова в
+контроллерах/моделях/джобах/каналах) удалены. Инвалидация теперь автоматическая,
+как в oracle response_cache.rb: epoch (`PRAGMA data_version`) читается с
+выделенного read-only observer-коннекта (`DB::Database#checkout` навсегда +
+fiber-семафор `Channel(Bool)` поверх — leased-коннект не файбер-безопасен).
+Observer никогда не пишет, поэтому data_version двигается на КАЖДЫЙ коммит
+приложения, включая writer-fiber этого же процесса (пул видел только чужие).
+Все три кэша (Response/Identity/Fragment) остались epoch-keyed — ничего
+больше не нужно. Метод `invalidate!` оставлен как ручной таран.
+
+**WriteQueue → AR** (структура WriteQueue сохранена — это сериализация
+writer-fiber'а, а не SQL; AR-вызовы внутри транзакций идут через пиннед
+`Base.__session`):
+
+- **bannable** 1:1 с оракулом: `sessions.pluck(:ip_address).compact_blank.uniq`
+  → `bans.create!`, `sessions.delete_all`, `banned!`/`active!` (enum-банги),
+  `bans.delete_all`; у User появился `has_many :bans`. Порт-отклонение:
+  close_remote_connections/RemoveBannedContentJob — после коммита (оракул
+  в транзакции, но у него job-enqueue сам after-commit).
+- **room#destroy_later**: `becomes(Rooms::Closed).save!` (switch класса ДО
+  save — иначе after_save_commit Rooms::Open наградит всех активных юзеров
+  мембершипами на пути к удалению), `memberships.pluck(:user_id)` →
+  `delete_all`. STI-тип пишется коротким спеллингом ('Closed') как раньше.
+- **room#unread_memberships**: `memberships.visible.disconnected.
+  where.not(user_id:).update_all(...)` + `unless direct? → where(unread_at:
+  nil)` — семантика оракула (уже-unread не переписываются), прежний
+  полный-rewrite убран.
+- **Room#reset_remote_connections_of / destroy_one_message_at_a_time**
+  (oracle API): `User.where(id:).find_each(&.reset_remote_connections)`,
+  `messages.find_each(&.destroy)` + `destroy`; Room::DestroyJob — тело
+  оракула (raw teardown удалён, broadcast per-message удалён — стримы
+  участников уже закрыты reset'ом).
+- **Message**: `has_many :boosts, dependent: :destroy`; `after_destroy_commit
+  :remove_from_index` (include Message::Searchable, instance-метод);
+  rich_text-строка умирает с записью — **active_record_cr v0.1.19** добавил
+  `has_rich_text` after_destroy cleanup + CollectionProxy#pluck cast.
+  messages/by_bots destroy — чистый `message.destroy`.
+- **message_creator**: rich_text INSERT → `record.body=` (upsert через
+  after_save has_rich_text, через __session в транзакции). Осталось сырым:
+  `Message::Attachment.store` (ActiveStorage-внутренности) и FTS-инсерт
+  (plain text вычисляется из запроса — оракул делает это в record_creation,
+  у порта сознательно в MessageCreator, см. выше по notes).
+- **messages/by_bots update**: `body=` + `save` (bump updated_at) вместо
+  raw UPDATE rich_text + touch; FTS update_in_index остался.
+- **RemoveBannedContentJob**: `user.messages.order("id").each { destroy +
+  broadcast_remove }` (оракул: message.destroy + message.broadcast_remove).
+- **Ban.banned?**: `where(...).exists?` вместо raw query_one.
+
+`.or`/`.merge` не применены: сайты оракула (broadcasts/message_pusher) в порту
+идут другими путями (unread — update_all, push — PushMessageJob), конверсии
+требуют реструктуризации, отложено.

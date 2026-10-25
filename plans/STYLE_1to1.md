@@ -71,10 +71,11 @@ Crystal, (c) стилистическая проблема порта. План 
   применено точечно (room.messages); extension-блоки (`has_many do`) —
   компромисс Membership.grant_to (notes/style-parity.md).
 - [~] Query API: `where.not`/`update_all` — есть и применяются; `.merge`, `.or`,
-  `pluck`, `find_each` — есть в шарде; adoption в app отложен: все сайты
-  оракула (bannable, room#destroy_later, broadcasts, message_pusher) в порте
-  внутри WriteQueue-транзакций на сыром SQL — конверсия совпадает с фазой 3
-  «WriteQueue → AR» (2026-10-25); `joins(:assoc)` —
+  `pluck`, `find_each` — есть в шарде и применены (2026-10-25: pluck —
+  bannable/room#destroy_later, find_each — Room#reset_remote_connections_of/
+  destroy_one_message_at_a_time, where.not/update_all — unread_memberships);
+  `.or`/`.merge` остаются неприменёнными (сайты оракула — broadcasts/
+  message_pusher на иных путях порта); `joins(:assoc)` —
   только has_many-конвенция (membership-скоупы на сырых JOIN);
   `insert_all`/`excluding` — не применены.
 - [~] `signed_id(purpose:)` / `find_signed!` — вручную через MessageVerifier
@@ -173,11 +174,25 @@ Crystal, (c) стилистическая проблема порта. План 
   «oracle-путь → генератор» в комментариях chat_layout.cr.
 - [x] Убрать двойное именование `Campfire::ResponseCache` /
   `ResponseCache`-алиасы (осталось только полное имя).
-- [ ] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом
-  write-экшене на around_action-механику оракула (PRAGMA data_version не видит
-  собственные коммиты — notes/known-gaps.md).
-- [ ] WriteQueue: сырой SQL (`INSERT INTO webhooks`, `UPDATE ... SET body`)
-  перевести на AR-методы после 2.1.
+- [x] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом
+  write-экшене на around_action-механику оракула — решено observer-коннектом
+  (2026-10-25): epoch читается с выделенного leased-коннекта
+  (`DB#checkout` + fiber-семафор), который никогда не пишет, поэтому видит
+  собственные коммиты приложения (механика oracle response_cache.rb);
+  все 32 ручных invalidate! удалены, все три кэша (Response/Identity/
+  Fragment) остаются epoch-keyed и инвалидируются автоматически.
+- [x] WriteQueue: сырой SQL (`INSERT INTO webhooks`, `UPDATE ... SET body`)
+  перевести на AR-методы после 2.1 — конверсия 2026-10-25 (см.
+  notes/style-parity.md): bannable (pluck/compact_blank/bans.create!/
+  delete_all/banned!/active!), room#destroy_later (becomes(Rooms::Closed)+
+  save!+pluck+delete_all), unread_memberships (visible.disconnected.
+  where.not.update_all), message_creator (rich_text через has_rich_text
+  body=-сеттера), messages/by_bots update/destroy (body=+save / чистый
+  destroy), Room::DestroyJob и RemoveBannedContentJob (find_each(&:destroy));
+  поддержка шарда — active_record_cr v0.1.19 (has_rich_text after_destroy,
+  CollectionProxy#pluck cast). Остались: FTS-инсерт/апдейт (plain text из
+  запроса), Message::Attachment.store, jobs-DB (JobQueue) — вне AR по
+  архитектуре (notes).
 
 ---
 

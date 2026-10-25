@@ -35,12 +35,25 @@ module Campfire
     @@entries = {} of String => Page
     @@bytes = 0
     @@epoch = ""
+    @@observer : DB::Connection?
+    # Fiber-safe semaphore for the leased (not fiber-safe) connection:
+    # acquire = receive, release = send; created pre-primed, lazily.
+    @@observer_lock : Channel(Bool)?
+
+    private def self.observer_lock : Channel(Bool)
+      @@observer_lock ||= begin
+        ch = Channel(Bool).new(1)
+        ch.send(true)
+        ch
+      end
+    end
 
     # Pure in-memory mutations with no yield points, atomic across fiber switches.
-    # data_version only moves on commits from other connections — this app's own writes
-    # aren't visible through the pool — so every write action resets the epoch explicitly,
-    # along with IdentityCache and FragmentCache (session/user/room/profile changes
-    # affect those caches too).
+    # The epoch comes from a dedicated read-only observer connection (the
+    # oracle's ResponseCache): PRAGMA data_version only moves on commits from
+    # OTHER connections, so the observer — which never writes — sees every
+    # commit of this app, including the writer fiber's own. No manual
+    # invalidate! in write actions: the epoch changes on the next read.
     def self.invalidate! : Nil
       @@epoch = ""
       Campfire::IdentityCache.reset!
@@ -48,11 +61,22 @@ module Campfire
     end
 
     def self.epoch : String
-      conn = ActiveRecord::Base.connection
-      conn.query_one("PRAGMA data_version") { |rs| rs.read(Int64) }.to_s
-    rescue
-      # On any failure treat the epoch as changed — the cache is dropped.
-      Random::Secure.hex(8)
+      # The leased connection is not fiber-safe: serialize PRAGMA reads
+      # (a quick, non-blocking query) instead of leasing per call.
+      lock = observer_lock
+      lock.receive
+      begin
+        observer.query_one("PRAGMA data_version") { |rs| rs.read(Int64) }.to_s
+      rescue
+        # On any failure treat the epoch as changed — the cache is dropped.
+        Random::Secure.hex(8)
+      ensure
+        lock.send(true)
+      end
+    end
+
+    private def self.observer : DB::Connection
+      @@observer ||= ActiveRecord::Base.connection.checkout
     end
 
     # Key: everything the page bytes depend on besides the DB (covered by the epoch):

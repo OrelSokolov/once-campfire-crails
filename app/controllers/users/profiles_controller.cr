@@ -29,7 +29,6 @@ class Users::ProfilesController < ApplicationController
   end
 
   def update
-    Campfire::ResponseCache.invalidate!
     user = current_user.not_nil!
     user.name = nested("name") unless nested?("name").nil?
     user.email_address = nested("email_address") unless nested?("email_address").nil?

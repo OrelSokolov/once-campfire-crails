@@ -69,21 +69,16 @@ class MessagesController < ApplicationController
     message = @message.not_nil!
     room = @room.not_nil!
 
-    Campfire::ResponseCache.invalidate!
 
     body_html = message_body_param
     plain = plain_text(body_html)
-    now = Time.utc
     # Separate local so the queue closure does not capture message and lose nil-narrowing.
     target = message
     Campfire::WriteQueue.perform do
-      conn = ActiveRecord::Base.connection
-      conn.exec(
-        "UPDATE action_text_rich_texts SET body = ?, updated_at = ? WHERE record_type = 'Message' AND record_id = ?",
-        body_html.empty? ? plain : body_html, now, target.not_nil!.id.not_nil!)
-      Message::Searchable.update_in_index(conn, target.not_nil!.id.not_nil!, plain)
-      # Touch the message, like AR's update! bumping updated_at.
-      target.not_nil!.touch
+      # update!(body: ...) — has_rich_text persists the row on save.
+      target.not_nil!.body = body_html.empty? ? plain : body_html
+      target.not_nil!.save
+      Message::Searchable.update_in_index(ActiveRecord::Base.connection, target.not_nil!.id.not_nil!, plain)
     end
 
     message = Message.find?(message.id.not_nil!).not_nil!
@@ -99,16 +94,9 @@ class MessagesController < ApplicationController
     message = @message.not_nil!
     room = @room.not_nil!
 
-    Campfire::ResponseCache.invalidate!
-    mid = message.id.not_nil!
-    ActiveRecord::Base.connection.exec(
-      "DELETE FROM action_text_rich_texts WHERE record_type='Message' AND record_id=?", mid)
-    Message::Searchable.remove_from_index(ActiveRecord::Base.connection, mid)
     message.destroy
 
-    Campfire::ResponseCache.invalidate!
-
-    broadcast_remove_to([room, "messages"], target: "message_#{mid}")
+    broadcast_remove_to([room, "messages"], target: "message_#{message.id.not_nil!}")
     render(html: __render_view("destroy", format: "turbo_stream").to_s,
       content_type: "text/vnd.turbo-stream.html")
   end

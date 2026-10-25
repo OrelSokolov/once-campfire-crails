@@ -28,7 +28,6 @@ class Accounts::LogosController < ApplicationController
   end
 
   def destroy
-    Campfire::ResponseCache.invalidate!
     user = current_user.not_nil!
     return render(plain: "forbidden", status: 403) unless user.administrator?
     if (attachment = Account.take.try(&.logo_attachment))

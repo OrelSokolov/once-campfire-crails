@@ -63,22 +63,33 @@ class Room < ApplicationRecord
   end
 
   # Rewriting every member on every message is most of what posting to a large
-  # room writes, so members who are unread already stay as they are — the port
-  # rewrites them anyway (no unread_at IS NULL guard): membership updated_at
-  # isn't part of the sidebar contract, so the simpler statement is kept.
+  # room writes, so members who are unread already stay as they are. Directs
+  # keep touching them all: a direct's sidebar row is cached by membership and
+  # shows the room's recency.
   def unread_memberships(message : Message) : Nil
-    now = Time.utc
-    ActiveRecord::Base.connection.exec(
-      "UPDATE memberships SET unread_at = ?, updated_at = ? " \
-      "WHERE room_id = ? AND user_id <> ? AND involvement <> 'invisible' " \
-      "AND (connected_at IS NULL OR connected_at < ?)",
-      now, now, id.not_nil!, message.creator_id.not_nil!, now - 60.seconds)
+    recipients = memberships.visible.disconnected.where.not(user_id: message.creator_id.not_nil!)
+    recipients = recipients.where(unread_at: nil) unless direct?
+    recipients.update_all({"unread_at" => message.created_at, "updated_at" => Time.utc})
   end
 
   # Room::PushMessageJob enqueue tuple — the JobQueue DB write must stay
   # outside the production transaction (see MessageCreator#create!).
   def push_later(message : Message) : Tuple(String, String)
     Room::PushMessageJob.__queue_pair(self, message)
+  end
+
+  # Deleting the memberships skips the reset that revoking one does, so the former members get it here, all at once,
+  # before the messages go: their connections stop receiving the room's streams. It's done in the job, not the
+  # request, because it costs a Redis round trip per member.
+  def reset_remote_connections_of(user_ids : Array(Int64)) : Nil
+    User.where(id: user_ids).find_each(&.reset_remote_connections)
+  end
+
+  # Each message is destroyed in its own transaction, so other writes get through in between. Any message posted
+  # meanwhile goes with the room.
+  def destroy_one_message_at_a_time : Nil
+    messages.find_each(&.destroy)
+    destroy
   end
 
   def open? : Bool
@@ -97,21 +108,18 @@ class Room < ApplicationRecord
   # the room's own transaction held the database's write lock, and stopped every other write, until the last one.
   # An open room is closed first, so that no one who joins the account before the job runs is let in.
   def destroy_later : Nil
-    Campfire::ResponseCache.invalidate!
-    rid = id.not_nil!
-    now = Time.utc
+    # open? ? becomes!(Rooms::Closed) : self — the becomes() class switch
+    # must happen BEFORE save!: Rooms::Open's after_save_commit would grant
+    # membership to every active user on the way to deletion.
+    room = open? ? becomes(Rooms::Closed) : self
     former_member_ids = Campfire::WriteQueue.perform do
       ActiveRecord::Base.transaction do
-        conn = ActiveRecord::Base.__session
-        conn.exec("UPDATE rooms SET type = 'Closed', updated_at = ? WHERE id = ?", now, rid)
-        ids = conn.query_all(
-          "SELECT user_id FROM memberships WHERE room_id = ?", rid) do |rs|
-          rs.read(Int64)
-        end
-        conn.exec("DELETE FROM memberships WHERE room_id = ?", rid)
+        room.save!
+        ids = room.memberships.pluck(:user_id).map(&.as(Int64))
+        room.memberships.delete_all
         ids
       end
     end || [] of Int64
-    Room::DestroyJob.perform_later(self, former_member_ids)
+    Room::DestroyJob.perform_later(room, former_member_ids)
   end
 end

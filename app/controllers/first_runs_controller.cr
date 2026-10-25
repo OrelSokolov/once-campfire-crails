@@ -7,7 +7,6 @@ class FirstRunsController < ApplicationController
   end
 
   def create
-    Campfire::ResponseCache.invalidate!
     user = FirstRun.create!(user_params)
     start_new_session_for user
 

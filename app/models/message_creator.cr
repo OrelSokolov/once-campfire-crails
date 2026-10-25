@@ -27,17 +27,17 @@ module MessageCreator
     message = Campfire::WriteQueue.perform do
       created = retry_on_lock do
         ActiveRecord::Base.transaction do
+          # has_rich_text :body — the body= setter queues the rich_text row;
+          # save! persists it through the after_save upsert (pinned conn).
           record = Message.new(
             room_id: room.id.not_nil!,
             creator_id: creator.id.not_nil!,
             client_message_id: client_message_id)
+          record.body = body_html.empty? ? plain : body_html
           record.save! # belongs_to :room, touch: true touches rooms.updated_at
           message_id = record.id.not_nil!
 
           conn = ActiveRecord::Base.__session # pinned transaction connection
-          conn.exec(
-            "INSERT INTO action_text_rich_texts (record_type, record_id, name, body, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
-            "Message", message_id, "body", body_html.empty? ? plain : body_html, now, now)
           Message::Attachment.store(conn, record, attachment, now) if attachment
           # indexMessage: a file without text is indexed by its filename.
           Message::Searchable.insert_in_index(conn, message_id,
@@ -58,7 +58,6 @@ module MessageCreator
     record = message[:record]
     rendered = attachment ? ChatLayout.attachments_for([record.id.not_nil!])[record.id.not_nil!]? : nil
     Message::Broadcasts.broadcast_create(room, record, creator, rendered, base_url)
-    Campfire::ResponseCache.invalidate! # write: invalidate the whole-page cache
     record
   end
 

@@ -69,7 +69,6 @@ class SearchesController < ApplicationController
       now = Time.utc
       Search.new(user_id: user.id.not_nil!, query: query,
         created_at: now, updated_at: now).save!
-      Campfire::ResponseCache.invalidate!
     end
     redirect_to searches_url(q: query)
   end
@@ -78,7 +77,6 @@ class SearchesController < ApplicationController
     user = current_user.not_nil!
     ActiveRecord::Base.connection.exec(
       "DELETE FROM searches WHERE user_id = ?", user.id.not_nil!)
-    Campfire::ResponseCache.invalidate!
     redirect_to searches_url
   end
 

@@ -9,7 +9,6 @@ class PresenceChannel < RoomChannel
 
     # PRAGMA data_version of the pool does not see writes from this connection, so
     # invalidate the response cache explicitly (see notes/known-gaps.md).
-    Campfire::ResponseCache.invalidate!
 
     broadcast_read_room
   end
