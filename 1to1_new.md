@@ -65,9 +65,17 @@
       (Rails-дефолт) пока невозможен — 8 конфликтов имён между
       crails-обёртками (page_open/page_close/copy_button/…), у оракула их
       нет; разблокируется после tag-билдера и переноса HTML из ChatLayout.
-- [ ] **action_view_cr**: tag-билдер (`tag.figure/span/title`, `tag(:meta, ...)`,
-      `link_to ... do` с порядком атрибутов оракула, `image_tag` с вложенными
-      `aria: {hidden:}`) → путь к переносу HTML из ChatLayout в ERB-партиалы.
+- [x] **action_view_cr 0.1.16**: tag-билдер rails-main — dot-имена
+      dasherize (`tag.lexxy_prompt` → `<lexyy-prompt>`), опциональный
+      позиционный контент (`tag.span("текст", class:)`,
+      `tag.title/…`) экранируется (SafeString проходит) и склеивается с
+      блоком; void-теги (VOID_ELEMENTS) без закрывающего; `tag(:meta, name:,
+      content:)` — коллизия kwargs с именами параметров решена
+      переименованием; 8 новых оракул-кейсов + concat-спека (rails-main
+      поведение, генератор пинит 8.1.4). Ключевая находка: порядок атрибутов
+      raw-ответа — вставка (гем НЕ сортирует), браузерный DOM нормализует в
+      алфавит на обеих сторонах (Turbo morph) → порядок не является
+      паритетным ограничением; путь к переносу HTML из ChatLayout открыт.
 - [x] **active_job_cr** (уровень приложения, без шарда): `ApplicationJob` с
       макросом `serialized(**args)` → `perform_later` / отложенный
       `__queue_pair` / dispatch `__run`; аргументы-записи сериализуются как

@@ -197,8 +197,10 @@
 ## Хелперы / вьюхи
 
 - `app/helpers/users_helper.cr` / `accounts_helper.cr`: nav-ссылки —
-  литеральные `<a>`: `link_to` ставит href последним, у оракула href первый
-  (byte-parity).
+  литеральные `<a>`: сохранены с эпохи до выяснения (2026-10-25: raw-ответ
+  оракула хранит порядок вставки атрибутов, браузерный DOM нормализует в
+  алфавит на обеих сторонах — порядок НЕ паритетное ограничение);
+  перевод на `link_to do` — вместе с переносом HTML из ChatLayout.
 - `app/helpers/boosts_helpers.cr`: шаблон boosts/index без завершающего `\n`
   (byte-parity: `boosts_dom` сам завершает вывод `\n`).
 - `app/helpers/users/avatars_helper.cr`: цвет аватара `Digest::CRC32` вместо
@@ -231,6 +233,11 @@
 - `app/controllers/accounts/custom_styles_controller.cr`: `update` без
   `notice: "✓"` в redirect_to (flash не портирован); тест гонку Turbo-редиректа
   закрывает маркером data-parity-sent.
+- `app/helpers/**`: tag-билдер (action_view 0.1.16) — семантика rails-main:
+  контент+блок склеиваются (8.1.4-гем терял позиционный контент при блоке,
+  отмечено в spec как not-oracle-drivable); атрибуты с дефисами
+  (`"data-1p-ignore"`) невыразимы как Crystal kwargs — Hash-аргумент или
+  литеральный HTML; порядок атрибутов — вставка (браузер нормализует).
 - `app/helpers/**`: helper wiring через action_pack 0.2.14 (маркер
   `include ActionController::Helper` + конвенция/`helper :sym`) вместо
   Rails include-all: 8 конфликтов имён между crails-обёртками
