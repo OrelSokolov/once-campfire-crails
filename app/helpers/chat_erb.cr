@@ -44,9 +44,17 @@ class ChatERB
     ChatLayout.asset(name)
   end
 
+  # Propshaft-style manifest resolution (same override as ApplicationHelper).
+  include ActionView::Helpers::TagHelper
+
+  def image_tag(source : String, **opts) : ERB::SafeString
+    ::ActionView::Helpers::AssetTagHelper.image_tag(
+      ChatLayout.asset(source), __av_opts_to_h(opts))
+  end
+
   # Layout lightbox dialog (layouts/_lightbox).
   def lightbox : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.lightbox_dialog)
+    render(partial: "layouts/lightbox")
   end
 
   # ————— rooms/involvements (bell + pwa dialogs + show) —————
@@ -219,6 +227,7 @@ class ChatERB
   # the shared @__erb_buf, so a nested call would clobber the parent's
   # buffer; partials swap it out and restore it.
   compile_partials({
+    "layouts/lightbox"     => {path: "app/views/layouts/_lightbox.html.erb", locals: {} of String => Nil},
     "users/sidebars/rooms/direct" => {path: "app/views/users/sidebars/rooms/_direct.html.erb", locals: {"membership" => Membership}},
     "browser_settings"     => {path: "app/views/pwa/_browser_settings.html.erb", locals: {} of String => Nil},
     "system_settings"      => {path: "app/views/pwa/_system_settings.html.erb", locals: {} of String => Nil},

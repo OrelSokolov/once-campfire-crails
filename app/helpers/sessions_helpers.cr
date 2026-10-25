@@ -29,7 +29,7 @@ module SessionsHelpers
   end
 
   def lightbox_dialog : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.lightbox_dialog)
+    render(partial: "layouts/lightbox")
   end
 
   def version : String

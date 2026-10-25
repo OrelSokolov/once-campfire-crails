@@ -91,6 +91,25 @@
       `room.destroy_one_message_at_a_time` / `reset_remote_connections_of` —
       сейчас логика остаётся в джобах, оракул держит её в моделях.
 
+## Фаза 3b — перенос HTML из ChatLayout в ERB-партиалы (НАЧАТА 2026-10-25)
+
+Цель: паритет структуры с оракулом (81 ERB против наших 48), устранение 8
+конфликтов имён хелперов-обёрток → разблокировка `helper :all` и 1:1-сигнатур.
+
+- [x] Инкремент 1 — `layouts/_lightbox.html.erb` 1:1 с оракулом:
+      `image_tag "…", aria: {"hidden" => "true"}` в шаблоне; переопределение
+      `image_tag` (ApplicationHelper + ChatERB) резолвит ассеты через
+      манифест преbuildа (`compute_asset_path`-семантика); партиал
+      зарегистрирован compile_partials в ApplicationController и ChatERB;
+      `ChatLayout.lightbox_dialog` удалён (call-sites: sessions/new,
+      _body_close). verified: raw-байт-сверка + capybara 72/0 + compare
+      2/129 baseline.
+- [ ] Инкременты дальше (по нарастающей сложности): nav_back/copy_button/
+      web_share_button/qr_button → хелперы оракула (clipboard_helper и
+      пр.), chat_sidebar_frame → turbo_frame_tag, head/body_open →
+      layouts/application.html.erb, page_open/page_close → layout-обёртки,
+      затем messages/boosts/attachments (message_dom — ядро ChatLayout).
+
 ## Фаза 4 — средние патчи (НЕ НАЧАТА)
 
 - [ ] `allow_browser versions:` (action_pack_cr) — убрать ручной UA-парсинг

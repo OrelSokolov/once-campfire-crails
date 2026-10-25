@@ -367,28 +367,6 @@ module ChatLayout
     end
   end
 
-  # Layout lightbox dialog (all pages, after </aside>): image viewer
-  # dialog with close/download/share buttons.
-  def self.lightbox_dialog : String
-    String.build do |io|
-      io << %(<dialog aria-label="Image Viewer (Press escape to close)" class="lightbox" )
-      io << %(data-action="close-&gt;lightbox#reset" data-lightbox-target="dialog">\n)
-      io << %(<img class="lightbox__image" data-lightbox-target="zoomedImage" src="">\n)
-      io << %(<form class="lightbox__btn" method="dialog">\n<button class="btn">\n)
-      io << icon("remove.svg", size: nil) << "\n"
-      io << %(<span class="for-screen-reader">Close image viewer</span>\n</button>\n</form>\n)
-      io << %(<a class="lightbox__btn--download btn hide-in-ios-pwa" data-lightbox-target="download" href="">\n)
-      io << icon("download.svg", size: nil) << "\n"
-      io << %(<span class="for-screen-reader">Download file</span>\n</a>\n)
-      io << %(<button class="lightbox__btn--share btn"\n)
-      io << %(data-controller="web-share"\ndata-action="web-share#share"\n)
-      io << %(data-web-share-files-value=""\n)
-      io << %(data-lightbox-target="share">\n)
-      io << icon("share.svg", size: nil) << "\n"
-      io << %(<span class="for-screen-reader">Share file</span>\n</button>\n</dialog>\n)
-    end
-  end
-
   # footer + sidebar (turbo-frame user_sidebar) + app-logo —
   # layouts/_body_close.html.erb. users/sidebar_helper.rb#
   # sidebar_turbo_frame_tag: turbo_frame_tag :user_sidebar with

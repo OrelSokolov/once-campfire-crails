@@ -1,0 +1,21 @@
+<dialog aria-label="Image Viewer (Press escape to close)" class="lightbox" data-action="close->lightbox#reset" data-lightbox-target="dialog">
+<img class="lightbox__image" data-lightbox-target="zoomedImage" src="">
+<form class="lightbox__btn" method="dialog">
+<button class="btn">
+<%= image_tag "remove.svg", aria: {"hidden" => "true"} %>
+<span class="for-screen-reader">Close image viewer</span>
+</button>
+</form>
+<a class="lightbox__btn--download btn hide-in-ios-pwa" data-lightbox-target="download" href="">
+<%= image_tag "download.svg", aria: {"hidden" => "true"} %>
+<span class="for-screen-reader">Download file</span>
+</a>
+<button class="lightbox__btn--share btn"
+data-controller="web-share"
+data-action="web-share#share"
+data-web-share-files-value=""
+data-lightbox-target="share">
+<%= image_tag "share.svg", aria: {"hidden" => "true"} %>
+<span class="for-screen-reader">Share file</span>
+</button>
+</dialog>

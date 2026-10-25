@@ -1,4 +1,10 @@
 abstract class ApplicationController < ActionController::Base
+  # layouts/_lightbox — the oracle layout partial (render "layouts/lightbox"),
+  # available to every controller via the SessionsHelpers/ChatERB wrappers.
+  compile_partials({
+    "layouts/lightbox" => {path: "app/views/layouts/_lightbox.html.erb",
+                           locals: {} of String => Nil},
+  })
 
   include Authentication
   include Authorization
