@@ -61,6 +61,14 @@ module ApplicationHelper
     ERB::SafeString.new(ChatLayout.page_close)
   end
 
+  # dom_id(room, prefix) — the oracle's RecordIdentifier resolves the STI
+  # class (Rooms::Open → rooms_open_5); the port materializes every row as
+  # the base Room class, so route through Room#dom_id (STI-type aware).
+  # Messages and other non-STI records keep the shard's RecordIdentifier.
+  def dom_id(room : Room, prefix : String | Symbol) : String
+    "#{prefix}_#{room.dom_id}"
+  end
+
   def lanyard_src : String
     ChatLayout.asset("lanyard.svg")
   end

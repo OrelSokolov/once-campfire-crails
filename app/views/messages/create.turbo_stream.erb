@@ -1,1 +1,1 @@
-<%= ERB::SafeString.new(append_message_stream(@room.not_nil!, @message_html.to_s)) %>
+<%= turbo_stream.append dom_id(@room.not_nil!, :messages), @message_html %>

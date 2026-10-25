@@ -293,3 +293,43 @@ writer-fiber'а, а не SQL; AR-вызовы внутри транзакций 
 `.or`/`.merge` не применены: сайты оракула (broadcasts/message_pusher) в порту
 идут другими путями (unread — update_all, push — PushMessageJob), конверсии
 требуют реструктуризации, отложено.
+
+## STYLE_1to1 — 2.6 turbo_stream + 2.4 button_to, 2026-10-25
+
+**turbo_stream-вьюхи на TagBuilder** (2.6 закрыт): create/destroy/
+refreshes/show .turbo_stream.erb рендерят через `turbo_stream.append/
+remove/replace` из turbo_cr (StreamsHelper включён в ApplicationController —
+оракул-механика turbo-rails: хелпер доступен всем вью). Ответы сверены
+байт-в-байт с предыдущей ручной сборкой (smoke tmp/ts-smoke: различия только
+id/таймстампы сообщений и порт в origin-URL). Особенности:
+
+- `dom_id(room, :messages)` — ApplicationHelper-оверлоад `dom_id(Room,
+  prefix)` → Room#dom_id (STI-тип): записи порта — класс Room, шардовый
+  RecordIdentifier дал бы `messages_room_5` вместо `messages_rooms_open_5`.
+  Не-STI записи (Message) идут через шардовый RecordIdentifier как в оракуле.
+- refresh-вьюха: `(turbo_stream.append ... if @new_messages.any?)` в скобках
+  (модификатор-if — выражение только в скобках, Crystal) + контент-форма
+  вместо блока с partial-collection (мега-хелперы — фаза 3); одинокий "\n"
+  при пустых new сохранён (erubi-семантика переноса после emit-тега).
+- messages/by_bots#create — тот же TagBuilder inline (порт-специфичный
+  turbo-stream ответ сохранён; оракул отдаёт head :created).
+
+**button_to edge/8.2** — **action_view_cr v0.1.17–0.1.18**: гейт
+`UrlHelper.button_to_edge_82` (8.1.4-дефолт не тронут, url_button_* орacle
+-кейсы зелёные). Приложение (rails 8.2.0.alpha) выставляет флаг в
+config/application.cr. 8.2-форма: `<form action class method>` + plain
+`<input name="_method" type="hidden" value>` (без autocomplete/слэша) +
+атрибуты submit-кнопки **отсортированы** (aria-checked → aria-labelledby →
+class → role → tabindex → type; вложенные data/aria рекурсивно) — сверька по
+артефактам оракула (involvement-кнопка профиля, ban-кнопки, boost-delete).
+
+Конвертация ручных форм на `button_to` (2.4 закрыт, кроме ChatLayout):
+users/show (×4 + helper button_to_direct_room_with), push_subscriptions (×2),
+searches/_recent_searches, users/sidebars placeholders, rooms/directs/edit,
+rooms/involvements/_show, profiles_helper#involvement_chip,
+rooms_helper#button_to_delete_room. Попутно исправлены латентные байтовые
+баги порядка атрибутов (push-формы, involvement-форма _show, boost-форма).
+Остались ручными (ChatLayout — статический билдер без вью-контекста,
+переносятся вместе с разбором мега-хелперов в фазе 3): join_code-форма
+(порядок уже 8.2-корректный) и boost_dom-форма (порядок исправлен на
+action-class-method).

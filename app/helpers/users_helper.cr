@@ -6,6 +6,14 @@ module UsersHelper
       nav_html: user_nav(viewer, subject)))
   end
 
+  # Oracle users_helper button_to_direct_room_with(user).
+  def button_to_direct_room_with(user : User) : ERB::SafeString
+    button_to "/rooms/directs?user_ids%5B%5D=#{user.id.not_nil!}",
+      class: "btn btn--primary full-width txt--large" do
+      icon("messages.svg")
+    end
+  end
+
   # users/_nav.html.erb: back link + "Edit my profile" for self.
   # Literal <a>: link_to from action_view_cr renders href last, oracle output has it first.
   def user_nav(viewer : User, subject : User) : String

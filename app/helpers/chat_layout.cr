@@ -1213,8 +1213,8 @@ module ChatLayout
       io << %(<span role="button" class="txt-small#{medium}" )
       io << %(data-action="click-&gt;boost-delete#reveal keydown.enter-&gt;boost-delete#reveal:prevent" )
       io << %(data-boost-delete-target="content">) << HTML.escape(b.content) << %(</span>\n)
-      io << %(<form class="button_to" action="/messages/#{mid}/boosts/#{b.id}" method="post">)
-      io << %(<input type="hidden" name="_method" value="delete">)
+      io << %(<form action="/messages/#{mid}/boosts/#{b.id}" class="button_to" method="post">)
+      io << %(<input name="_method" type="hidden" value="delete">)
       io << %(<button class="btn btn--negative flex-item-justify-end boost__delete" )
       io << %(data-action="boost-delete#perform" data-boost-delete-target="button" type="submit">\n)
       io << icon("minus.svg", 20) << "\n"

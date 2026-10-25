@@ -70,7 +70,9 @@ class Messages::ByBotsController < ApplicationController
       base_url: origin)
 
     message_html = ChatLayout.message_dom(message, room, bot, base_url: origin).chomp
-    render(html: append_message_stream(room, message_html),
+    # messages/create.turbo_stream.erb inline (the bot API answers with the
+    # same append stream; the trailing \n is the erb template text).
+    render(html: turbo_stream.append(dom_id(room, :messages), message_html).raw + "\n",
       content_type: "text/vnd.turbo-stream.html")
   end
 

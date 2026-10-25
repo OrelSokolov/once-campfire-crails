@@ -8,6 +8,6 @@
       <strong><%= member.name.to_s %></strong>
     </div>
     <% end %></section>
-  <form class="button_to" method="post" action="<%= room_url(@room.not_nil!.id.not_nil!) %>"><input type="hidden" name="_method" value="delete"><button class="btn btn--negative center" aria-label="Delete Ping" data-turbo-confirm="Are you sure you want to delete this ping and all messages in it? This can’t be undone." type="submit"><%= icon("trash.svg") %>Ping</button></form>
+  <%= button_to room_url(@room.not_nil!.id.not_nil!), method: "delete", class: "btn btn--negative center", aria: {label: "Delete Ping"}, data: {turbo_confirm: "Are you sure you want to delete this ping and all messages in it? This can’t be undone."} do %><%= icon("trash.svg") %>Ping<% end %>
 </div>
 <%= page_close %>

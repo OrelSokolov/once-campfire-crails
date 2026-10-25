@@ -1,1 +1,4 @@
-<%= ERB::SafeString.new(refresh_stream(@room.not_nil!, @new_messages, @updated_messages)) %>
+<%= (turbo_stream.append dom_id(@room.not_nil!, :messages), messages_html(@room.not_nil!, @new_messages) if @new_messages.any?) %>
+<% @updated_messages.each do |message| %>
+<%= turbo_stream.replace dom_id(message), messages_html(@room.not_nil!, [message]) %>
+<% end %>

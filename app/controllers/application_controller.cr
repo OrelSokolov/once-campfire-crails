@@ -22,6 +22,10 @@ abstract class ApplicationController < ActionController::Base
   # turbo-rails includes Turbo::Streams::Broadcasts into ActionController::Base, so
   # controllers call broadcast_*_to directly.
   include Turbo::Streams::Broadcasts
+  # Turbo::StreamsHelper (turbo_stream TagBuilder) is available in every
+  # view in the oracle (turbo-rails engine); the port renders *.turbo_stream.erb
+  # with the controller as context, so include it here.
+  include Turbo::StreamsHelper
 
   before_action :set_current_request
   before_action :set_version_headers

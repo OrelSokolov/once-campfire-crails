@@ -121,12 +121,15 @@ Crystal, (c) стилистическая проблема порта. План 
   `[]=` не поддержана; app пишет `cookies.signed.set(...)`.
 
 ### 2.4. action_view_cr — вьюхи (~20 файлов)
-- [~] `image_tag` — механика есть (пребилд-манифест), `icon()` остаётся
+- [x] `image_tag` — механика есть (пребилд-манифест), `icon()` остаётся
   для byte-parity (notes/style-parity.md).
 - [ ] `form_with model:` — отложено (byte-parity URL/скопов форм).
-- [~] `button_to` блоком/`method: :delete` — работает и применяется;
-  ~8 мест остаются ручными `<form class="button_to">`; nav — литеральные
-  `<a>` (перенос вместе с HTML из ChatLayout).
+- [x] `button_to` блоком/`method: :delete` — edge/8.2-форма в шарде
+  (action_view_cr v0.1.17+, гейт `UrlHelper.button_to_edge_82`, конфиг в
+  config/application.cr): action → class → method, plain _method-input,
+  отсортированные атрибуты кнопки. Все ручные `<form class="button_to">`
+  переведены (2026-10-25), кроме двух в ChatLayout (статический билдер —
+  переносятся в фазе 3; boost-форма переведена на 8.2-порядок атрибутов).
 - [~] `content_for :nav/:footer` — точечно; основной механизм
   `page_open`/`page_close`; `@page_title`/`@body_class` — нет.
 - [~] `render partial:, collection:, as: :user`; `dom_id(@room, :list)` —
@@ -147,8 +150,10 @@ Crystal, (c) стилистическая проблема порта. План 
   `Room#to_gid_param` вручную (STI-нормализация), `GlobalID.create` нет.
 
 ### 2.6. turbo_cr / jbuilder_cr (~10 файлов)
-- [~] `turbo_stream.append/remove/replace` — TagBuilder в шарде 1:1;
-  3 turbo_stream-вьюхи остаются на ручных тегах/хелперах.
+- [x] `turbo_stream.append/remove/replace` — TagBuilder в шарде 1:1;
+  все 3 turbo_stream-вьюхи на TagBuilder (2026-10-25, notes/style-parity.md):
+  StreamsHelper в ApplicationController, `dom_id(Room, prefix)`-оверлоад,
+  by_bots#create — inline TagBuilder.
 - [x] jbuilder: `json.cache!` — jbuilder_cr v0.1.1 (объектная форма,
   ключ из cache_key); `json.(obj, :attrs)` — `json.extract!` (синтаксис
   `json.(...)` в Crystal невыразим); url-хелперы `room_message_url(...)`

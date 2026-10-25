@@ -39,7 +39,7 @@
             </a>
           <% end %></div>
         <div contents>
-      <% placeholders.each do |u| %><form action="/rooms/directs?user_ids%5B%5D=<%= u.id %>" class="button_to" method="post"><button class="direct borderless fill-transparent unpad" type="submit">
+      <% placeholders.each do |u| %><%= button_to "/rooms/directs?user_ids%5B%5D=#{u.id}", class: "direct borderless fill-transparent unpad" do %>
         <span class="avatar">
           <img aria-hidden="true" src="<%= avatar_path(u) %>"/>
             </span>
@@ -49,7 +49,7 @@
               <%= u.name.to_s.split(" ")[0]? || "" %>
                 </span>
                 </span>
-              </button></form><% end %>
+              <% end %><% end %>
 
         </div>
       </div>

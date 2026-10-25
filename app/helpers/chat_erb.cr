@@ -46,6 +46,8 @@ class ChatERB
 
   # Propshaft-style manifest resolution (same override as ApplicationHelper).
   include ActionView::Helpers::TagHelper
+  # button_to (UrlHelper) for rooms/involvements/** templates.
+  include ActionView::Helpers::UrlHelper
 
   def image_tag(source : String, **opts) : ERB::SafeString
     ::ActionView::Helpers::AssetTagHelper.image_tag(

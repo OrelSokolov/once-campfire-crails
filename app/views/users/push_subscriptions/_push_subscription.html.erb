@@ -7,15 +7,15 @@
     <span><%= push_subscription.endpoint %></span>
 
     <span class="flex align-center gap">
-      <form class="button_to" method="post" action="/users/me/push_subscriptions/<%= push_subscription.id %>/test_notifications"><button class="btn btn--reversed" type="submit">
+      <%= button_to "/users/me/push_subscriptions/#{push_subscription.id}/test_notifications", class: "btn btn--reversed" do %>
         <%= icon("notification-bell-everything.svg") %>
         <span class="for-screen-reader">Send test notification</span>
-      </button></form>
+      <% end %>
 
-      <form class="button_to" method="post" action="/users/me/push_subscriptions/<%= push_subscription.id %>"><input name="_method" type="hidden" value="delete"><button class="btn btn--negative" type="submit">
+      <%= button_to "/users/me/push_subscriptions/#{push_subscription.id}", method: "delete", class: "btn btn--negative" do %>
         <%= icon("minus.svg") %>
         <span class="for-screen-reader">Delete subscription</span>
-      </button></form>
+      <% end %>
     </span>
   </span>
 </li>

@@ -5,6 +5,11 @@ name: once_campfire_crails
 version: 0.1.0
 crystal: ">= 1.21.0"
 dependencies:
+  # транзитивен (action_pack_cr/railties_cr), но bumped явно: button_to
+  # edge/8.2 (UrlHelper.button_to_edge_82) — см. plans/STYLE_1to1.md 2.4.
+  action_view_cr:
+    github: OrelSokolov/action_view.cr
+    version: ~> 0.1.17
   railties_cr:
     github: OrelSokolov/railties.cr
     version: ~> 0.1.16

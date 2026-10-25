@@ -32,24 +32,11 @@ module RoomsHelper
     ChatLayout.system_welcome(origin)
   end
 
-  # An empty update set still renders a lone "\n" text node after </body>,
-  # matching the reference Turbo output.
-  def refresh_stream(room : Room, new_messages : Array(Message),
-                     updated_messages : Array(Message)) : String
-    epoch = db_epoch
-    String.build do |io|
-      unless new_messages.empty?
-        io << %(<turbo-stream action="append" target="messages_#{room.dom_id}"><template>)
-        io << ChatLayout.messages_html(new_messages, epoch, room, origin)
-        io << %(</template></turbo-stream>)
-      end
-      io << '\n'
-      updated_messages.each do |message|
-        io << %(<turbo-stream action="replace" target="message_#{message.id}"><template>)
-        io << ChatLayout.messages_html([message], epoch, room, origin)
-        io << %(</template></turbo-stream>\n)
-      end
-    end
+  # rooms/refreshes/show.turbo_stream.erb: the message list markup for
+  # turbo_stream append/replace content (the oracle renders the
+  # messages/message partial collection; the port compiles it at build time).
+  def messages_html(room : Room, messages : Array(Message)) : String
+    ChatLayout.messages_html(messages, db_epoch, room, origin)
   end
 
   # rooms/directs/edit.html.erb shell (the directs edit screen keeps its own
@@ -74,10 +61,11 @@ module RoomsHelper
 
   # The delete-room form of the edit layout (rooms/layouts/_edit.html.erb).
   def button_to_delete_room(room : Room) : ERB::SafeString
-    ERB::SafeString.new(
-      %(<form action="#{origin}/rooms/#{room.id.not_nil!}" class="button_to" method="post"><input name="_method" type="hidden" value="delete"><button aria-label="Delete #{room.name.to_s}" class="btn btn--negative max-width" data-turbo-confirm="Are you sure you want to delete this room and all messages in it? This can’t be undone." type="submit">) +
-      icon("trash.svg").raw +
-      %(<span class="overflow-ellipsis">#{room.name.to_s}</span></button></form>))
+    button_to "#{origin}/rooms/#{room.id.not_nil!}", method: "delete",
+      class: "btn btn--negative max-width", aria: {label: "Delete #{room.name.to_s}"},
+      data: {turbo_confirm: "Are you sure you want to delete this room and all messages in it? This can’t be undone."} do
+      icon("trash.svg") + tag.span(room.name.to_s, class: "overflow-ellipsis")
+    end
   end
 
   def avatar_link(member : User) : ERB::SafeString

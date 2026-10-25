@@ -81,13 +81,15 @@ module Users::ProfilesHelper
     label = ChatLayout::INVOLVEMENT_LABELS[current]? || current
     ERB::SafeString.new(
       %(<turbo-frame id="involvement_#{dom_id}">\n) +
-      %(<form action="/rooms/#{room.id.not_nil!}/involvement?involvement=#{nxt}" class="button_to" method="post">) +
-      %(<input name="_method" type="hidden" value="put">) +
-      %(<button aria-checked="true" aria-labelledby="involvement_label_#{dom_id}" ) +
-      %(class="btn #{current}" role="checkbox" tabindex="0" type="submit">) +
-      ChatLayout.icon("notification-bell-#{current}.svg") +
-      %(<span class="for-screen-reader" id="involvement_label_#{dom_id}">) +
-      %(#{HTML.escape(label)}</span></button></form>\n</turbo-frame>))
+      button_to("/rooms/#{room.id.not_nil!}/involvement?involvement=#{nxt}",
+        method: "put", role: "checkbox",
+        aria: {checked: true, labelledby: "involvement_label_#{dom_id}"},
+        tabindex: 0, class: "btn #{current}") do
+        ERB::SafeString.new(ChatLayout.icon("notification-bell-#{current}.svg") +
+          %(<span class="for-screen-reader" id="involvement_label_#{dom_id}">) +
+          %(#{HTML.escape(label)}</span>))
+      end.raw +
+      %(\n</turbo-frame>))
   end
 
   # Involvement#next: shared rooms cycle mentions -> everything ->
