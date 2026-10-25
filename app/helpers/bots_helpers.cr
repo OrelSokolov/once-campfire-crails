@@ -3,7 +3,7 @@ module BotsHelpers
   include ActionController::Helper
   def page_open(title : String, back_path : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open(title == "Chat bots" ? "bots" : "bot-form",
-      title, nav_html: ChatLayout.nav_back(back_path)))
+      title, nav_html: nav_back_to(back_path).raw))
   end
 
   def copy_button(cmd : String, sr : String) : ERB::SafeString

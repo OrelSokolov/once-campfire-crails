@@ -1,4 +1,7 @@
 class UsersController < ApplicationController
+  # transfer_link (UsersHelper) shares web_share_session_button with the
+  # profile views (Rails mixes all helpers into one view context).
+  helper "users/profiles"
 
   # Data for show.html.erb: the viewer (admin branches) and the profile subject.
   @viewer : User?

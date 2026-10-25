@@ -114,9 +114,22 @@
       "qr_code"` — в ApplicationController. verified: сборка 0 ошибок,
       capybara 72/0, compare 128/129 (1 отказ = baseline custom-boost.png
       0.27% > порога 0.20%, не связан с кнопками).
-- [ ] Инкременты дальше (по нарастающей сложности): nav_back →
-      хелпер оракула, chat_sidebar_frame → turbo_frame_tag, head/body_open →
-      layouts/application.html.erb, page_open/page_close → layout-обёртки,
+- [x] Инкремент 3 — nav_back: `ApplicationHelper#link_back_to`/`link_back`
+      (оракул 1:1: link_to-блок + tag.span; link_back — по Referer с
+      fallback root_path) + переходные div-обёртки `nav_back`/`nav_back_to`
+      (div остаётся у crails page-обёрток до миграции вьюх на content_for
+      :nav); RoomsHelper#link_back_to_last_room_visited делегирует
+      link_back_to (выбор пути @room-based, оракул читает last_room-cookie);
+      все вызовы (bots/custom_styles/push_subscriptions/rooms/directs/
+      profiles/users _nav, accounts _nav) переведены; ChatLayout.nav_back
+      удалён. Заодно фикс CI b768b19: забытый git add — wiring
+      `helper "users/profiles"` в UsersController (web_share_session_button
+      не резолвился в чистом дереве). verified: сборка 0 ошибок +
+      воспроизведение CI-сборки (-Dwithout_mt) в worktree, capybara 72/0,
+      compare 2/129 (оба = baseline png custom-boost + mobile).
+- [ ] Инкременты дальше (по нарастающей сложности): chat_sidebar_frame →
+      turbo_frame_tag, head/body_open → layouts/application.html.erb,
+      page_open/page_close → layout-обёртки,
       затем messages/boosts/attachments (message_dom — ядро ChatLayout).
 
 ## Фаза 4 — средние патчи (НЕ НАЧАТА)

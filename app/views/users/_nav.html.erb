@@ -1,2 +1,2 @@
-<%= ERB::SafeString.new(ChatLayout.nav_back("/")) %><% if viewer.id == subject.id %><div class="flex align-center gap flex-item-justify-end"><a href="/users/me/profile" class="btn"><%= icon("pencil.svg") %><span class="for-screen-reader">Edit my profile</span></a></div><% else %><div class="flex align-center gap flex-item-justify-end">
+<%= nav_back %><% if viewer.id == subject.id %><div class="flex align-center gap flex-item-justify-end"><a href="/users/me/profile" class="btn"><%= icon("pencil.svg") %><span class="for-screen-reader">Edit my profile</span></a></div><% else %><div class="flex align-center gap flex-item-justify-end">
 </div><% end %>

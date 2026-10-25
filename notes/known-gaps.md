@@ -156,6 +156,9 @@
   `urlsafe_encode64` с паддингом.
 - `app/controllers/welcome_controller.cr`: fallback — первая видимая комната
   по id, а не `Current.user.rooms.original`.
+- `app/helpers/rooms_helper.cr`: `link_back_to_last_room_visited` выбирает
+  путь по `@room` (edit → сама комната, new → root), оракул читает
+  last_room-cookie через `last_room_visited` helper_method.
 - `app/controllers/joins_controller.cr`: роутер декодирует path-сегменты
   через `URI.decode_www_form`, «+» в join_code превращается в пробел —
   пробуются оба варианта.

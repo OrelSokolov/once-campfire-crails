@@ -104,7 +104,7 @@ module Users::ProfilesHelper
 
   def profile_nav : String
     String.build do |io|
-      io << ChatLayout.nav_back("/") << "\n"
+      io << nav_back.raw << "\n"
       io << %(<div class="flex-item-justify-end">\n)
       io << %(<form accept-charset="UTF-8" action="/session" data-controller="sessions" method="post"><input name="_method" type="hidden" value="delete">\n)
       io << %(<input data-sessions-target="pushSubscriptionEndpoint" id="push_subscription_endpoint" name="push_subscription_endpoint" type="hidden">\n)

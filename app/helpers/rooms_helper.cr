@@ -56,22 +56,20 @@ module RoomsHelper
   # wrapper; the opens/closeds pages moved to rooms/layouts/*).
   def page_open(title : String, back_path : String) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("room-form", title,
-      nav_html: ChatLayout.nav_back(back_path)))
+      nav_html: nav_back_to(back_path).raw))
   end
 
-  # Oracle layouts (rooms/layouts/_new|_edit.html.erb): back to the last
-  # visited room — edit pages to the room itself, new pages to the root
-  # (byte-identical to the previous inline page_open back link).
+  # Oracle rooms_helper.rb link_back_to_last_room_visited: back to the last
+  # visited room. The crails port keeps the @room-based selection (edit
+  # pages to the room itself, new pages to the root); the oracle reads the
+  # last_room cookie through the last_room_visited helper_method.
   def link_back_to_last_room_visited : ERB::SafeString
     path = if (r = @room) && (rid = r.id)
-             "/rooms/#{rid}"
+             room_path(rid)
            else
-             "/"
+             root_path
            end
-    ERB::SafeString.new(
-      %(<a class="btn" href="#{path}">) +
-      icon("arrow-left.svg").raw +
-      %(<span class="for-screen-reader">Go Back</span></a>))
+    link_back_to path
   end
 
   # The delete-room form of the edit layout (rooms/layouts/_edit.html.erb).

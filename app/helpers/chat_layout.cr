@@ -226,15 +226,6 @@ module ChatLayout
     ::ActionView::Helpers::AssetTagHelper.image_tag(asset(name), opts).to_s
   end
 
-  # nav "Go Back" button (layout_start.eta: form screens). Line breaks
-  # as in the Rails ERB output (artifacts: <div>/<a>/</div> on separate
-  # lines).
-  def self.nav_back(path : String) : String
-    %(<div class="flex-item-justify-start">\n<a class="btn" href="#{path}">) +
-      icon("arrow-left.svg") +
-      %(<span class="for-screen-reader">Go Back</span></a>\n</div>)
-  end
-
   # head + <body class=body_class(+admin)> + nav + main — layout_start
   # for form/account/profile/bots/... screens. In the reference only a
   # few pages set @body_class (rooms/show: sidebar, searches:

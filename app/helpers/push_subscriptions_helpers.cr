@@ -4,7 +4,7 @@ module PushSubscriptionsHelpers
   def page_open : ERB::SafeString
     ERB::SafeString.new(ChatLayout.page_open("push-subscriptions",
       "Push notification subscriptions",
-      nav_html: ChatLayout.nav_back(last_room_visited_path)))
+      nav_html: nav_back_to(last_room_visited_path).raw))
   end
 
   # Non-browser or empty UA (curl, nil) yields an empty string.
