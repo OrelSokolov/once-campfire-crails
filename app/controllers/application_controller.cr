@@ -6,6 +6,10 @@ abstract class ApplicationController < ActionController::Base
                            locals: {} of String => Nil},
   })
 
+  # Non-conventional helper modules: ClipboardHelper/QrCodeHelper are
+  # shared across accounts/bots/users views, so wire them globally.
+  helper :clipboard, "qr_code"
+
   include Authentication
   include Authorization
   include SetCurrentRequest

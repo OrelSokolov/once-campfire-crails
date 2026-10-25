@@ -14,7 +14,9 @@ module AccountsHelper
   end
 
   def copy_button(url : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.copy_button(url, "Copy join link", "colorize--black"))
+    button_to_copy_to_clipboard(url) do
+      ERB::SafeString.new(%(\n<span class="for-screen-reader">Copy join link</span>\n#{ChatLayout.icon("copy-paste.svg", 20, "colorize--black")}\n))
+    end
   end
 
   def translation_button(key : String) : ERB::SafeString

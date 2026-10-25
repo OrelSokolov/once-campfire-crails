@@ -140,9 +140,9 @@
 - `app/controllers/rooms_controller.cr`: сравнение по `created_at` —
   субзапрос по id (литеральный Time-бинд sqlite3-шарда сериализуется с
   миллисекундами, якорь deep-link дублировался).
-- `app/controllers/concerns/authorization.cr`: метод называется
-  `require_admin`, ответ `render(plain: "forbidden", status: 403)` вместо
-  `head :forbidden` (тело ответа отличается).
+- `app/controllers/concerns/authorization.cr`: `ensure_can_administer` +
+  `head :forbidden` — 1:1 с оракулом (заметка о `require_admin` устарела,
+  2026-10-25).
 - `app/controllers/concerns/tracked_room_visit.cr`:
   `remember_last_room_visited` вызывается вручную после решения page-cache, а
   не before_action; принимает room аргументом.
@@ -151,7 +151,9 @@
 - `app/controllers/autocompletable/users_controller.cr`: NoTemplateDedent —
   вывод сохраняет отступы шаблона (parity-бейзлайны их фиксируют).
 - `app/controllers/qr_code_controller.cr`: PNG через rqrcode_cr вместо SVG
-  оракула, без `expires_in 1.year`.
+  оракула, без `expires_in 1.year`; QR-id — `Base64.urlsafe_encode(url,
+  padding: false)` (контроллер декодирует без паддинга), у оракула
+  `urlsafe_encode64` с паддингом.
 - `app/controllers/welcome_controller.cr`: fallback — первая видимая комната
   по id, а не `Current.user.rooms.original`.
 - `app/controllers/joins_controller.cr`: роутер декодирует path-сегменты
@@ -240,11 +242,17 @@
   литеральный HTML; порядок атрибутов — вставка (браузер нормализует).
 - `app/helpers/**`: helper wiring через action_pack 0.2.14 (маркер
   `include ActionController::Helper` + конвенция/`helper :sym`) вместо
-  Rails include-all: 8 конфликтов имён между crails-обёртками
+  Rails include-all: конфликты имён между crails-обёртками
   (page_open/page_close/copy_button/avatar_link/last_room_visited_path/
   fresh_account_logo_path/translation_button/version), у оракула этих
   методов в хелперах нет (page_open и пр. — crails-обёртки над ChatLayout);
   `helper :all` разблокируется после переноса HTML в ERB-партиалы.
+  Кнопки (инкремент 2, фаза 3b): ChatLayout qr_button/copy_button/
+  web_share_button удалены, оракульные блочные `button_to_copy_to_clipboard`
+  (ClipboardHelper)/`link_to_zoom_qr_code` (QrCodeHelper)/
+  `web_share_session_button` (Users::ProfilesHelper) зарегистрированы;
+  crails-обёртки `copy_button` в accounts/bots/profiles остаются как тонкие
+  делегаты до миграции вьюх на блочный API (учтены в конфликтах выше).
   `helper_method` — compile-валидация без рантайм-эффекта (контекст рендера
   = контроллер); оракульные `platform`/`signed_in?`/`last_room_visited`
   не портированы (crails-хелперы несут свою логику platform через @ua).

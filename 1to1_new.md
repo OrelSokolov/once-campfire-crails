@@ -104,9 +104,18 @@
       `ChatLayout.lightbox_dialog` удалён (call-sites: sessions/new,
       _body_close). verified: raw-байт-сверка + capybara 72/0 + compare
       2/129 baseline.
-- [ ] Инкременты дальше (по нарастающей сложности): nav_back/copy_button/
-      web_share_button/qr_button → хелперы оракула (clipboard_helper и
-      пр.), chat_sidebar_frame → turbo_frame_tag, head/body_open →
+- [x] Инкремент 2 — кнопки-хелперы: `ClipboardHelper`
+      (button_to_copy_to_clipboard), `QrCodeHelper` (link_to_zoom_qr_code),
+      `Users::ProfilesHelper#web_share_session_button` — блочные API оракула
+      (tag.button/link_to, data Hash-ключами); crails-обёртки copy_button
+      (accounts/bots/profiles) и web_share_button (profiles) делегируют им,
+      users_helper.transfer_link собран из этих хелперов; ChatLayout
+      qr_button/copy_button/web_share_button удалены; `helper :clipboard,
+      "qr_code"` — в ApplicationController. verified: сборка 0 ошибок,
+      capybara 72/0, compare 128/129 (1 отказ = baseline custom-boost.png
+      0.27% > порога 0.20%, не связан с кнопками).
+- [ ] Инкременты дальше (по нарастающей сложности): nav_back →
+      хелпер оракула, chat_sidebar_frame → turbo_frame_tag, head/body_open →
       layouts/application.html.erb, page_open/page_close → layout-обёртки,
       затем messages/boosts/attachments (message_dom — ядро ChatLayout).
 

@@ -7,7 +7,9 @@ module BotsHelpers
   end
 
   def copy_button(cmd : String, sr : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.copy_button(cmd, sr, icon_first: true))
+    button_to_copy_to_clipboard(cmd) do
+      ERB::SafeString.new(%(\n#{ChatLayout.icon("copy-paste.svg", 20)}\n<span class="for-screen-reader">#{HTML.escape(sr)}</span>\n))
+    end
   end
 
   def translation_button(key : String) : ERB::SafeString

@@ -19,7 +19,23 @@ module Users::ProfilesHelper
   end
 
   def web_share_button(url : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.web_share_button(url))
+    web_share_session_button(url, "Your sign-in link",
+      "This is your own private sign-in URL, DO NOT SHARE IT. Use it to sign-in on another device or if you get locked out.") do
+      ERB::SafeString.new(%(\n<span class="for-screen-reader">Share auto-login link</span>\n#{ChatLayout.icon("share.svg", 20, "flex-item-no-shrink colorize--black")}\n))
+    end
+  end
+
+  # Oracle profiles_helper.rb: hidden until Stimulus reveals navigator.share.
+  def web_share_session_button(url : String, title : String, text : String, &) : ERB::SafeString
+    tag.button class: "btn", hidden: true, data: {
+      "controller"          => "web-share",
+      "action"              => "web-share#share",
+      "web_share_url_value" => url,
+      "web_share_text_value" => text,
+      "web_share_title_value" => title,
+    } do
+      yield
+    end
   end
 
   # No FormModel for User in the port: field values are passed
@@ -31,8 +47,9 @@ module Users::ProfilesHelper
   end
 
   def copy_button(url : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.copy_button(url, "Copy auto-login link",
-      icon_class: "flex-item-no-shrink colorize--black"))
+    button_to_copy_to_clipboard(url) do
+      ERB::SafeString.new(%(\n<span class="for-screen-reader">Copy auto-login link</span>\n#{ChatLayout.icon("copy-paste.svg", 20, "flex-item-no-shrink colorize--black")}\n))
+    end
   end
 
   def profile_display_name(room : Room, viewer : User) : String

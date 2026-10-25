@@ -131,7 +131,7 @@ module ChatLayout
                      ua : String = "", origin : String = "") : String
     viewer = Current.user
     String.build do |io|
-      cls = viewer && viewer.role == 1 ? "sidebar admin" : "sidebar"
+      cls = viewer && viewer.administrator? ? "sidebar admin" : "sidebar"
       io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
       io << %(<a href="#main-content" class="skip-navigation btn">Skip to main content</a>\n)
       io << %(<nav id="nav">\n)
@@ -246,7 +246,7 @@ module ChatLayout
     cls = body_class.to_s
     # Oracle body_classes: [body_class, admin].compact.join(" ") — no
     # leading space when body_class is empty.
-    if user && user.role == 1
+    if user && user.administrator?
       cls = cls.empty? ? "admin" : "#{cls} admin"
     end
     String.build do |io|
@@ -262,43 +262,6 @@ module ChatLayout
   # layouts/_body_close.html.erb (ChatERB).
   def self.page_close(footer_html : String = "", sidebar_html : String = "") : String
     ChatERB.new(footer: footer_html, sidebar: sidebar_html).body_close.to_s
-  end
-
-  # QR icon button (transfer_link.eta/invite.eta: lightbox + qr-code.svg).
-  def self.qr_button(url : String) : String
-    %(<a href="#{url}" class="btn" data-lightbox-target="image" ) +
-      %(data-action="lightbox#open" data-lightbox-url-value="#{url}">) +
-      %(<span class="for-screen-reader">Show QR code</span>) +
-      icon("qr-code.svg", 20, "colorize--black") + %(</a>)
-  end
-
-  # Copy button (copy-to-clipboard + copy-paste.svg) —
-  # button_to_copy_to_clipboard: the icon/sr-text order and the img class
-  # are decided by the caller (bots: img first without a class;
-  # profile/invite: span first with colorize--black).
-  def self.copy_button(content : String, sr_label : String,
-                       icon_class : String? = nil, icon_first : Bool = false) : String
-    icon_html = icon("copy-paste.svg", 20, icon_class)
-    span_html = %(<span class="for-screen-reader">#{HTML.escape(sr_label)}</span>)
-    inner = (icon_first ? [icon_html, span_html] : [span_html, icon_html]).join('\n')
-    %(<button class="btn" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" ) +
-      %(data-copy-to-clipboard-success-class="btn--success" ) +
-      %(data-copy-to-clipboard-content-value="#{HTML.escape(content)}">\n) +
-      inner + %(\n</button>)
-  end
-
-  # web-share (transfer block of profile/invite/user): share the
-  # auto-login link; the button is hidden, Stimulus reveals it when
-  # navigator.share is supported. The caller appends the "    </div>"
-  # tail (artifacts).
-  def self.web_share_button(url : String) : String
-    %(<button class="btn" data-action="web-share#share" data-controller="web-share" ) +
-      %(data-web-share-text-value="This is your own private sign-in URL, DO NOT SHARE IT. Use it to sign-in on another device or if you get locked out." ) +
-      %(data-web-share-title-value="Your sign-in link" ) +
-      %(data-web-share-url-value="#{HTML.escape(url)}" hidden="">\n) +
-      %(<span class="for-screen-reader">Share auto-login link</span>\n) +
-      icon("share.svg", 20, "flex-item-no-shrink colorize--black") +
-      %(\n</button>)
   end
 
   # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — the
@@ -354,7 +317,7 @@ module ChatLayout
       io << %(<span class="for-screen-reader">Share join link</span>\n)
       io << icon("share.svg", 20, "colorize--black") << "\n"
       io << %(</button>\n)
-      if user.role == 1
+      if user.administrator?
         io << %(<form action="/account/join_code" class="button_to" method="post"><button class="btn btn--regenerate" type="submit">\n)
         io << icon("refresh.svg", 20, "colorize--black") << "\n"
         io << %(<span class="for-screen-reader">Regenerate join link</span>\n)

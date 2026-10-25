@@ -17,7 +17,6 @@ module UsersHelper
     url = origin + "/session/transfers/" +
           generate_signed_id(subject.id.not_nil!, "user/transfer",
             expires_at: Time.utc + 4.hours)
-    qr = "/qr_code/" + Base64.urlsafe_encode(url, padding: false)
     ERB::SafeString.new(
       %(<fieldset>\n<legend class="gap">\n) +
       ChatLayout.icon("laptop.svg", 36, "colorize--black") + "\n" +
@@ -30,13 +29,16 @@ module UsersHelper
       %(<input class="input" id="session_transfer_url" readonly="" type="text" value=") +
       HTML.escape(url) + %(">\n) +
       %(<div class="flex align-center center gap">\n) +
-      %(<a class="btn" data-action="lightbox#open" data-lightbox-target="image" ) +
-      %(data-lightbox-url-value=") + HTML.escape(qr) + %(" href=") + HTML.escape(qr) + %(">\n) +
-      %(<span class="for-screen-reader">Show auto-login QR code</span>\n) +
-      ChatLayout.icon("qr-code.svg", 20, "colorize--black") + "\n</a>\n" +
-      ChatLayout.copy_button(url, "Copy auto-login link",
-        icon_class: "flex-item-no-shrink colorize--black") + "\n" +
-      ChatLayout.web_share_button(url) +
+      link_to_zoom_qr_code(url) {
+        ERB::SafeString.new(%(\n<span class="for-screen-reader">Show auto-login QR code</span>\n#{ChatLayout.icon("qr-code.svg", 20, "colorize--black")}\n))
+      }.raw + "\n" +
+      button_to_copy_to_clipboard(url) {
+        ERB::SafeString.new(%(\n<span class="for-screen-reader">Copy auto-login link</span>\n#{ChatLayout.icon("copy-paste.svg", 20, "flex-item-no-shrink colorize--black")}\n))
+      }.raw + "\n" +
+      web_share_session_button(url, "Your sign-in link",
+        "This is your own private sign-in URL, DO NOT SHARE IT. Use it to sign-in on another device or if you get locked out.") {
+        ERB::SafeString.new(%(\n<span class="for-screen-reader">Share auto-login link</span>\n#{ChatLayout.icon("share.svg", 20, "flex-item-no-shrink colorize--black")}\n))
+      }.raw +
       %(\n</div>\n</div>\n</fieldset>))
   end
 end
