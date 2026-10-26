@@ -21,9 +21,6 @@ ActionView::Helpers::FormHelper.form_with_generates_ids = true
 ActionView::Helpers::FormTagHelper.default_enforce_utf8 = false
 ActionView::Helpers::FormTagHelper.method_field_autocomplete = false
 ActionView::Helpers::FormTagHelper.remove_hidden_field_autocomplete = true
-# button_to на rails 8.2 (оракул): action → class → method и plain
-# _method-input (см. UrlHelper.button_to_edge_82).
-ActionView::Helpers::UrlHelper.button_to_edge_82 = true
 
 
 class Application < CRails::Application

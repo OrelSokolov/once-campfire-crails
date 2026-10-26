@@ -124,12 +124,11 @@ Crystal, (c) стилистическая проблема порта. План 
 - [x] `image_tag` — механика есть (пребилд-манифест), `icon()` остаётся
   для byte-parity (notes/style-parity.md).
 - [ ] `form_with model:` — отложено (byte-parity URL/скопов форм).
-- [x] `button_to` блоком/`method: :delete` — edge/8.2-форма в шарде
-  (action_view_cr v0.1.17+, гейт `UrlHelper.button_to_edge_82`, конфиг в
-  config/application.cr): action → class → method, plain _method-input,
-  отсортированные атрибуты кнопки. Все ручные `<form class="button_to">`
-  переведены (2026-10-25), кроме двух в ChatLayout (статический билдер —
-  переносятся в фазе 3; boost-форма переведена на 8.2-порядок атрибутов).
+- [x] `button_to` блоком/`method: :delete` — все ручные `<form
+  class="button_to">` переведены на шардовый `button_to` (2026-10-25);
+  байты — insertion-порядок сырого гема (см. notes/style-parity.md:
+  артефакты харнесса сортируют атрибуты, не гнаться за ними). Остались
+  2 ручные формы в ChatLayout (статический билдер — фаза 3).
 - [~] `content_for :nav/:footer` — точечно; основной механизм
   `page_open`/`page_close`; `@page_title`/`@body_class` — нет.
 - [~] `render partial:, collection:, as: :user`; `dom_id(@room, :list)` —

@@ -314,14 +314,17 @@ id/таймстампы сообщений и порт в origin-URL). Особ�
 - messages/by_bots#create — тот же TagBuilder inline (порт-специфичный
   turbo-stream ответ сохранён; оракул отдаёт head :created).
 
-**button_to edge/8.2** — **action_view_cr v0.1.17–0.1.18**: гейт
-`UrlHelper.button_to_edge_82` (8.1.4-дефолт не тронут, url_button_* орacle
--кейсы зелёные). Приложение (rails 8.2.0.alpha) выставляет флаг в
-config/application.cr. 8.2-форма: `<form action class method>` + plain
-`<input name="_method" type="hidden" value>` (без autocomplete/слэша) +
-атрибуты submit-кнопки **отсортированы** (aria-checked → aria-labelledby →
-class → role → tabindex → type; вложенные data/aria рекурсивно) — сверька по
-артефактам оракула (involvement-кнопка профиля, ban-кнопки, boost-delete).
+**button_to — важное уточнение про артефакты** (исправлено в action_view_cr
+v0.1.19): паритетный харнесс **сортирует атрибуты тегов** при сохранении
+артефактов (capybara-tests/harness/normalize.rb: attrs.sort) — «алфавитный»
+порядок форм/кнопок в артефактах это нормализация сравнения, а не байты
+оракула. Сырой гем (8.1.4 и 8.2.0.alpha git-реф приложения — код в этой
+области идентичен, проверено запуском ruby из рефа) даёт insertion-порядок:
+`<form class method action>`, `__av_method_field` (autocomplete гейтится
+remove_hidden_field_autocomplete, load_defaults 8.2 → off), атрибуты кнопки
+без сортировки + `type="submit"` в конце, `hidden="hidden"`. Промежуточные
+v0.1.17–0.1.18 (gate button_to_edge_82) шли по нормализованным артефактам и
+откачены; спек button_to_spec.cr шарда фиксирует сырые байты гема.
 
 Конвертация ручных форм на `button_to` (2.4 закрыт, кроме ChatLayout):
 users/show (×4 + helper button_to_direct_room_with), push_subscriptions (×2),
