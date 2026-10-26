@@ -15,13 +15,13 @@ dependencies:
     version: ~> 0.1.16
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.22
+    version: ~> 0.1.19
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
     version: ~> 0.1.1
   active_support_cr:
     github: OrelSokolov/active_support.cr
-    version: ~> 0.1.13
+    version: ~> 0.1.12
   attr_reader_cr:
     github: OrelSokolov/attr_reader.cr
     version: ~> 0.1.0

@@ -3,11 +3,11 @@ version: 2.0
 shards:
   action_cable_cr:
     git: https://github.com/orelsokolov/action_cable.cr.git
-    version: 0.1.6
+    version: 0.1.5
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.18
+    version: 0.2.17
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
@@ -19,7 +19,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.22
+    version: 0.1.19
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git
@@ -27,7 +27,7 @@ shards:
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git
-    version: 0.1.13
+    version: 0.1.12
 
   attr_reader_cr:
     git: https://github.com/orelsokolov/attr_reader.cr.git
@@ -95,5 +95,5 @@ shards:
 
   turbo_cr:
     git: https://github.com/orelsokolov/turbo.cr.git
-    version: 0.1.7
+    version: 0.1.6
 

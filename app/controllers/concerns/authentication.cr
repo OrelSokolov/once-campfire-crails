@@ -55,11 +55,6 @@ module Authentication
     @identity_entry.try(&.user)
   end
 
-  # Bang variant (Ruby-style): the authenticated user or a raise.
-  def current_user! : User
-    current_user!
-  end
-
   def require_authentication : Nil
     bot_authentication
     redirect_to new_session_url unless current_user
@@ -94,7 +89,8 @@ module Authentication
     Current.session = session
     Current.user = user
     set_authenticated_by(:session)
-    cookies.signed.permanent[:session_token] = { value: session.token!, httponly: true, same_site: :lax }
+    cookies.signed.set("session_token", session.token.not_nil!,
+      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
   end
 
   # X-Forwarded-For is honored only when the socket peer is a trusted proxy,
