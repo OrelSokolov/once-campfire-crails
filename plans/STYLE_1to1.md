@@ -106,8 +106,11 @@ Crystal, (c) стилистическая проблема порта. План 
   unfurl/by_bots/boosts/logos — осознанный (тела ответов).
 - [x] `respond_to do |format|` — есть в шарде; в app не используется
   (update/autocompletable вручную разбирают Accept).
-- [~] `stale?(etag:)`/`fresh_when` — есть в шарде; `expires_in` — нет;
-  logos/cached_responses — ручная механика (ETag/Cache-Control byte-parity).
+- [~] `stale?(etag:)`/`fresh_when` — есть в шарде; `expires_in` —
+  action_pack_cr v0.2.17 (2026-10-26), adopted в qr_code#show
+  (`expires_in 1.year, public: true`); logos/cached_responses — ручная
+  механика (ETag/Cache-Control byte-parity). Попутно: jbuilder_cr v0.1.2
+  — фикс stack overflow на webmanifest (рекурсия _ks → method_missing).
 - [x] `params.require(:x).permit(...)` — символная форма во всех контроллерах.
 - [x] DSL `allow_unauthenticated_access(**options)` / `allow_bot_access` —
   макросы в concerns/authentication.cr 1:1 с class_methods оракула
@@ -161,8 +164,18 @@ Crystal, (c) стилистическая проблема порта. План 
   без `direct`-роутинга (2.7) остаётся ChatLayout-путь (2026-10-25).
 
 ### 2.7. railties_cr — конфиги и роутер
-- [~] Вложенный роутер: `scope module:` есть; `on: :collection`,
-  `direct :fresh_account_logo` — нет.
+- [x] Вложенный роутер: `scope module:` есть; `on: :collection` — было
+  в action_pack_cr (resources-блоки), verb-макросы принимают Symbol
+  (0.2.16); `direct :fresh_account_logo` / `direct :fresh_user_avatar`
+  + top-level `route_for` — action_pack_cr v0.2.16 (2026-10-26):
+  макрос `direct` (тип модельного аргумента явный:
+  `direct :fresh_user_avatar, User do |user, options|`), диспетчеризация
+  из `__crails_url_helper`, generic-`DirectArgBox` (Reference в юнионах
+  Crystal недекларируем), query-nil пропускаются. Adopted: routes.cr
+  1:1 (direct-блоки, `as:` на logo/avatar роутах, блочные searches),
+  обёртки fresh_* удалены, jbuilder-делегаты `JbuilderTemplate#fresh_*`
+  (notes/style-parity.md, инкремент 2026-10-26). Компромиссы: один
+  позиционный аргумент; снапшотный hot-path аватаров — ChatLayout.
 - [x] `configure do ... end` для config/environments/*.cr — railties_cr
   v0.1.16 (`configure do |config|`), оба окружения переведены (2026-10-25).
 - [x] ActiveJob + GlobalID-сериализация аргументов — `serialized`-макрос,
@@ -179,7 +192,12 @@ Crystal, (c) стилистическая проблема порта. План 
   system_welcome через render(partial:), web_share_session_button →
   ClipboardHelper; маппинг «oracle-путь → генератор» в комментариях
   chat_layout.cr. Осталось: boost_dom/messages_html (горячий путь
-  fragment-кэша — только вместе с коллекционным рендером).
+  fragment-кэша — только вместе с коллекционным рендером;
+  дизайн-разведка 2026-10-26: ERB-партиалы messages/boosts/_boosts +
+  _boost на BoostEntry-снапшотах через render partial:/collection:,
+  контекст-класс по образцу ChatERB, бамп FragmentCache::RENDER_VERSION,
+  байт-точки — порядок атрибутов button_to, _method-инпут, \n после
+  </form>; see notes/style-parity.md инкременты).
 - [x] Убрать двойное именование `Campfire::ResponseCache` /
   `ResponseCache`-алиасы (осталось только полное имя).
 - [x] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом

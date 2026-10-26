@@ -3,7 +3,7 @@
 <%= page_open(viewer, subject) %><section class="panel txt-align-center">
   <div class="flex flex-column gap <%= subject.banned? ? "banned" : "" %>">
     <div class="avatar txt-xx-large center" style="background: white">
-      <img alt="Profile avatar" class="avatar" src="<%= ChatLayout.fresh_user_avatar_path(subject.id.not_nil!, subject.updated_at) %>">
+      <img alt="Profile avatar" class="avatar" src="<%= fresh_user_avatar_path(subject) %>">
     </div>
     <% if subject.bot? %><div class="pad-double--inline push--inline push--block-start"><% if subject.active? %><%= button_to_direct_room_with(subject) %><% else %><div><%= subject.name.to_s %> is no longer on this account</div><% end %></div><% elsif subject.deactivated? %><div><h1 class="txt-x-large margin-none"><%= subject.name.to_s %></h1><div><%= subject.name.to_s %> is no longer on this account</div></div><% else %><div class="flex flex-column gap" style="--row-gap: calc(var(--block-space) / 3)">
       <h1 class="txt-x-large txt-tight-lines margin-none"><%= subject.name.to_s %></h1>

@@ -14,10 +14,6 @@ module Users::ProfilesHelper
     ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
-  def fresh_avatar_path(user : User) : String
-    ChatLayout.fresh_user_avatar_path(user.id.not_nil!, user.updated_at)
-  end
-
   def web_share_button(url : String) : ERB::SafeString
     web_share_session_button(url, "Your sign-in link",
       "This is your own private sign-in URL, DO NOT SHARE IT. Use it to sign-in on another device or if you get locked out.") do

@@ -23,11 +23,6 @@ module AccountsHelper
     ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
-  # Oracle url-helper name (fresh_account_logo_path).
-  def fresh_account_logo_path : String
-    ChatLayout.fresh_account_logo_path(@account)
-  end
-
   # Nav links are literal <a> tags: link_to renders href as the last
   # attribute while the oracle output has href first (byte parity).
   def account_nav(user : User) : String

@@ -65,6 +65,20 @@ class JbuilderTemplate
       .__crails_url_helper("room_message_url", [room, message], {} of Symbol => Nil)
   end
 
+  # fresh_user_avatar_path/_url(user), fresh_account_logo_path(options) —
+  # direct-route helpers (config/routes.cr) for partials.
+  def fresh_user_avatar_path(user : User) : String
+    UrlContext.new(jb_origin).fresh_user_avatar_path(user)
+  end
+
+  def fresh_user_avatar_url(user : User) : String
+    UrlContext.new(jb_origin).fresh_user_avatar_url(user)
+  end
+
+  def fresh_account_logo_path(**opts) : String
+    UrlContext.new(jb_origin).fresh_account_logo_path(**opts)
+  end
+
   attr_accessor jb_origin : String = "http://localhost"
 
   compile_partials({

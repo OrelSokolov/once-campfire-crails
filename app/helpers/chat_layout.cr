@@ -64,14 +64,11 @@ module ChatLayout
     time.to_utc.to_s("%Y-%m-%dT%H:%M:%S.%LZ")
   end
 
+  # fresh_account_logo (oracle direct helper, config/routes.cr): the
+  # helpers read Current.account; compile-time builders pass the account
+  # they already hold (one row — same value, no extra query).
   def self.fresh_account_logo_path(account : Account?, size : String? = nil) : String
-    return "/account/logo" unless account
-    query = [] of String
-    if (stamp = account.updated_at.try(&.to_s("%Y%m%d%H%M%S")))
-      query << "v=#{stamp}"
-    end
-    query << "size=#{size}" if size
-    query.empty? ? "/account/logo" : "/account/logo?#{query.join("&")}"
+    route_for(:account_logo, v: account.try(&.updated_at).try(&.to_fs(:number)), size: size)
   end
 
   # user is Current.user (set by ApplicationController before render;
@@ -291,13 +288,14 @@ module ChatLayout
   # fresh_user_avatar_path (oracle avatars_helper): public path
   # /users/<signed_id purpose=user/avatar>/avatar?v=<updated_at YYYYMMDDHHMMSS>.
   # The token is deterministic (shared secret) and byte-identical to the
-  # Rails token.
+  # Rails token. Snapshot flavor for the hot path (boost entries render
+  # without instantiating AR records); object calls go through the
+  # `direct :fresh_user_avatar` helper (config/routes.cr).
   def self.fresh_user_avatar_path(user_id : Int64, updated_at : Time?) : String
     token = CRails.application
       .message_verifier("active_record/signed_id", url_safe: true)
       .generate(user_id, purpose: "user/avatar")
-    stamp = (updated_at || Time.utc).to_s("%Y%m%d%H%M%S")
-    "/users/#{token}/avatar?v=#{stamp}"
+    route_for(:user_avatar, token, v: (updated_at || Time.utc).to_fs(:number))
   end
 
   # room_display_name(room, for_user:) RoomsHelper for direct rooms:

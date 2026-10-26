@@ -28,11 +28,15 @@ CRails.application.routes.draw do
   patch "/account/bots/:bot_id/key", to: "accounts/bots/keys#update"
   get "/account", to: "accounts#edit"
   get "/account/custom_styles", to: "accounts/custom_styles#edit"
-  get "/account/logo", to: "accounts/logos#show"
+  get "/account/logo", to: "accounts/logos#show", as: "account_logo"
   delete "/account/logo", to: "accounts/logos#destroy"
   patch "/account/users/:user_id", to: "accounts/users#update"
   delete "/account/users/:user_id", to: "accounts/users#destroy"
   post "/account/join_code", to: "accounts/join_codes#create"
+
+  direct :fresh_account_logo do |options|
+    route_for :account_logo, v: Current.account.try(&.updated_at).try(&.to_fs(:number)), size: options["size"]?
+  end
 
   get "/join/:code", to: "joins#show"
   post "/join/:code", to: "joins#create"
@@ -52,13 +56,17 @@ CRails.application.routes.draw do
   delete "/users/me/push_subscriptions/:id", to: "users/push_subscriptions#destroy"
   post   "/users/me/push_subscriptions/:push_subscription_id/test_notifications",
     to: "users/push_subscriptions/test_notifications#create"
-  get "/users/:token/avatar", to: "users/avatars#show"
+  get "/users/:token/avatar", to: "users/avatars#show", as: "user_avatar"
   resources :users, only: [:show]
   # resource :ban внутри resources :users: бан/разбан из users/show.
   post   "/users/:user_id/ban", to: "users/bans#create"
   delete "/users/:user_id/ban", to: "users/bans#destroy"
 
   get "/autocompletable/users", to: "autocompletable/users#index"
+
+  direct :fresh_user_avatar, User do |user, options|
+    route_for :user_avatar, user.avatar_token, v: user.updated_at.not_nil!.to_fs(:number)
+  end
 
   # namespace :rooms как в Rails; :room_id вместо :id — на URL не влияет.
   namespace :rooms do
@@ -106,9 +114,8 @@ CRails.application.routes.draw do
   # unfurl_link: только create — og-метаданные ссылки (POST {url}).
   resource :unfurl_link, only: [:create]
 
-  # GET /searches — searches#show (Rails resources даёт index).
-  get "/searches", to: "searches#index", as: "searches"
-  post "/searches", to: "searches#create"
-  delete "/searches/clear", to: "searches#clear"
-  post "/searches/clear", to: "searches#clear"
+  # searches: index/create + collection clear (routes.rb:94-96).
+  resources :searches, only: [:index, :create] do
+    delete :clear, on: :collection
+  end
 end

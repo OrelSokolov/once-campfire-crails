@@ -7,7 +7,7 @@ shards:
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.15
+    version: 0.2.17
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
@@ -59,7 +59,7 @@ shards:
 
   jbuilder_cr:
     git: https://github.com/orelsokolov/jbuilder.cr.git
-    version: 0.1.1
+    version: 0.1.2
 
   marcel_cr: # Overridden
     git: https://github.com/orelsokolov/marcel.cr.git

@@ -337,6 +337,42 @@ rooms_helper#button_to_delete_room. Попутно исправлены лате
 (порядок уже 8.2-корректный) и boost_dom-форма (порядок исправлен на
 action-class-method).
 
+## STYLE_1to1 — 2.7 direct-роутинг + expires_in + фикс jbuilder, 2026-10-26
+
+**`direct`/`route_for`** (2.7 закрыт, action_pack.cr **0.2.16**): Drawer#direct —
+макрос (`direct :helper do |options|` / `direct :helper, User do |user, options|`,
+тип позиционного аргумента передаётся явно — типизировать параметры блоков в
+Crystal нельзя; захваченный блок не наследует `with drawer yield`-ресивер, поэтому
+блоки зовут top-level `route_for`). Диспетчеризация — в `__crails_url_helper`:
+`fresh_account_logo_path`/`_url` генерируются method_missing'ом как обычные
+именованные хелперы и работают во всех контекстах (контроллеры, ERB-вью,
+jbuilder через делегаты `JbuilderTemplate#fresh_*`). Аргумент travels в
+generic-`DirectArgBox` (Reference в юнионах Crystal объявить нельзя). Query-nil
+значения теперь пропускаются (паритет Rails url_for). Adopted в app: routes.cr —
+два direct-блока 1:1 + `as: "account_logo"`/`as: "user_avatar"` + блочная форма
+`resources :searches do delete :clear, on: :collection end` (verb-макросы
+принимают Symbol; лишний POST /searches/clear удалён); удалены обёртки
+ChatLayout-путей (accounts_helper/sessions_helpers fresh_account_logo_path,
+profiles_helper fresh_avatar_path) — вью зовут сгенерированные хелперы;
+`User#avatar_token` уже был 1:1; снапшотный hot-path (бусты/сайдбар) остаётся на
+`ChatLayout.fresh_user_avatar_path(uid, updated_at)` — внутри тот же route_for.
+
+**`expires_in`** (2.3 хвост) — action_pack.cr **0.2.17**: ConditionalGet#
+expires_in (Cache-Control Rails-порядок public/private → max-age →
+must-revalidate; `private:` через **opts — ключевое слово). Adopted:
+qr_code#show → `expires_in 1.year, public: true` (байты
+`Cache-Control: public, max-age=31536000`); logos/cached_responses остаются на
+ручной механике (byte-parity ETag/Cache-Control уже выверен).
+
+**jbuilder.cr 0.1.2 — фикс stack overflow** (латентный, воспроизводился на
+/webmanifest.json со времён 0.1.1): вызов `_ks(<Node-union>)` уходил в
+method_missing → `set!("_ks", node)` → set! → `_ks(...)` → бесконечная рантайм-
+рекурсия. Фикс: catch-all `_ks`-оверлоад (raise) + guard в method_missing —
+подчёркнутые методы дают compile error вместо молчаливой рекурсии.
+
+Компромиссы direct: один позиционный аргумент на хелпер (фиксированная арность
+захваченных блоков); тип аргумента явный (`direct :fresh_user_avatar, User`).
+
 ## STYLE_1to1 — фаза 3, инкремент 2: accounts/_invite партиал, 2026-10-26
 
 Секция invite системного приветствия (join-link поле, QR/copy/share,

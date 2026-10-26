@@ -2,9 +2,9 @@ account = @account
 
 json.name account.try(&.name).to_s.presence || "Campfire"
 json.icons [
-  {src: ChatLayout.fresh_account_logo_path(account, "small"), sizes: "192x192", purpose: nil},
-  {src: ChatLayout.fresh_account_logo_path(account), sizes: "512x512", purpose: nil},
-  {src: ChatLayout.fresh_account_logo_path(account), sizes: "512x512", purpose: "maskable"},
+  {src: fresh_account_logo_path(size: "small"), sizes: "192x192", purpose: nil},
+  {src: fresh_account_logo_path, sizes: "512x512", purpose: nil},
+  {src: fresh_account_logo_path, sizes: "512x512", purpose: "maskable"},
 ] do |icon|
   json.src icon[:src]
   json.type "image/png"

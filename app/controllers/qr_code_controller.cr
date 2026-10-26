@@ -17,6 +17,7 @@ class QrCodeController < ApplicationController
     return render(plain: "not found", status: 404) unless value
 
     png = RQRCode::QRCode.new(value.not_nil!).as_png(size: 120)
+    expires_in 1.year, public: true
     render(plain: png.to_s, content_type: "image/png")
   end
 end

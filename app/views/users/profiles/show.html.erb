@@ -11,7 +11,7 @@
 
     <%= profile_form_with do |form| %>
       <label class="btn avatar input--file txt-xx-large">
-        <img aria-hidden="true" data-upload-preview-target="image" height="300" src="<%= fresh_avatar_path(@user.not_nil!) %>" width="300">
+        <img aria-hidden="true" data-upload-preview-target="image" height="300" src="<%= fresh_user_avatar_path(@user.not_nil!) %>" width="300">
         <%= form.file_field :avatar, id: "file", class: "input", accept: "image/*", data: {"upload-preview-target": "input", action: "upload-preview#previewImage change->form#submit"} %>
         <span class="for-screen-reader">Avatar</span>
       </label>
