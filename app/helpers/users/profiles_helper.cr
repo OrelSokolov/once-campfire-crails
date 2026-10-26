@@ -25,18 +25,7 @@ module Users::ProfilesHelper
     end
   end
 
-  # Oracle profiles_helper.rb: hidden until Stimulus reveals navigator.share.
-  def web_share_session_button(url : String, title : String, text : String, &) : ERB::SafeString
-    tag.button class: "btn", hidden: true, data: {
-      "controller"          => "web-share",
-      "action"              => "web-share#share",
-      "web_share_url_value" => url,
-      "web_share_text_value" => text,
-      "web_share_title_value" => title,
-    } do
-      yield
-    end
-  end
+  # web_share_session_button lives in ClipboardHelper (globally wired).
 
   # No FormModel for User in the port: field values are passed
   # explicitly via value:.

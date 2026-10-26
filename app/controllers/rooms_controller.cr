@@ -21,12 +21,15 @@ class RoomsController < ApplicationController
   attr_reader direct_members : Array(User) = [] of User
 
   # Room form partial; locals become the typed arguments of the compiled method.
+  # accounts/invite — the system_welcome invite section (RoomsHelper#invitation_html).
   compile_partials({
-    "rooms/_form" => {path: "app/views/rooms/_form.html.erb",
-                      locals: {"room" => Room?, "kind" => String,
-                               "user" => User, "selected" => Set(Int64),
-                               "is_open" => Bool, "can_administer" => Bool,
-                               "users" => Array(User), "divider" => Int32}},
+    "rooms/_form"    => {path: "app/views/rooms/_form.html.erb",
+                         locals: {"room" => Room?, "kind" => String,
+                                  "user" => User, "selected" => Set(Int64),
+                                  "is_open" => Bool, "can_administer" => Bool,
+                                  "users" => Array(User), "divider" => Int32}},
+    "accounts/invite" => {path: "app/views/accounts/_invite.html.erb",
+                          locals: {"url" => String}},
   }, dedent: true)
 
   # Room page layouts (rooms/layouts/_new|_edit.html.erb): set @page_title and

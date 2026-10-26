@@ -336,3 +336,24 @@ rooms_helper#button_to_delete_room. Попутно исправлены лате
 переносятся вместе с разбором мега-хелперов в фазе 3): join_code-форма
 (порядок уже 8.2-корректный) и boost_dom-форма (порядок исправлен на
 action-class-method).
+
+## STYLE_1to1 — фаза 3, инкремент 2: accounts/_invite партиал, 2026-10-26
+
+Секция invite системного приветствия (join-link поле, QR/copy/share,
+регенерация join-code) вынесена из ChatLayout.system_welcome в ERB-партиал
+app/views/accounts/_invite.html.erb (оракул-структура, плоская конвенция
+порта): render(partial:) из RoomsHelper#invitation_html, регистрация в
+RoomsController.compile_partials (compile_partials подкласса затеняет
+диспетчер ApplicationController — общие партиалы регистрируются в рендерящем
+контроллере). ChatLayout.system_welcome(origin, invite_html) остался
+статической обёрткой (логотип/перевод/текст) — вне горячего пути.
+
+web_share_session_button переехал из Users::ProfilesHelper в ClipboardHelper
+(глобально wired; в оракуле он в ProfilesHelper, но Rails даёт все хелперы
+всем вью — порт-эквивалент: общий модуль). Байты welcome-блока сверены
+«до/после»: 4 дельты, все к реальному оракулу — href последним в QR-ссылке
+(link_to гема), hidden="hidden" (tag.button гема), form class→method→action
+(button_to гема), перевод строки после </form> (erubi-семантика); остальное
+байт-в-байт. Последняя ручная форма ChatLayout — boost_dom (горячий путь
+fragment-кэша сообщений, конверсия = разбор messages_html на коллекционный
+рендер, отдельный инкремент фазы 3).

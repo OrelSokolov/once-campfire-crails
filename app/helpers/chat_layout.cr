@@ -258,14 +258,12 @@ module ChatLayout
   # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — the
   # "Welcome to Campfire" block above the original room's messages
   # (Room.original, while it has no more than PAGE_SIZE messages):
-  # account logo, invite_message translation, the invite-link field with
-  # QR/copy/sharing and join-code regeneration for admins.
-  def self.system_welcome(origin : String) : String
+  # account logo, invite_message translation, and the invite section
+  # (accounts/_invite partial, rendered by RoomsHelper#invitation_html).
+  def self.system_welcome(origin : String, invite_html : String) : String
     user = Current.user
     return "" unless user
     account = Account.take
-    join_url = "#{origin}/join/#{account.try(&.join_code).to_s}"
-    qr_path = "/qr_code/" + Base64.urlsafe_encode(join_url, padding: false)
     String.build do |io|
       io << %(<div id="system_welcome" class="message message--formatted txt-align-center center">\n)
       io << %(<div class="message__body center">\n)
@@ -280,43 +278,7 @@ module ChatLayout
       io << %(<p>\n<strong>Welcome to Campfire</strong><br>\n)
       io << %(To invite people to chat, share the join link below.\n</p>\n)
       io << %(</div>\n)
-      # accounts/_invite.html.erb (line breaks as in the Rails ERB output)
-      io << %(<div class="flex flex-column align-center gap">\n)
-      io << %(<label class="flex flex-column gap full-width" style="--row-gap: 0.5em">\n)
-      io << %(<strong id="invite_label" class="invite-label">Share to invite more people</strong>\n)
-      io << %(<span class="flex align-center gap input input--actor fill-white">\n)
-      io << icon("person-add.svg", 20, "colorize--black") << "\n"
-      io << %(<input type="text" class="input" id="invite_url" value="#{HTML.escape(join_url)}" aria-labelledby="invite_label" readonly>\n)
-      io << %(</span>\n)
-      io << %(</label>\n)
-      io << %(<div class="flex align-center gap">\n)
-      io << %(<a href="#{qr_path}" class="btn" data-lightbox-target="image" ) <<
-        %(data-action="lightbox#open" data-lightbox-url-value="#{qr_path}">\n)
-      io << %(<span class="for-screen-reader">Show join link QR code</span>\n)
-      io << icon("qr-code.svg", 20, "colorize--black") << "\n"
-      io << %(</a>\n)
-      # button_to_copy_to_clipboard
-      io << %(<button class="btn" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" ) <<
-        %(data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-content-value="#{HTML.escape(join_url)}">\n)
-      io << %(<span class="for-screen-reader">Copy join link</span>\n)
-      io << icon("copy-paste.svg", 20, "colorize--black") << "\n"
-      io << %(</button>\n)
-      io << %(<button class="btn" hidden data-controller="web-share" data-action="web-share#share" ) <<
-        %(data-web-share-url-value="#{HTML.escape(join_url)}" ) <<
-        %(data-web-share-text-value="Hit this link to join me in Campfire and start chatting." ) <<
-        %(data-web-share-title-value="Link to join Campfire">\n)
-      io << %(<span class="for-screen-reader">Share join link</span>\n)
-      io << icon("share.svg", 20, "colorize--black") << "\n"
-      io << %(</button>\n)
-      if user.administrator?
-        io << %(<form action="/account/join_code" class="button_to" method="post"><button class="btn btn--regenerate" type="submit">\n)
-        io << icon("refresh.svg", 20, "colorize--black") << "\n"
-        io << %(<span class="for-screen-reader">Regenerate join link</span>\n)
-        io << %(</button></form>  </div>\n)
-      else
-        io << %(</div>\n)
-      end
-      io << %(</div>\n)
+      io << invite_html
       io << %(</div>\n</div>\n</div>\n)
     end
   end

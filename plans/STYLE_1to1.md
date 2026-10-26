@@ -174,8 +174,12 @@ Crystal, (c) стилистическая проблема порта. План 
 
 - [~] Разобрать мега-хелперы (`ChatLayout`, `messages_page_html`,
   `compile_partials`) обратно в ERB-партиалы оракула — начато (layouts/
-  _lightbox.html.erb, инкремент 1; clipboard/qr_code-хелперы); маппинг
-  «oracle-путь → генератор» в комментариях chat_layout.cr.
+  _lightbox.html.erb, инкремент 1; clipboard/qr_code-хелперы);
+  инкремент 2 (2026-10-26): accounts/_invite.html.erb — invite-секция
+  system_welcome через render(partial:), web_share_session_button →
+  ClipboardHelper; маппинг «oracle-путь → генератор» в комментариях
+  chat_layout.cr. Осталось: boost_dom/messages_html (горячий путь
+  fragment-кэша — только вместе с коллекционным рендером).
 - [x] Убрать двойное именование `Campfire::ResponseCache` /
   `ResponseCache`-алиасы (осталось только полное имя).
 - [x] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом

@@ -29,7 +29,10 @@ module RoomsHelper
     return "" unless original && original.id == room.id
     return "" if Message.where("room_id = ?", room.id.not_nil!)
       .offset(40).exists?
-    ChatLayout.system_welcome(origin)
+    account = Account.take
+    join_url = origin + "/join/" + account.try(&.join_code).to_s
+    invite = render(partial: "accounts/invite", locals: {"url" => join_url}).raw
+    ChatLayout.system_welcome(origin, invite)
   end
 
   # rooms/refreshes/show.turbo_stream.erb: the message list markup for
