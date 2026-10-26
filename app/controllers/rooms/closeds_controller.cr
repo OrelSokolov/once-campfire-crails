@@ -6,21 +6,21 @@ class Rooms::ClosedsController < RoomsController
   # Open and closed rooms convert into each other, so both are in reach here. Direct
   # rooms never are: converting one would let its creator revise who's in it.
   private def room_scope
-    Current.user.not_nil!.rooms.without_directs
+    Current.user!.rooms.without_directs
   end
 
   def new
-    prepare_room_form(nil, "closeds", current_user.not_nil!)
+    prepare_room_form(Rooms::Closed.new, "closeds", current_user!)
   end
 
   def create
-    user = current_user.not_nil!
-    member_ids = selected_user_ids.unshift(user.id.not_nil!).uniq!
+    user = current_user!
+    member_ids = selected_user_ids.unshift(user.id!).uniq!
     create_room(Rooms::Closed, member_ids, user)
   end
 
   def edit
-    prepare_room_form(@room, "closeds", current_user.not_nil!)
+    prepare_room_form(@room, "closeds", current_user!)
   end
 
   def update

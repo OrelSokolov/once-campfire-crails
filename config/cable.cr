@@ -4,7 +4,7 @@
 require "action_cable_cr"
 require "turbo_cr"
 
-Turbo.app = "campfire" # gid://campfire/<Model>/<id>
+GlobalID.app = "campfire" # gid://campfire/<Model>/<id>
 
 if (secret = CRails.secret_key_base)
   Turbo.signed_stream_verifier_key_from_secret!(secret)

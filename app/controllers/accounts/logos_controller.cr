@@ -28,14 +28,14 @@ class Accounts::LogosController < ApplicationController
   end
 
   def destroy
-    user = current_user.not_nil!
+    user = current_user!
     return render(plain: "forbidden", status: 403) unless user.administrator?
     if (attachment = Account.take.try(&.logo_attachment))
       blob_id = attachment.blob_id
       attachment.destroy
       if (bid = blob_id) && (blob = ActiveStorageBlob.find?(bid))
         ActiveRecord::Base.connection.exec(
-          "DELETE FROM active_storage_variant_records WHERE blob_id = ?", blob.id.not_nil!)
+          "DELETE FROM active_storage_variant_records WHERE blob_id = ?", blob.id!)
         blob.destroy
         if (key = blob.key)
           Dir.glob(File.join(variants_dir(key), "*")).each { |f| File.delete?(f) }

@@ -8,7 +8,7 @@ class Message
       ids = Set(Int64).new
       body.scan(/<action-text-attachment\b[^>]*\bsgid=["']([^"']+)/) do |match|
         if (gid = match[1]?) && (user = ChatLayout.mention_user(gid))
-          ids << user.id.not_nil!
+          ids << user.id!
         end
       end
       ids

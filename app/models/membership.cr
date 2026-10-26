@@ -16,11 +16,9 @@ class Membership < ApplicationRecord
                          mentions: "mentions", everything: "everything"},
            prefix: :involved_in
 
-  # Relation#joins by belongs_to is unsupported — JOIN with a raw fragment; direct rooms
-  # are detected by rooms.name IS NULL (see Room#to_gid_param for the two type spellings).
-  scope(:with_ordered_room)    { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").order("LOWER(rooms.name)") }
-  scope(:with_direct_rooms)    { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").where("rooms.name IS NULL").order("rooms.updated_at DESC") }
-  scope(:without_direct_rooms) { joins("INNER JOIN rooms ON rooms.id = memberships.room_id").where("rooms.name IS NOT NULL") }
+  scope(:with_ordered_room)    { joins(:room).order("LOWER(rooms.name)") }
+  scope(:with_direct_rooms)    { joins(:room).merge(Room.directs).order("rooms.updated_at DESC") }
+  scope(:without_direct_rooms) { joins(:room).merge(Room.without_directs) }
   scope(:visible) { where.not(involvement: "invisible") }
   scope(:unread)  { where.not(unread_at: nil) }
   # Membership::Connectable scopes (oracle defines them in the concern).
@@ -30,12 +28,9 @@ class Membership < ApplicationRecord
   # memberships.grant_to(users) of the oracle (has_many ... do extension):
   # insert_all with the room's default involvement, duplicates skipped.
   def self.grant_to(room : Room, user_ids : Array(Int64)) : Nil
-    now = Time.utc
-    user_ids.each do |uid|
-      ActiveRecord::Base.connection.exec(
-        "insert into memberships (room_id, user_id, involvement, connections, created_at, updated_at) " \
-        "values (?, ?, ?, 0, ?, ?) on conflict do nothing",
-        room.id.not_nil!, uid, room.default_involvement, now, now)
-    end
+    insert_all(user_ids.map { |uid|
+      {"room_id" => room.id!, "user_id" => uid,
+       "involvement" => room.default_involvement} of String => ActiveRecord::Value
+    })
   end
 end

@@ -15,8 +15,7 @@ class Sessions::TransfersController < ApplicationController
     return render(plain: "invalid transfer token", status: 400) unless user
 
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
-    cookies.signed.set("session_token", session.token.not_nil!,
-      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
+    cookies.signed.permanent[:session_token] = { value: session.token!, httponly: true, same_site: :lax }
     redirect_to root_url
   end
 end

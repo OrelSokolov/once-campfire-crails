@@ -23,12 +23,13 @@ module Users::ProfilesHelper
 
   # web_share_session_button lives in ClipboardHelper (globally wired).
 
-  # No FormModel for User in the port: field values are passed
-  # explicitly via value:.
+  # profile_form_with (oracle users/profiles_helper.rb): form_with model:
+  # @user, url: user_profile_path — the FormModel on AR drives the scope
+  # and the field values.
   def profile_form_with(**params,
                         &block : ActionView::Helpers::FormHelper::FormBuilder -> _)
-    form_with **params, url: "/users/me/profile", method: "patch",
-      scope: "user", data: {controller: "form"}, &block
+    form_with(**params, model: @user.not_nil!, url: user_profile_path,
+      method: "patch", data: {controller: "form"}, &block)
   end
 
   def copy_button(url : String) : ERB::SafeString
@@ -41,7 +42,7 @@ module Users::ProfilesHelper
     return room.name.to_s unless room.direct?
     others = User.where(
       %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
-      room.id.not_nil!, viewer.id.not_nil!)
+      room.id!, viewer.id!)
       .order("id").map(&.name.to_s)
     ChatLayout.display_sentence(others, viewer.name.to_s)
   end
@@ -51,7 +52,7 @@ module Users::ProfilesHelper
     name = HTML.escape(profile_display_name(room, viewer))
     ERB::SafeString.new(
       %(<li class="flex align-center gap margin-none min-width membership-item">\n) +
-      %(<a class="overflow-ellipsis fill-shade txt-primary txt-undecorated" href="#{room_path(room.id.not_nil!)}">\n) +
+      %(<a class="overflow-ellipsis fill-shade txt-primary txt-undecorated" href="#{room_path(room.id!)}">\n) +
       %(<strong>#{name}</strong>\n</a>\n) +
       %(<hr aria-hidden="true" class="separator">\n) +
       %(<span class="txt-small">\n) +
@@ -66,7 +67,7 @@ module Users::ProfilesHelper
     label = ChatLayout::INVOLVEMENT_LABELS[current]? || current
     ERB::SafeString.new(
       %(<turbo-frame id="involvement_#{dom_id}">\n) +
-      button_to("/rooms/#{room.id.not_nil!}/involvement?involvement=#{nxt}",
+      button_to("/rooms/#{room.id!}/involvement?involvement=#{nxt}",
         method: "put", role: "checkbox",
         aria: {checked: true, labelledby: "involvement_label_#{dom_id}"},
         tabindex: 0, class: "btn #{current}") do

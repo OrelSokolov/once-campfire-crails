@@ -16,7 +16,7 @@ class Messages::Boosts::ByBotsController < ApplicationController
     bot = bot_from_key.not_nil!
     message = @message.not_nil!
     room = @room.not_nil!
-    mid = message.id.not_nil!
+    mid = message.id!
 
     content = raw_request_body
     if content.strip.empty? || content.size > 16
@@ -25,7 +25,7 @@ class Messages::Boosts::ByBotsController < ApplicationController
 
     now = Time.utc
     @boost = Campfire::WriteQueue.perform do
-      record = Boost.new(message_id: mid, booster_id: bot.id.not_nil!,
+      record = Boost.new(message_id: mid, booster_id: bot.id!,
         content: content, created_at: now, updated_at: now)
       record.save!
       record
@@ -48,7 +48,7 @@ class Messages::Boosts::ByBotsController < ApplicationController
       boost.destroy
     end
 
-    if (room = Room.find?(message.room_id.not_nil!))
+    if (room = Room.find?(message.room_id!))
       broadcast_remove_to([room, "messages"], target: "boost_#{params["boost_id"]}")
     end
     render(plain: "", status: :no_content)
@@ -63,8 +63,8 @@ class Messages::Boosts::ByBotsController < ApplicationController
     room = message.try(&.room_id).try do |room_id|
       Room.find?(room_id).try do |r|
         Membership.where(
-          "room_id = ? AND user_id = ?", r.id.not_nil!,
-          bot_from_key.not_nil!.id.not_nil!).take ? r : nil
+          "room_id = ? AND user_id = ?", r.id!,
+          bot_from_key.not_nil!.id!).take ? r : nil
       end
     end
     if message && room && params["id"].to_s == room.id.to_s
@@ -78,8 +78,8 @@ class Messages::Boosts::ByBotsController < ApplicationController
   private def set_boost
     @boost = Boost.where(
       "id = ? AND message_id = ? AND booster_id = ?",
-      params["boost_id"].to_s.to_i64, @message.not_nil!.id.not_nil!,
-      bot_from_key.not_nil!.id.not_nil!).take
+      params["boost_id"].to_s.to_i64, @message.not_nil!.id!,
+      bot_from_key.not_nil!.id!).take
     head(:not_found) unless @boost
   end
 

@@ -10,7 +10,7 @@ module RoomsHelper
             else
               others = User.where(
                 %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
-                room.id.not_nil!, user.id.not_nil!).order("id").map(&.name.to_s)
+                room.id!, user.id!).order("id").map(&.name.to_s)
               ChatLayout.display_sentence(others, user.name.to_s)
             end
     html = String.build do |io|
@@ -27,7 +27,7 @@ module RoomsHelper
   def invitation_html(room : Room, user : User) : String
     original = Room.order("created_at").first?
     return "" unless original && original.id == room.id
-    return "" if Message.where("room_id = ?", room.id.not_nil!)
+    return "" if Message.where("room_id = ?", room.id!)
       .offset(40).exists?
     account = Account.take
     join_url = origin + "/join/" + account.try(&.join_code).to_s
@@ -64,7 +64,7 @@ module RoomsHelper
 
   # The delete-room form of the edit layout (rooms/layouts/_edit.html.erb).
   def button_to_delete_room(room : Room) : ERB::SafeString
-    button_to "#{origin}/rooms/#{room.id.not_nil!}", method: "delete",
+    button_to "#{origin}/rooms/#{room.id!}", method: "delete",
       class: "btn btn--negative max-width", aria: {label: "Delete #{room.name.to_s}"},
       data: {turbo_confirm: "Are you sure you want to delete this room and all messages in it? This can’t be undone."} do
       icon("trash.svg") + tag.span(room.name.to_s, class: "overflow-ellipsis")

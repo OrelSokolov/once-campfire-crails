@@ -16,13 +16,13 @@ module PushSubscriptionsHelpers
   end
 
   private def last_room_visited_path : String
-    user = current_user.not_nil!
+    user = current_user!
     room = nil
-    if last = cookies["last_room"]?
+    if last = cookies[:last_room]?
       room = Room.visible_for(user).where("id = ?", last.to_i64?).take
     end
     room ||= Room.visible_for(user).order("id").first?
-    room ? room_path(room.id.not_nil!) : root_path
+    room ? room_path(room.id!) : root_path
   end
 end
 

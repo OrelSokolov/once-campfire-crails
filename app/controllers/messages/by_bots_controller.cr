@@ -28,7 +28,7 @@ class Messages::ByBotsController < ApplicationController
 
     conn = ActiveRecord::Base.connection
     total = conn.query_one(
-      "SELECT count(*) FROM messages WHERE room_id = ?", room.id.not_nil!,
+      "SELECT count(*) FROM messages WHERE room_id = ?", room.id!,
       as: Int64)
     response.headers["X-Total-Count"] = total.to_s
     direction = params["after"]? ? "after" : "before"
@@ -38,10 +38,10 @@ class Messages::ByBotsController < ApplicationController
       has_next = conn.query_one?(
         "SELECT id FROM messages WHERE room_id = ? AND created_at #{op} " \
         "(SELECT created_at FROM messages WHERE id = ?) LIMIT 1",
-        room.id.not_nil!, anchor_id, as: Int64)
+        room.id!, anchor_id, as: Int64)
       if has_next
         response.headers["Link"] =
-          %(<#{origin}/rooms/#{room.id.not_nil!}/#{params["bot_key"]}/messages?#{direction}=#{anchor_id}>; rel="next")
+          %(<#{origin}/rooms/#{room.id!}/#{params["bot_key"]}/messages?#{direction}=#{anchor_id}>; rel="next")
       end
     end
     render(template: "messages/by_bots/index")
@@ -90,10 +90,10 @@ class Messages::ByBotsController < ApplicationController
       # updated_at (the oracle's update!).
       target.not_nil!.body = body_html
       target.not_nil!.save
-      Message::Searchable.update_in_index(ActiveRecord::Base.connection, target.not_nil!.id.not_nil!, plain)
+      Message::Searchable.update_in_index(ActiveRecord::Base.connection, target.not_nil!.id!, plain)
     end
 
-    mid = target.not_nil!.id.not_nil!
+    mid = target.not_nil!.id!
     message = Message.find?(mid).not_nil!
     broadcast_action_to([room, "messages"], :replace,
       target: "presentation_message_#{mid}",
@@ -110,7 +110,7 @@ class Messages::ByBotsController < ApplicationController
     message.destroy
 
 
-    broadcast_remove_to([room, "messages"], target: "message_#{message.id.not_nil!}")
+    broadcast_remove_to([room, "messages"], target: "message_#{message.id!}")
     head(:no_content)
   end
 
@@ -157,12 +157,12 @@ class Messages::ByBotsController < ApplicationController
     room = Room.find?(params["id"].to_s.to_i64)
     return nil unless room
     member = Membership.where(
-      "room_id = ? AND user_id = ?", room.id.not_nil!, bot.id.not_nil!).take
+      "room_id = ? AND user_id = ?", room.id!, bot.id!).take
     member ? room : nil
   end
 
   private def bot_messages_page(room : Room) : Array(Message)
-    room_id = room.id.not_nil!
+    room_id = room.id!
     anchor = params["before"]?
     after_anchor = params["after"]?
     if (anchor_id = anchor.try(&.to_s.to_i64?)) || (anchor_id = after_anchor.try(&.to_s.to_i64))

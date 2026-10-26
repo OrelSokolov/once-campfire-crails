@@ -28,12 +28,12 @@ class SessionsController < ApplicationController
     if (endpoint = params["push_subscription_endpoint"]?.try(&.to_s.presence)) &&
        (user = current_user)
       Push::Subscription.where("endpoint = ? AND user_id = ?",
-        endpoint, user.id.not_nil!).delete_all
+        endpoint, user.id!).delete_all
     end
-    raw = cookies.signed["session_token"]?
+    raw = cookies.signed[:session_token]?
     token = Session.token_from_signed_jar(raw)
     Session.where("token = ?", token).delete_all if token
-    cookies.delete("session_token")
+    cookies.delete(:session_token)
     # The reference's disconnect_remote_connections (terminate_current_session): live
     # sockets of the current user close with reconnect: true, so the client comes back
     # unauthorized and lands on the login page.

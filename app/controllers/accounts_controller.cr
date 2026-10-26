@@ -27,7 +27,7 @@ class AccountsController < ApplicationController
 
   def edit
     account = set_account
-    user = current_user.not_nil!
+    user = current_user!
     @user = user
     @restrict = account.restrict_room_creation_to_administrators?
     @join_url = origin + "/join/" + account.join_code.to_s

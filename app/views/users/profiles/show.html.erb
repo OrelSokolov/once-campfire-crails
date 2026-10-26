@@ -24,14 +24,14 @@
       <div class="flex align-center gap">
         <%= translation_button("user_name") %>
         <label class="flex align-center gap flex-item-grow input input--actor">
-          <%= form.text_field :name, value: @user.not_nil!.name.to_s, class: "input txt-large ", autocomplete: "name", placeholder: "Enter your name", autofocus: true, required: true, data: {"1p-ignore" => true} %>
+          <%= form.text_field :name, class: "input txt-large ", autocomplete: "name", placeholder: "Enter your name", autofocus: true, required: true, data: {"1p-ignore" => true} %>
           <%= icon("person.svg", 24, "colorize--black") %>
         </label>
       </div>
       <div class="flex align-center gap">
         <%= translation_button("email_address") %>
         <label class="flex align-center gap flex-item-grow input input--actor">
-          <%= form.email_field :email_address, value: @user.not_nil!.email_address.to_s, class: "input txt-large", autocomplete: "username", placeholder: "Enter your email address", required: false %>
+          <%= form.email_field :email_address, class: "input txt-large", autocomplete: "username", placeholder: "Enter your email address", required: false %>
           <%= icon("email.svg", 24, "colorize--black") %>
         </label>
       </div>
@@ -45,7 +45,7 @@
       <div class="flex align-start gap">
         <%= translation_button("bio") %>
         <label class="flex align--center gap flex-item--grow input input--actor">
-          <%= form.text_area :bio, value: @user.not_nil!.bio.to_s, class: "input txt-large", maxlength: 200, placeholder: "A few words about yourself…", rows: 3 %>
+          <%= form.text_area :bio, class: "input txt-large", maxlength: 200, placeholder: "A few words about yourself…", rows: 3 %>
           <%= icon("bio.svg", 24, "colorize--black") %>
         </label>
       </div>

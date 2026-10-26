@@ -1,7 +1,7 @@
 <%= page_open(@user.not_nil!) %><section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
   <% if @user.not_nil!.administrator? %>
     <div class="align-center center avatar__form gap" data-controller="upload-preview">
-      <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "txt--medium", data: {controller: "form"} do |form| %>
+      <%= form_with model: @account.not_nil!, method: "patch", class: "txt--medium", data: {controller: "form"} do |form| %>
         <label class="btn input--file">
           <%= icon("camera.svg") %>
           <%= form.file_field :logo, class: "input", accept: "image/*",
@@ -10,7 +10,7 @@
         </label>
       <% end %>
 
-      <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", data: {controller: "form"} do |form| %>
+      <%= form_with model: @account.not_nil!, method: "patch", data: {controller: "form"} do |form| %>
         <label class="btn avatar input--file account-logo txt-xx-large">
           <img data-upload-preview-target="image" role="presentation" src="<%= fresh_account_logo_path %>" width="48" height="48">
           <%= form.file_field :logo, class: "input", accept: "image/*",
@@ -22,11 +22,11 @@
       <% if @account.not_nil!.logo_attachment %><%= button_to fresh_account_logo_path, method: "delete", class: "btn btn--negative txt-small avatar__delete-btn" do %><%= icon("minus.svg") %><span class="for-screen-reader">Delete logo</span><% end %><% end %>
     </div>
 
-    <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "patch", scope: "account", class: "flex flex-column gap", data: {controller: "form"} do |form| %>
+    <%= form_with model: @account.not_nil!, class: "flex flex-column gap", data: {controller: "form"} do |form| %>
       <div class="flex align-center gap">
         <%= translation_button("account_name") %>
         <label class="flex align-center gap flex-item-grow">
-          <%= form.text_field :name, value: @account.not_nil!.name.to_s, id: "account_name", class: "input txt-large", autocomplete: "off", placeholder: "Name this account", autofocus: true,
+          <%= form.text_field :name, id: "account_name", class: "input txt-large", autocomplete: "off", placeholder: "Name this account", autofocus: true,
                 data: {action: "keydown.enter->form#submit"} %>
         </label>
         <%= form.button class: "btn btn--reversed center" do %>
@@ -36,7 +36,7 @@
     <% end %>
 
     <div class="margin-block-start pad-block pad-inline-double fill-shade border-radius">
-      <%= form_with url: "/account.#{@account.not_nil!.id.not_nil!}", method: "put", scope: "account", class: "flex align-center gap center", data: {controller: "form"} do |form| %>
+      <%= form_with model: @account.not_nil!, method: "put", class: "flex align-center gap center", data: {controller: "form"} do |form| %>
         <div class="flex-item-grow flex align-center gap txt-align-start">
           <%= icon("crown.svg", 18, "colorize--black") %> Must be admin to create new rooms
         </div>

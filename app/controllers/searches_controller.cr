@@ -18,7 +18,7 @@ class SearchesController < ApplicationController
   }, dedent: true)
 
   def index
-    user = current_user.not_nil!
+    user = current_user!
 
     # Whole-page cache (like rooms#show): the key includes the query (?q=...),
     # invalidated by the shared DB epoch.
@@ -36,18 +36,18 @@ class SearchesController < ApplicationController
                    JOIN memberships mm ON mm.room_id = m.room_id
                    WHERE mm.user_id = ? AND message_search_index MATCH ?
                    ORDER BY m.id DESC LIMIT 100)),
-          user.id.not_nil!, Message::Searchable.match_terms(query))
+          user.id!, Message::Searchable.match_terms(query))
           .order("id ASC").to_a
       end
 
       # Recent searches: the latest 10 queries.
       recents = ActiveRecord::Base.connection.query_all(
         "SELECT query FROM searches WHERE user_id = ? ORDER BY updated_at DESC LIMIT 10",
-        args: [user.id.not_nil!], as: String)
+        args: [user.id!], as: String)
 
       # Return room for the composer (the Exit search arrow).
-      return_room = (user.memberships.map(&.room_id.not_nil!).min? ||
-                    Room.visible_for(user).order("id").first.try(&.id.not_nil!) || 1).to_i64
+      return_room = (user.memberships.map(&.room_id!).min? ||
+                    Room.visible_for(user).order("id").first.try(&.id!) || 1).to_i64
 
       # Results come from a fragment cache; rooms and authors of cache misses are
       # fetched with one IN-query per entity.
@@ -63,20 +63,20 @@ class SearchesController < ApplicationController
   end
 
   def create
-    user = current_user.not_nil!
+    user = current_user!
     query = params["q"]?.to_s.strip
     unless query.empty?
       now = Time.utc
-      Search.new(user_id: user.id.not_nil!, query: query,
+      Search.new(user_id: user.id!, query: query,
         created_at: now, updated_at: now).save!
     end
     redirect_to searches_url(q: query)
   end
 
   def clear
-    user = current_user.not_nil!
+    user = current_user!
     ActiveRecord::Base.connection.exec(
-      "DELETE FROM searches WHERE user_id = ?", user.id.not_nil!)
+      "DELETE FROM searches WHERE user_id = ?", user.id!)
     redirect_to searches_url
   end
 

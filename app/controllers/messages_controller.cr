@@ -19,7 +19,7 @@ class MessagesController < ApplicationController
   attr_reader attachment : ChatLayout::Attachment?
 
   def index
-    user = current_user.not_nil!
+    user = current_user!
 
     # Whole-page cache (like rooms#show): the key includes the query (?before=...),
     # invalidated by the shared DB epoch.
@@ -37,7 +37,7 @@ class MessagesController < ApplicationController
     set_room
     return if @room.nil?
     room = @room.not_nil!
-    user = current_user.not_nil!
+    user = current_user!
 
     body_html = message_body_param
     client_message_id = message_client_id_param || UUID.random.to_s
@@ -48,7 +48,7 @@ class MessagesController < ApplicationController
     message = MessageCreator.create!(room, user, body_html, client_message_id,
       attachment: upload, base_url: origin)
 
-    attachment = upload ? ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]? : nil
+    attachment = upload ? ChatLayout.attachments_for([message.id!])[message.id!]? : nil
     # Both deliveries contain the same token-free, viewer-independent markup.
     # Chomped: Rails' render_to_string of the partial swallows newlines after <% end %>.
     @message_html = ChatLayout.message_dom(message, room, user, attachment, base_url: origin).chomp
@@ -61,7 +61,7 @@ class MessagesController < ApplicationController
 
   def edit
     message = @message.not_nil!
-    @mid = message.id.not_nil!
+    @mid = message.id!
     @attachment = ChatLayout.attachments_for([@mid.not_nil!])[@mid.not_nil!]?
   end
 
@@ -78,16 +78,16 @@ class MessagesController < ApplicationController
       # update!(body: ...) — has_rich_text persists the row on save.
       target.not_nil!.body = body_html.empty? ? plain : body_html
       target.not_nil!.save
-      Message::Searchable.update_in_index(ActiveRecord::Base.connection, target.not_nil!.id.not_nil!, plain)
+      Message::Searchable.update_in_index(ActiveRecord::Base.connection, target.not_nil!.id!, plain)
     end
 
-    message = Message.find?(message.id.not_nil!).not_nil!
-    mid = message.id.not_nil!
+    message = Message.find?(message.id!).not_nil!
+    mid = message.id!
     broadcast_action_to([room, "messages"], :replace,
       target: "presentation_message_#{mid}",
       html: ChatLayout.presentation_dom(mid, ChatLayout.text_presentation(message.body.to_s)),
       attributes: {"maintain_scroll" => "true"})
-    redirect_to room_message_url(room.id.not_nil!, mid)
+    redirect_to room_message_url(room.id!, mid)
   end
 
   def destroy
@@ -96,7 +96,7 @@ class MessagesController < ApplicationController
 
     message.destroy
 
-    broadcast_remove_to([room, "messages"], target: "message_#{message.id.not_nil!}")
+    broadcast_remove_to([room, "messages"], target: "message_#{message.id!}")
     render(html: __render_view("destroy", format: "turbo_stream").to_s,
       content_type: "text/vnd.turbo-stream.html")
   end
@@ -107,7 +107,7 @@ class MessagesController < ApplicationController
   # RoomScoped#set_room: the room is looked up within the current user's memberships,
   # so a non-member gets 404 for reads and writes alike (create calls set_room by hand).
   private def set_room
-    if room = current_user.not_nil!.rooms.find?(params["id"].to_s)
+    if room = current_user!.rooms.find?(params["id"].to_s)
       @room = room
     else
       response.status = :not_found
@@ -126,7 +126,7 @@ class MessagesController < ApplicationController
   end
 
   private def ensure_can_administer
-    head :forbidden unless Current.user.not_nil!.can_administer?(@message)
+    head :forbidden unless Current.user!.can_administer?(@message)
   end
 
   private def find_messages : Array(Message)

@@ -150,7 +150,7 @@ class ActiveStorageController < ApplicationController
     conn = ActiveRecord::Base.connection
     attachments = conn.query_all(
       "SELECT record_type, record_id FROM active_storage_attachments WHERE blob_id = ?",
-      args: [blob.id.not_nil!], as: {String, Int64})
+      args: [blob.id!], as: {String, Int64})
     if attachments.empty?
       metadata = JSON.parse(blob.metadata.to_s.presence || "{}")
       owner = metadata["campfire_upload_user_id"]?.try(&.as_i?)
@@ -167,7 +167,7 @@ class ActiveStorageController < ApplicationController
           !conn.query_one?(
             %(SELECT m.id FROM messages m JOIN memberships ms ON ms.room_id = m.room_id
               WHERE m.id = ? AND ms.user_id = ?),
-            message_id, user.id.not_nil!, as: Int64).nil?
+            message_id, user.id!, as: Int64).nil?
         else false
         end
       end

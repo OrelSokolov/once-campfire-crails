@@ -37,14 +37,14 @@ module Users::SidebarHelper
     shared_rooms.sort! { |a, b| a.name.to_s.downcase <=> b.name.to_s.downcase }
 
     directs = direct_rooms.map do |room|
-      members = members_by_room[room.id.not_nil!]? || [user]
+      members = members_by_room[room.id!]? || [user]
       members = members.reject { |m| m.id == user.id }
       members = [user] if members.empty?
-      ChatERB::SidebarDirect.new(room.id.not_nil!, sidebar_epoch_ms(room),
-        sidebar_room_unread?(user, room.id.not_nil!), members)
+      ChatERB::SidebarDirect.new(room.id!, sidebar_epoch_ms(room),
+        sidebar_room_unread?(user, room.id!), members)
     end
     shared = shared_rooms.map do |room|
-      ChatERB::SidebarShared.new(room, sidebar_room_unread?(user, room.id.not_nil!))
+      ChatERB::SidebarShared.new(room, sidebar_room_unread?(user, room.id!))
     end
 
     rooms_stream = Turbo::Streams::StreamName.signed_stream_name(["rooms"])
@@ -77,7 +77,7 @@ module Users::SidebarHelper
         WHERE r.name IS NULL ORDER BY u.id),
       as: {Int64, Int64})
     return Hash(Int64, Array(User)).new { |h, k| h[k] = [] of User } if rows.empty?
-    users_by_id = User.where(id: rows.map(&.[1])).to_a.index_by(&.id.not_nil!)
+    users_by_id = User.where(id: rows.map(&.[1])).to_a.index_by(&.id!)
     table = Hash(Int64, Array(User)).new { |h, k| h[k] = [] of User }
     rows.each do |(room_id, uid)|
       if (u = users_by_id[uid]?) && u.id != user.id
@@ -89,7 +89,7 @@ module Users::SidebarHelper
 
   private def sidebar_room_unread?(user : User, room_id : Int64) : Bool
     Membership.where("room_id = ?", room_id)
-      .where("user_id = ?", user.id.not_nil!).unread.any?
+      .where("user_id = ?", user.id!).unread.any?
   end
 
   private def sidebar_epoch_ms(room : Room) : Int64

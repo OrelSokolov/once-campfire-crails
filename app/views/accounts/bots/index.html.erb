@@ -13,7 +13,7 @@
   </div>
   <div class="pad-inline pad-block-start ">
     <menu class="flex flex-column gap margin-none pad">
-      <% @bots.each do |bot| %><% bid = bot.id.not_nil! %><li class="flex flex-column gap flush fill-shade border-radius pad-block pad-inline-double">
+      <% @bots.each do |bot| %><% bid = bot.id! %><li class="flex flex-column gap flush fill-shade border-radius pad-block pad-inline-double">
         <div class="flex align-center gap">
           <figure class="avatar flex-item--no-shrink" style="--avatar-size: 2.65em;">
             <%= avatar_link(bot, "lazy") %>

@@ -10,7 +10,7 @@
   <%= yield %>
 </section>
 
-<% if Current.user.not_nil!.can_administer?(@room) %>
+<% if Current.user!.can_administer?(@room) %>
   <section class="panel txt-align-center">
     <%= button_to_delete_room room %>
   </section>

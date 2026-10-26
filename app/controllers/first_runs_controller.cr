@@ -3,7 +3,10 @@ class FirstRunsController < ApplicationController
   allow_unauthenticated_access
   before_action :prevent_repeats
 
+  @user : User?
+
   def show
+    @user = User.new
   end
 
   def create

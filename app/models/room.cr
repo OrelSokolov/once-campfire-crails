@@ -5,19 +5,31 @@ class Room < ApplicationRecord
   has_many :messages, foreign_key: "room_id", dependent: :destroy
   belongs_to :creator, class_name: "User", default: -> { Current.user }
 
-  # STI type is stored in two spellings ('Rooms::Open' from seeds, short 'Open' created by the port), so scope to IN of both.
-  scope(:opens)           { where("type IN ('Open', 'Rooms::Open')") }
-  scope(:closeds)         { where("type IN ('Closed', 'Rooms::Closed')") }
-  scope(:directs)         { where("type IN ('Direct', 'Rooms::Direct')") }
-  scope(:without_directs) { where("type NOT IN ('Direct', 'Rooms::Direct')") }
+  # STI type: where(type:) on a namespaced value matches both spellings
+  # ('Rooms::Open' from reference seeds, short 'Open' created by the port) —
+  # the IN-expansion lives in active_record_cr Relation#where.
+  scope(:opens)           { where(type: "Rooms::Open") }
+  scope(:closeds)         { where(type: "Rooms::Closed") }
+  scope(:directs)         { where(type: "Rooms::Direct") }
+  scope(:without_directs) { where.not(type: "Rooms::Direct") }
   scope(:ordered)         { order("LOWER(name)") }
 
   # gid is built from the record's STI class, not Crystal's Room, to keep turbo-cable-stream-source signed names matching.
-  def to_gid_param : String
+  def gid_model_name : String
     sti = type.to_s
     sti = "Rooms::#{sti}" unless sti.includes?("::")
-    gid = "gid://#{Turbo.app}/#{sti}/#{id.not_nil!}"
-    Base64.urlsafe_encode(gid, padding: false)
+    sti
+  end
+
+  # form_with model: — the scope and the polymorphic route key are the STI
+  # model name (Rooms::Open → rooms_open), normalized like dom_id for both
+  # type spellings (short 'Open' and seed 'Rooms::Open' on a base-class row).
+  def form_scope : String
+    gid_model_name.underscore.tr("/", "_")
+  end
+
+  def form_model_name : String
+    form_scope
   end
 
   def dom_id : String
@@ -33,7 +45,7 @@ class Room < ApplicationRecord
   # Visible rooms for a user, involvement-filtered (sidebar listing).
   scope(:visible, ->(user) {
     where(%(id IN (SELECT room_id FROM memberships WHERE user_id = ? AND involvement != 'invisible')),
-      user.id.not_nil!)
+      user.id!)
   })
 
   def self.visible_for(user : User)
@@ -67,7 +79,7 @@ class Room < ApplicationRecord
   # keep touching them all: a direct's sidebar row is cached by membership and
   # shows the room's recency.
   def unread_memberships(message : Message) : Nil
-    recipients = memberships.visible.disconnected.where.not(user_id: message.creator_id.not_nil!)
+    recipients = memberships.visible.disconnected.where.not(user_id: message.creator_id!)
     recipients = recipients.where(unread_at: nil) unless direct?
     recipients.update_all({"unread_at" => message.created_at, "updated_at" => Time.utc})
   end

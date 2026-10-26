@@ -31,10 +31,10 @@ module AccountsHelper
 
   private def last_room_visited_path(user : User) : String
     room = nil
-    if last = cookies["last_room"]?
+    if last = cookies[:last_room]?
       room = Room.visible_for(user).where("id = ?", last.to_i64?).take
     end
     room ||= Room.visible_for(user).order("id").first?
-    room ? room_path(room.id.not_nil!) : root_path
+    room ? room_path(room.id!) : root_path
   end
 end

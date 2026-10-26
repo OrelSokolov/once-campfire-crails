@@ -8,7 +8,7 @@ class Accounts::CustomStylesController < ApplicationController
 
   def edit
     @account = Account.take.not_nil!
-    @user = current_user.not_nil!
+    @user = current_user!
   end
 
   def update

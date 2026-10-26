@@ -21,7 +21,7 @@ module Campfire
 
     def self.key(m : Message) : String
       updated = m.updated_at || m.created_at || Time.utc
-      "messages/#{m.id.not_nil!}-#{updated.to_unix_ms}-#{RENDER_VERSION}"
+      "messages/#{m.id!}-#{updated.to_unix_ms}-#{RENDER_VERSION}"
     end
 
     def self.get(key : String, epoch : String) : String?

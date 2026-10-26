@@ -12,9 +12,9 @@ class RemoveBannedContentJob < ApplicationJob
     # (boosts / rich_text / search index ride on destroy callbacks) and
     # its removal is broadcast to the room's stream.
     user.messages.order("id").each do |message|
-      room_id = message.room_id.not_nil!
+      room_id = message.room_id!
       message.destroy
-      Message::Broadcasts.broadcast_remove(room_id, message.id.not_nil!)
+      Message::Broadcasts.broadcast_remove(room_id, message.id!)
     end
   end
 end

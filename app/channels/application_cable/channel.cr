@@ -12,4 +12,9 @@ class ApplicationCable::Channel < ActionCable::Channel::Base
     return nil unless (uid = current_user_id)
     uid.to_i64?.try { |id| User.find?(id) }
   end
+
+  # Bang variant (Ruby-style): the connected user or a raise.
+  def current_user! : User
+    current_user!
+  end
 end

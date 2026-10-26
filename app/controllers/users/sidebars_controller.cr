@@ -4,7 +4,7 @@ class Users::SidebarsController < ApplicationController
   DIRECT_PLACEHOLDERS = 20
 
   def show
-    user = current_user.not_nil!
+    user = current_user!
 
     page = cache_page("sidebars#show", user.id) do
       sidebar_page(user, find_direct_placeholder_users(user, direct_room_ids(user)))
@@ -13,18 +13,18 @@ class Users::SidebarsController < ApplicationController
   end
 
   # Port detects direct rooms via rooms.name IS NULL (the type column
-  # stores two spellings, see Room#to_gid_param).
+  # stores two spellings, see Room#gid_model_name).
   private def find_direct_placeholder_users(user : User, direct_room_ids : Array(Int64)) : Array(User)
     exclude_user_ids = user_ids_already_in_direct_rooms_with(direct_room_ids)
     limit = {DIRECT_PLACEHOLDERS - exclude_user_ids.size, 0}.max
     return [] of User if limit == 0
-    User.active.where.not(id: exclude_user_ids + [user.id.not_nil!])
+    User.active.where.not(id: exclude_user_ids + [user.id!])
       .order("created_at").limit(limit).to_a
   end
 
   private def direct_room_ids(user : User) : Array(Int64)
     Room.visible_for(user).order("id").to_a
-      .select(&.direct?).map(&.id.not_nil!)
+      .select(&.direct?).map(&.id!)
   end
 
   private def user_ids_already_in_direct_rooms_with(direct_room_ids : Array(Int64)) : Array(Int64)

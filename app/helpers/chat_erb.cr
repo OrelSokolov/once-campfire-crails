@@ -153,7 +153,7 @@ class ChatERB
 
   # fresh_user_avatar_path (UsersHelper) for the sidebar avatars.
   def avatar_path(u : User) : String
-    ChatLayout.fresh_user_avatar_path(u.id.not_nil!, u.updated_at)
+    ChatLayout.fresh_user_avatar_path(u.id!, u.updated_at)
   end
 
   # Direct room label: one member — the first word of the name; several —
@@ -185,7 +185,7 @@ class ChatERB
   def direct_members(membership : Membership) : Array(User)
     members = User.where(
       %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
-      membership.room_id.not_nil!).to_a
+      membership.room_id!).to_a
       .reject { |u| u.id == membership.user_id }
     members.empty? ? [membership.user.not_nil!] : members
   end

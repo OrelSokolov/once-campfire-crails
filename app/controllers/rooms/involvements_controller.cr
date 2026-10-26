@@ -16,7 +16,7 @@ class Rooms::InvolvementsController < ApplicationController
       if %w[mentions everything nothing invisible].includes?(value)
         membership.update({"involvement" => value})
       end
-      redirect_to room_involvement_url(membership.room_id.not_nil!)
+      redirect_to room_involvement_url(membership.room_id!)
     else
       render_room_not_found
     end
@@ -28,12 +28,12 @@ class Rooms::InvolvementsController < ApplicationController
     if (user = current_user) &&
        (room = Room.find?(room_id))
       Membership.where(
-        "room_id = ? AND user_id = ?", room.id.not_nil!, user.id.not_nil!).take
+        "room_id = ? AND user_id = ?", room.id!, user.id!).take
     end
   end
 
   private def membership_room(membership : Membership) : Room
-    Room.find?(membership.room_id.not_nil!).not_nil!
+    Room.find?(membership.room_id!).not_nil!
   end
 
   private def render_room_not_found : Nil

@@ -24,7 +24,7 @@ class Bot::WebhookJob < ApplicationJob
     end
     return unless hook && hook[:status] == 0
 
-    message_id = message.id.not_nil!
+    message_id = message.id!
     msg = conn.query_one?(
       "SELECT m.id, m.room_id, m.creator_id, r.name AS room_name, r.type AS room_type, " \
       "u.name AS creator_name FROM messages m " \

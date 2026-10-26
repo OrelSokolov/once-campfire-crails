@@ -42,6 +42,6 @@ class RoomMessagesChannel < ApplicationCable::Channel
     room = GlobalID::Locator.locate(gid_param, only: Room)
     return false unless room && (uid = current_user_id)
 
-    Membership.where("room_id = ? AND user_id = ?", room.id.not_nil!, uid).exists?
+    Membership.where("room_id = ? AND user_id = ?", room.id!, uid).exists?
   end
 end

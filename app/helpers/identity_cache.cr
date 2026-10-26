@@ -33,7 +33,7 @@ module Campfire
       end
       session = Session.where("token = ?", token).take
       return nil unless session
-      user = session.user_id ? User.find?(session.user_id.not_nil!) : nil
+      user = session.user_id ? User.find?(session.user_id!) : nil
       entry = Entry.new(session, user)
       if epoch == @@epoch
         @@entries.clear if @@entries.size >= LIMIT

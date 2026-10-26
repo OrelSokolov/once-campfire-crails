@@ -77,9 +77,11 @@
   двух написаниях — полный из сидов оракула (`Rooms::Open`), короткий при
   создании портом (`Open`); все scope расширены до `IN` обеих форм;
   `direct?` — по `rooms.name IS NULL`, не по type.
-- `app/models/room.cr#to_gid_param`: gid строится от STI-класса записи с
+- `app/models/room.cr#gid_model_name`: gid строится от STI-класса записи с
   нормализацией короткого type к полному (иначе расходится
-  signed-stream-name turbo-cable-stream-source).
+  signed-stream-name turbo-cable-stream-source). Ручной `to_gid_param`
+  удалён (2026-10-26): хук `gid_model_name` в active_record_cr v0.1.20,
+  `to_gid_param`/`GlobalID.create` из шарда; см. notes/style-parity.md.
 
 ## Аутентификация / безопасность
 

@@ -118,10 +118,19 @@ Crystal, (c) стилистическая проблема порта. План 
   :deny_bots` (порт-эквивалент через bot_request? — authenticated_by-трекинга
   нет); by_bots сохраняет порт-специфичный skip require_authentication
   (require_bot). Макро-грабли `**options`-проброса — notes/style-parity.md.
-- [~] `around_action` + `before_action, if:/unless:` — есть в шарде;
-  page-cache в app вручную (cached_responses).
-- [~] `cookies.signed.permanent[...] = { value:, httponly: }` — hash-форма
-  `[]=` не поддержана; app пишет `cookies.signed.set(...)`.
+- [x] `around_action` + `before_action, if:/unless:` — есть в шарде;
+  page-cache в app вручную (cached_responses) — осознанный компромисс
+  (ETag/Cache-Control byte-parity, notes/style-parity.md).
+- [x] `cookies.signed.permanent[...] = { value:, httponly:, same_site: }` —
+  hash-форма `[]=` + Symbol-ключи имён — action_pack_cr v0.2.18 (2026-10-26);
+  подпись/шифрование перенесены в commit-фазу цепочки джарбов, поэтому
+  `cookies.signed.permanent[...]` несёт message-level exp = 20 лет, а
+  `.permanent.signed[...]` — exp nil (обе цепочки byte-verified против
+  actionpack 8.1.4, oracle/cookies_expected.yml). Adopted: authentication/
+  joins/transfers (`signed.permanent[:session_token] = { value:, httponly:,
+  same_site: :lax }` 1:1 с authentication.rb:94), tracked_room_visit/
+  rooms (`cookies.permanent[:last_room] = room.id`), session_lookup/
+  sessions/welcome/хелперы — Symbol-ключи чтения/удаления.
 
 ### 2.4. action_view_cr — вьюхи (~20 файлов)
 - [x] `image_tag` — механика есть (пребилд-манифест), `icon()` остаётся

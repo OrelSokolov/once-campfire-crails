@@ -5,17 +5,17 @@ class WelcomeController < ApplicationController
   attr_reader user : User?
 
   def show
-    user = current_user.not_nil!
+    user = current_user!
     @user = user
 
     room = nil
-    if last = cookies["last_room"]?
+    if last = cookies[:last_room]?
       room = Room.visible_for(user).where("id = ?", last.to_i64?).take
     end
     room ||= default_room(user)
 
     if room
-      redirect_to(room_path(room.id.not_nil!))
+      redirect_to(room_path(room.id!))
     end
   end
 

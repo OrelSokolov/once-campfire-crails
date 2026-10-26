@@ -35,7 +35,7 @@ class Users::AvatarsController < ApplicationController
         public_path: !!PublicCache.avatar_token_path?(request.path))
     end
 
-    key = blob.not_nil!.key.not_nil!
+    key = blob.not_nil!.key!
     path = File.join(storage_root, key[0, 2], key[2, 2], key)
     return render(plain: "avatar file missing", status: 404) unless File.exists?(path)
 

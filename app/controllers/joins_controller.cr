@@ -7,6 +7,7 @@ class JoinsController < ApplicationController
 
   # The invite link's account for show.html.erb (name, join_code in the action).
   attr_reader account : Account?
+  @user : User?
 
   def show
     # Known issue (PLAN.md): the router decodes path segments with URI.decode_www_form,
@@ -19,6 +20,7 @@ class JoinsController < ApplicationController
       return redirect_to root_url
     end
     @account = account
+    @user = User.new
   end
 
   def create
@@ -47,8 +49,7 @@ class JoinsController < ApplicationController
     user.save!
 
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
-    cookies.signed.set("session_token", session.token.not_nil!,
-      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
+    cookies.signed.permanent[:session_token] = { value: session.token!, httponly: true, same_site: :lax }
     redirect_to root_url
   end
 

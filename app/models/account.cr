@@ -22,7 +22,7 @@ class Account < ApplicationRecord
 
   def logo_blob : ActiveStorageBlob?
     logo_attachment.try do |attachment|
-      ActiveStorageBlob.find(attachment.blob_id.not_nil!)
+      ActiveStorageBlob.find(attachment.blob_id!)
     end
   end
 
@@ -34,7 +34,7 @@ class Account < ApplicationRecord
   def logo_variant(size : String = "large") : ActiveStorage::Variant?
     attachment = logo_attachment
     return nil unless attachment
-    blob = ActiveStorage::Blob.find?(attachment.blob_id.not_nil!)
+    blob = ActiveStorage::Blob.find?(attachment.blob_id!)
     return nil unless blob && blob.variable?
     dims = LOGO_VARIANT_SIZES[size]? || LOGO_VARIANT_SIZES["large"]
     blob.variant(resize_to_limit: dims, format: "png").processed

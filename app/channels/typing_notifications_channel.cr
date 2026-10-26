@@ -10,6 +10,6 @@ class TypingNotificationsChannel < RoomChannel
   end
 
   private def current_user_attributes
-    current_user.not_nil!.slice(:id, :name)
+    current_user!.slice(:id, :name)
   end
 end

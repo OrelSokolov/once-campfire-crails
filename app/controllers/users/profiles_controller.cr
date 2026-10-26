@@ -8,14 +8,14 @@ class Users::ProfilesController < ApplicationController
   @qr_path : String = ""
 
   def show
-    user = current_user.not_nil!
+    user = current_user!
     @user = user
     @ua = request.headers["User-Agent"]?.to_s
     rooms = Room.where(
-      %(id IN (SELECT room_id FROM memberships WHERE user_id = ?)), user.id.not_nil!)
-      .to_a.index_by(&.id.not_nil!)
+      %(id IN (SELECT room_id FROM memberships WHERE user_id = ?)), user.id!)
+      .to_a.index_by(&.id!)
     user.memberships.each do |membership|
-      next unless room = rooms[membership.room_id.not_nil!]?
+      next unless room = rooms[membership.room_id!]?
       if room.direct?
         @direct_memberships << {room, membership}
       else
@@ -23,13 +23,13 @@ class Users::ProfilesController < ApplicationController
       end
     end
     @shared_memberships.sort_by! { |(room, _)| room.name.to_s.downcase }
-    @direct_memberships.sort_by! { |(room, _)| room.id.not_nil! }
+    @direct_memberships.sort_by! { |(room, _)| room.id! }
     @transfer_url = transfer_url_for(user)
     @qr_path = "/qr_code/" + Base64.urlsafe_encode(@transfer_url, padding: false)
   end
 
   def update
-    user = current_user.not_nil!
+    user = current_user!
     user.name = nested("name") unless nested?("name").nil?
     user.email_address = nested("email_address") unless nested?("email_address").nil?
     user.bio = nested("bio") unless nested?("bio").nil?
@@ -44,7 +44,7 @@ class Users::ProfilesController < ApplicationController
 
   private def transfer_url_for(user : User) : String
     origin + "/session/transfers/" +
-      generate_signed_id(user.id.not_nil!, "user/transfer",
+      generate_signed_id(user.id!, "user/transfer",
         expires_at: Time.utc + 4.hours)
   end
 

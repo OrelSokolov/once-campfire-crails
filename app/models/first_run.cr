@@ -31,7 +31,7 @@ class FirstRun
 
     room = Rooms::Open.new(
       name: FIRST_ROOM_NAME,
-      creator_id: user.id.not_nil!,
+      creator_id: user.id!,
       created_at: now, updated_at: now)
     room.save!
     # The room's after_save_commit grants membership to every active user

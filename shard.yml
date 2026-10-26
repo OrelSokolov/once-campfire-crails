@@ -9,13 +9,13 @@ dependencies:
   # edge/8.2 (UrlHelper.button_to_edge_82) — см. plans/STYLE_1to1.md 2.4.
   action_view_cr:
     github: OrelSokolov/action_view.cr
-    version: ~> 0.1.19
+    version: ~> 0.1.20
   railties_cr:
     github: OrelSokolov/railties.cr
     version: ~> 0.1.16
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.19
+    version: ~> 0.1.24
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
     version: ~> 0.1.1

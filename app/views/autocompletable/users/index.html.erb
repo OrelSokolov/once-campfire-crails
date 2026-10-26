@@ -1,4 +1,4 @@
-<% @users.each do |u| %><% sgid = generate_sgid(u.id.not_nil!) %><lexxy-prompt-item search="<%= u.name.to_s %>" sgid="<%= sgid %>">
+<% @users.each do |u| %><% sgid = generate_sgid(u.id!) %><lexxy-prompt-item search="<%= u.name.to_s %>" sgid="<%= sgid %>">
   <template type="menu"><span class="autocomplete__item flex align-center gap unpad"><a title="<%= u.name.to_s %>" class="btn avatar" data-turbo-frame="_top" href="<%= user_path(u.id) %>"><img aria-hidden="true" src="/users/<%= u.id %>/avatar" width="48" height="48"></a><span class="autocompletable__name"><%= u.name.to_s %></span></span></template>
   <template type="editor"></template>
 </lexxy-prompt-item>

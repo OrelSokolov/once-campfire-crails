@@ -14,7 +14,7 @@ class UsersController < ApplicationController
   }, dedent: true)
 
   def show
-    viewer = current_user.not_nil!
+    viewer = current_user!
     @viewer = viewer
     # find-bang: RecordNotFound -> 404 via the middleware rescue ladder
     @subject = User.find(params["id"].to_s)

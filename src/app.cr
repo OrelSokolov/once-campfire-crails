@@ -125,6 +125,11 @@ end
 
 CRails.application.initialize!
 
+# Rails' activerecord railtie: signed_id/find_signed verify through the
+# application's "active_record/signed_id" verifier (url_safe, Rails 8.1).
+ActiveRecord.signed_id_verifier =
+  CRails.application.message_verifier("active_record/signed_id", url_safe: true)
+
 # Dev-заметка про кластер: в многопоточной сборке (дефолт Crystal 1.21)
 # Process.fork не компилируется, поэтому форк-кластер недоступен, пока
 # приложение не собрано с -Dwithout_mt. Предупреждаем один раз при старте

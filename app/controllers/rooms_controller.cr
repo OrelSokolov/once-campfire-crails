@@ -24,7 +24,7 @@ class RoomsController < ApplicationController
   # accounts/invite — the system_welcome invite section (RoomsHelper#invitation_html).
   compile_partials({
     "rooms/_form"    => {path: "app/views/rooms/_form.html.erb",
-                         locals: {"room" => Room?, "kind" => String,
+                         locals: {"room" => Room, "kind" => String,
                                   "user" => User, "selected" => Set(Int64),
                                   "is_open" => Bool, "can_administer" => Bool,
                                   "users" => Array(User), "divider" => Int32}},
@@ -75,7 +75,7 @@ class RoomsController < ApplicationController
   end
 
   def show
-    user = current_user.not_nil!
+    user = current_user!
     page = cache_page("rooms#show", user.id) { room_page(@room.not_nil!, user, find_messages) }
     # last_room cookie on every response, but after the cache decision
     # (a Set-Cookie before cache_page would prevent storing the page).
@@ -88,7 +88,7 @@ class RoomsController < ApplicationController
 
   def destroy
     room = @room.not_nil!
-    rid = room.id.not_nil!
+    rid = room.id!
     room.destroy_later
     broadcast_remove_room(rid, room.type.to_s)
     redirect_to root_url
@@ -103,11 +103,11 @@ class RoomsController < ApplicationController
   # Subclasses narrow this to the room types they're allowed to act on, so that one
   # room namespace can't be used to reach another's rooms.
   def room_scope
-    Current.user.not_nil!.rooms
+    Current.user!.rooms
   end
 
   def ensure_can_administer
-    head :forbidden unless Current.user.not_nil!.can_administer?(@room)
+    head :forbidden unless Current.user!.can_administer?(@room)
   end
 
   # With restrict_room_creation_to_administrators, creating rooms (opens/closeds) is
@@ -115,7 +115,7 @@ class RoomsController < ApplicationController
   def ensure_permission_to_create_rooms : Nil
     account = Account.take
     if account.try(&.restrict_room_creation_to_administrators?) &&
-       !Current.user.not_nil!.administrator?
+       !Current.user!.administrator?
       head(:forbidden)
     end
   end
@@ -132,25 +132,25 @@ class RoomsController < ApplicationController
     room = @room.not_nil!
     if (mid = params["message_id"]?.try(&.to_s).try(&.to_i64?)) &&
        (anchor = Message.where("room_id = ? AND id = ?",
-         room.id.not_nil!, mid).first?)
+         room.id!, mid).first?)
       before = Message.where(
         "room_id = ? AND created_at < (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, mid)
+        room.id!, mid)
         .order("created_at DESC").limit(40).to_a.reverse
       after = Message.where(
         "room_id = ? AND created_at > (SELECT created_at FROM messages WHERE id = ?)",
-        room.id.not_nil!, mid)
+        room.id!, mid)
         .order("created_at ASC").limit(40).to_a
       before + [anchor] + after
     else
-      Message.where("room_id = ?", room.id.not_nil!)
+      Message.where("room_id = ?", room.id!)
         .order("created_at DESC").limit(40).to_a.reverse
     end
   end
 
   # TrackedRoomVisit: cookies.permanent.
   def remember_last_room_visited(room : Room) : Nil
-    cookies.permanent["last_room"] = room.id.not_nil!.to_s
+    cookies.permanent[:last_room] = room.id!
   end
 
   # Shared create for Rooms::Opens/Closeds: a room of class klass + memberships for
@@ -162,7 +162,7 @@ class RoomsController < ApplicationController
     # (rooms/open.cr), then the selected members are granted conflict-safe.
     room = klass.create_for(
       {"name" => room_params["name"]?.to_s,
-       "creator_id" => user.id.not_nil!,
+       "creator_id" => user.id!,
        "created_at" => Time.utc, "updated_at" => Time.utc},
       member_ids)
 
@@ -182,16 +182,16 @@ class RoomsController < ApplicationController
     room.save!
 
     unless room.type.to_s.ends_with?("Open")
-      wanted = selected_user_ids.unshift(room.creator_id.not_nil!).uniq!.to_set
-      existing = Membership.where("room_id = ?", room.id.not_nil!)
+      wanted = selected_user_ids.unshift(room.creator_id!).uniq!.to_set
+      existing = Membership.where("room_id = ?", room.id!)
       existing.each do |m|
-        unless wanted.includes?(m.user_id.not_nil!)
+        unless wanted.includes?(m.user_id!)
           # destroy (not delete): Membership#after_destroy_commit resets the
           # revoked user's remote connections — memberships.revoke_from.
           m.destroy
         end
       end
-      have = existing.map(&.user_id.not_nil!).to_set
+      have = existing.map(&.user_id!).to_set
       missing = wanted.reject { |uid| have.includes?(uid) }
       Membership.grant_to(room, missing)
     end
@@ -201,28 +201,29 @@ class RoomsController < ApplicationController
   end
 
   # Data for _form.html.erb: selected members, admin/open flags, users (selected first,
-  # then by name), divider position.
+  # then by name), divider position. `room` is a built Rooms::Open/Closed for the
+  # new screens (form_with model: needs the record for scope and URL).
   def prepare_room_form(room : Room?, kind : String, user : User) : Nil
     @room = room
     @kind = kind
     @user = user
-    selected = if r = room
-      Membership.where("room_id = ?", r.id.not_nil!)
-        .map(&.user_id.not_nil!).to_set
+    selected = if room && (rid = room.id)
+      Membership.where("room_id = ?", rid)
+        .map(&.user_id!).to_set
     else
-      Set(Int64).new.tap { |s| s << user.id.not_nil! }
+      Set(Int64).new.tap { |s| s << user.id! }
     end
     @selected = selected
     @is_open = kind == "opens"
-    @can_administer = room.nil? || user.administrator? || room.creator_id == user.id
+    @can_administer = room.nil? || !room.persisted? || user.administrator? || room.creator_id == user.id
     @users = User.active.to_a.sort_by(&.name.to_s.downcase)
     if @is_open
       # opens form: User.active.ordered is just LOWER(name), no selected/others split.
       @divider = 0
     else
       @users.sort! { |a, b|
-        (selected.includes?(b.id.not_nil!) ? 1 : 0) <=>
-        (selected.includes?(a.id.not_nil!) ? 1 : 0)
+        (selected.includes?(b.id!) ? 1 : 0) <=>
+        (selected.includes?(a.id!) ? 1 : 0)
       }
       @divider = selected.size
     end
@@ -234,10 +235,10 @@ class RoomsController < ApplicationController
     kind = room.type.to_s.split("::").last?.try(&.downcase)
     link = String.build do |io|
       io << %(<a class="align-center gap room btn txt-nowrap" data-sorted-list-target="item" )
-      io << %(data-room-id=") << room.id.not_nil!.to_s
+      io << %(data-room-id=") << room.id!.to_s
       io << %(" data-sorted-list-name=") << HTML.escape(room.name.to_s)
-      io << %(" id="list_rooms_) << kind << "_" << room.id.not_nil!.to_s
-      io << %(" style="--column-gap: 0.5em" href="/rooms/) << room.id.not_nil!.to_s << %(">)
+      io << %(" id="list_rooms_) << kind << "_" << room.id!.to_s
+      io << %(" style="--column-gap: 0.5em" href="/rooms/) << room.id!.to_s << %(">)
       io << %(<span class="overflow-ellipsis">) << HTML.escape(room.name.to_s) << %(</span></a>)
     end
     broadcast_prepend_to(["rooms"], target: "shared_rooms", html: link)

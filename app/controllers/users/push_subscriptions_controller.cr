@@ -12,19 +12,19 @@ class Users::PushSubscriptionsController < ApplicationController
 
   def index
     @push_subscriptions = Push::Subscription
-      .where("user_id = ?", current_user.not_nil!.id.not_nil!)
+      .where("user_id = ?", current_user!.id!)
       .order("id").to_a
   end
 
   def create
-    user = current_user.not_nil!
+    user = current_user!
     endpoint = nested("endpoint")
     p256dh = nested("p256dh_key")
     auth = nested("auth_key")
 
     existing = Push::Subscription.where(
       "user_id = ? AND endpoint = ? AND p256dh_key = ? AND auth_key = ?",
-      user.id.not_nil!, endpoint, p256dh, auth).take
+      user.id!, endpoint, p256dh, auth).take
     if existing
       # Existing endpoints must pass current validations
       if existing.valid?
@@ -35,7 +35,7 @@ class Users::PushSubscriptionsController < ApplicationController
       end
     else
       subscription = Push::Subscription.new(
-        user_id: user.id.not_nil!,
+        user_id: user.id!,
         endpoint: endpoint,
         p256dh_key: p256dh,
         auth_key: auth,
@@ -50,7 +50,7 @@ class Users::PushSubscriptionsController < ApplicationController
 
   def destroy
     Push::Subscription.where("user_id = ? AND id = ?",
-      current_user.not_nil!.id.not_nil!, params["id"].to_s).delete_all
+      current_user!.id!, params["id"].to_s).delete_all
     redirect_to user_push_subscriptions_url
   end
 

@@ -1,4 +1,4 @@
-<% uid = user.id.not_nil! %>
+<% uid = user.id! %>
 <% viewer = @user.not_nil! %>
 <% admin = viewer.administrator? %>
 <% banned = user.banned? %>
@@ -10,7 +10,7 @@
 <div class="overflow-ellipsis fill-shade"><strong><%= user.name.to_s %></strong></div>
 </div>
 <hr class="separator" aria-hidden="true">
-<% if admin && !banned && user.active? %><% unless user.bot? %><%= form_with url: "/account/users/#{uid}", method: "patch", scope: "user", data: {controller: "form"} do |form| %>
+<% if admin && !banned && user.active? %><% unless user.bot? %><%= form_with model: user, url: account_user_path(user), method: "patch", data: {controller: "form"} do |form| %>
 <label class="btn txt-small flex-item-no-shrink" for="role_user_<%= uid %>">
 <span class="for-screen-reader">Role: <%= user.administrator? ? "Administrator" : "Member" %></span>
 <%= icon("crown.svg") %>

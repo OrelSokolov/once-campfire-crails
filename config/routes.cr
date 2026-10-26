@@ -30,15 +30,15 @@ CRails.application.routes.draw do
   get "/account/custom_styles", to: "accounts/custom_styles#edit"
   get "/account/logo", to: "accounts/logos#show", as: "account_logo"
   delete "/account/logo", to: "accounts/logos#destroy"
-  patch "/account/users/:user_id", to: "accounts/users#update"
-  delete "/account/users/:user_id", to: "accounts/users#destroy"
+  patch "/account/users/:user_id", to: "accounts/users#update", as: "account_user"
+  delete "/account/users/:user_id", to: "accounts/users#destroy", as: "account_user"
   post "/account/join_code", to: "accounts/join_codes#create"
 
   direct :fresh_account_logo do |options|
     route_for :account_logo, v: Current.account.try(&.updated_at).try(&.to_fs(:number)), size: options["size"]?
   end
 
-  get "/join/:code", to: "joins#show"
+  get "/join/:code", to: "joins#show", as: "join"
   post "/join/:code", to: "joins#create"
   get "/qr_code/:id", to: "qr_code#show"
   get "/webmanifest", to: "pwa#manifest"
@@ -48,7 +48,7 @@ CRails.application.routes.draw do
   # Литеральные /users/me/* до resources :users; аватар — по :token.
   get "/users/me/sidebar", to: "users/sidebars#show", as: "user_sidebar"
   get "/users/me/profile", to: "users/profiles#show", as: "user_profile"
-  patch "/users/me/profile", to: "users/profiles#update"
+  patch "/users/me/profile", to: "users/profiles#update", as: "user_profile"
   # scope defaults: { user_id: "me" }: Web Push подписки текущего юзера.
   get    "/users/me/push_subscriptions", to: "users/push_subscriptions#index",
     as: "user_push_subscriptions"
@@ -65,7 +65,7 @@ CRails.application.routes.draw do
   get "/autocompletable/users", to: "autocompletable/users#index"
 
   direct :fresh_user_avatar, User do |user, options|
-    route_for :user_avatar, user.avatar_token, v: user.updated_at.not_nil!.to_fs(:number)
+    route_for :user_avatar, user.avatar_token, v: user.updated_at!.to_fs(:number)
   end
 
   # namespace :rooms как в Rails; :room_id вместо :id — на URL не влияет.

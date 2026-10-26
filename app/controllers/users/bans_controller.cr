@@ -7,13 +7,13 @@ class Users::BansController < ApplicationController
   def create
     user = @user.not_nil!
     user.ban
-    redirect_to user_path(user.id.not_nil!)
+    redirect_to user_path(user.id!)
   end
 
   def destroy
     user = @user.not_nil!
     user.unban
-    redirect_to user_path(user.id.not_nil!)
+    redirect_to user_path(user.id!)
   end
 
   private def set_user : Nil

@@ -8,7 +8,7 @@ class Accounts::BotsController < ApplicationController
   @bot : User?
 
   def new
-    @bot = nil
+    @bot = User.new(role: :bot)
   end
 
   def create
@@ -25,11 +25,11 @@ class Accounts::BotsController < ApplicationController
       bot_token: User.generate_bot_token,
       created_at: now, updated_at: now)
     bot.save!
-    sync_webhook(bot.id.not_nil!, nested("webhook_url"))
+    sync_webhook(bot.id!, nested("webhook_url"))
     # The port writes short STI types ('Open') while the oracle seed stores full
     # names ('Rooms::Open'); the opens scope covers both spellings.
     Room.opens.each do |room|
-      Membership.new(room_id: room.id.not_nil!, user_id: bot.id.not_nil!,
+      Membership.new(room_id: room.id!, user_id: bot.id!,
         involvement: "mentions", connections: 0,
         created_at: now, updated_at: now).save!
     end
@@ -39,12 +39,12 @@ class Accounts::BotsController < ApplicationController
   def index
     @bots = User.active_bots.ordered.to_a
     @bots.each do |bot|
-      bid = bot.id.not_nil!
+      bid = bot.id!
       bot_key = "#{bid}-#{bot.bot_token.to_s}"
       # Covers both type spellings: seed 'Rooms::Direct', port 'Direct'.
       rooms = [] of NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String)))
       Room.visible_for(bot).without_directs.ordered.each do |room|
-        rid = room.id.not_nil!
+        rid = room.id!
         text = "curl -d 'Hello!' #{origin}/rooms/#{rid}/#{bot_key}/messages"
         upload = %{curl -F "attachment=@/path/to/file" #{origin}/rooms/#{rid}/#{bot_key}/messages}
         rooms << {legend: room.name.to_s, commands: [
@@ -67,7 +67,7 @@ class Accounts::BotsController < ApplicationController
     bot.name = name unless name.empty?
     bot.updated_at = Time.utc
     bot.save!
-    sync_webhook(bot.id.not_nil!, nested("webhook_url"))
+    sync_webhook(bot.id!, nested("webhook_url"))
     redirect_to account_bots_url
   end
 
@@ -76,9 +76,9 @@ class Accounts::BotsController < ApplicationController
     # the oracle soft-deactivates — see notes/style-parity.md)
     bot = User.where("role = 2").find(params["id"].to_s)
     ActiveRecord::Base.connection.exec(
-      "DELETE FROM memberships WHERE user_id = ?", bot.id.not_nil!)
+      "DELETE FROM memberships WHERE user_id = ?", bot.id!)
     ActiveRecord::Base.connection.exec(
-      "DELETE FROM webhooks WHERE user_id = ?", bot.id.not_nil!)
+      "DELETE FROM webhooks WHERE user_id = ?", bot.id!)
     bot.destroy
     redirect_to account_bots_url
   end

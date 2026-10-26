@@ -8,7 +8,7 @@ module UsersHelper
 
   # Oracle users_helper button_to_direct_room_with(user).
   def button_to_direct_room_with(user : User) : ERB::SafeString
-    button_to "/rooms/directs?user_ids%5B%5D=#{user.id.not_nil!}",
+    button_to "/rooms/directs?user_ids%5B%5D=#{user.id!}",
       class: "btn btn--primary full-width txt--large" do
       icon("messages.svg")
     end
@@ -23,7 +23,7 @@ module UsersHelper
   # Admin transfer panel on the user profile: QR/copy/web-share of the auto-login URL.
   def transfer_link(subject : User) : ERB::SafeString
     url = origin + "/session/transfers/" +
-          generate_signed_id(subject.id.not_nil!, "user/transfer",
+          generate_signed_id(subject.id!, "user/transfer",
             expires_at: Time.utc + 4.hours)
     ERB::SafeString.new(
       %(<fieldset>\n<legend class="gap">\n) +

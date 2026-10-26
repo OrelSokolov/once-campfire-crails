@@ -16,7 +16,7 @@ class Accounts::UsersController < ApplicationController
     target = @target.not_nil!
     target.status = "deactivated"
     target.save!
-    Session.where("user_id = ?", target.id.not_nil!).delete_all
+    Session.where("user_id = ?", target.id!).delete_all
     target.close_remote_connections
     redirect_to edit_account_url
   end

@@ -6,6 +6,6 @@
   </div>
 <% end %>
 
-<section class="panel txt-align-center" style="view-transition-name: <%= local_assigns[:view_transition_name] || "new-room" %>">
+<section class="panel txt-align-center" style="view-transition-name: <%= local_assigns["view_transition_name"]? || "new-room" %>">
   <%= yield %>
 </section>

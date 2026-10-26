@@ -5,9 +5,9 @@ module MessagesHelper
   # show.html.erb: the message DOM (same message_dom as in the room).
   def message_dom : ERB::SafeString
     message = self.message.not_nil!
-    attachment = ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]?
+    attachment = ChatLayout.attachments_for([message.id!])[message.id!]?
     ERB::SafeString.new(ChatLayout.message_dom(message, room.not_nil!,
-      User.find?(message.creator_id.not_nil!), attachment, base_url: origin))
+      User.find?(message.creator_id!), attachment, base_url: origin))
   end
 
   # edit.html.erb: attachment presentation (attachment branch).

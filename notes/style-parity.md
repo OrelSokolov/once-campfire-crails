@@ -468,3 +468,32 @@ rooms/_form, rooms/directs/new, profile_form_with).
   active_record 0.1.22 (FormModel) подхвачена параллельным WIP в
   ~/myshards/active_record.cr; action_view (form_models/Array) и action_pack
   (нейминг + .:format) — не опубликованы, версии 0.1.20/0.2.19 свободны.
+
+## STYLE_1to1 — 2.3 cookies: hash-форма + Symbol-ключи, 2026-10-26
+
+- **`cookies.signed.permanent[name] = { value:, httponly:, same_site: }`** —
+  action_pack_cr v0.2.18: hash-форма `jar[name] = { value:, ... }` (Rails
+  CookieJar#[]= c хешем опций) и Symbol-ключи имён во всех джарбах.
+  Подпись/шифрование перенесены из `set` в commit-фазу цепочки (child →
+  parent): цепочка `cookies.signed.permanent[...]` подписывает значение,
+  которое parent-permanent уже успел снабдить expires = 20 лет, — конверт
+  несёт message-level `exp` (как в геме, oracle
+  ck_signed_permanent_hash*); обратный порядок `.permanent.signed[...]`
+  коммитит подпись раньше — exp конверта остаётся nil (существующее
+  поведение, ck_permanent_signed). Оба порядка byte-verified против
+  actionpack 8.1.4 (оракул + реверс verify_cookies.rb).
+- **Plain/permanent jar со скаляром** — `cookies.permanent[:last_room] =
+  room.id` пишет wire `"42"` (gem-конвертация to_s, oracle ck_permanent_int);
+  порту больше не нужен `.not_nil!.to_s` (остался `not_nil!` — id nilable).
+- Adopted в app: authentication/joins/transfers —
+  `cookies.signed.permanent[:session_token] = { value:, httponly: true,
+  same_site: :lax }` 1:1 с authentication.rb:94 (раньше —
+  `cookies.signed.set(..., expires: Time.utc + 20.years, ...)` с ручным
+  20-летним expires); tracked_room_visit/rooms_controller —
+  `cookies.permanent[:last_room] = room.id.not_nil!`;
+  session_lookup/sessions/welcome/accounts_helper/push_subscriptions —
+  Symbol-ключи чтения (`cookies.signed[:session_token]?`,
+  `cookies[:last_room]?`) и удаления (`cookies.delete(:session_token)`).
+- Осталось осознанным: page-cache вручную (cached_responses) вместо
+  around_action — ETag/Cache-Control byte-parity (см. инкремент
+  2.7/expires_in выше).

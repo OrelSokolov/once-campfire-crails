@@ -1,12 +1,12 @@
 json.cache! message do
   json.extract! message, :id
 
-  json.created_at ChatLayout.iso8601_ms(message.created_at.not_nil!)
+  json.created_at ChatLayout.iso8601_ms(message.created_at!)
 
   json.body do
     plain = MessageCreator.plain_text(message.body.to_s)
     if plain.empty?
-      attachment = ChatLayout.attachments_for([message.id.not_nil!])[message.id.not_nil!]?
+      attachment = ChatLayout.attachments_for([message.id!])[message.id!]?
       plain = attachment.try(&.filename).to_s
     end
     json.plain_text plain

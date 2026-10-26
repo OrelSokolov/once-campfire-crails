@@ -1,5 +1,5 @@
 <%= page_open("New chat bot", "/account/bots") %><section class="panel">
-  <%= form_with url: "/account/bots", scope: "user", class: "flex flex-column gap" do |form| %>
+  <%= form_with model: @bot.not_nil!, url: account_bots_path, class: "flex flex-column gap" do |form| %>
     <h1 class="for-screen-reader">Chat Bot Setup</h1>
     <label class="align-center center avatar__form gap" data-controller="upload-preview">
       <div class="btn input--file">

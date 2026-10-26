@@ -8,6 +8,6 @@ class Room::PushMessageJob < ApplicationJob
   end
 
   def perform(room : Room, message : Message) : Nil
-    Room::MessagePusher.push(message.id.not_nil!)
+    Room::MessagePusher.push(message.id!)
   end
 end

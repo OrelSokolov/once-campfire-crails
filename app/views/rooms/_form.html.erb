@@ -1,11 +1,11 @@
-  <%= form_with url: "/rooms/#{kind}#{room ? "/#{room.id.not_nil!}" : ""}", method: (room ? "patch" : "post"), scope: "room" do |form| %>
+  <%= form_with model: room do |form| %>
     <div class="flex align-center gap">
       <% if can_administer %><%= translation_button("room_name") %>
         <label class="flex-item-grow txt-large">
-          <%= form.text_field :name, value: room.try(&.name).to_s, class: "input full-width", placeholder: "Name the room", required: true, autofocus: true, data: {action: "keydown.enter->form#submit:prevent", "turbo-permanent": true} %>
+          <%= form.text_field :name, name: "room[name]", id: "room_name", class: "input full-width", placeholder: "Name the room", required: true, autofocus: true, data: {action: "keydown.enter->form#submit:prevent", "turbo-permanent": true} %>
           <span class="for-screen-reader">Name this room</span>
         </label>
-      <% else %><h1 class="flex-item-grow txt-x-large"><%= room.try(&.name).to_s %></h1><% end %></div>
+      <% else %><h1 class="flex-item-grow txt-x-large"><%= room.name.to_s %></h1><% end %></div>
     <hr class="margin-block borderless">
     <section class="room-access margin-block pad-inline fill-shade border-radius">
       <menu class="flex flex-column gap margin-none pad overflow-y constrain-height" data-controller="filter" data-filter-active-class="filter--active" data-filter-selected-class="selected">
@@ -18,7 +18,7 @@
             <div class="overflow-ellipsis fill-shade"><strong>Everyone</strong></div>
           </div>
           <hr aria-hidden="true" class="separator">
-          <% if can_administer %><a class="btn--faux flex-inline" tabindex="-1" data-turbo-action="replace" href="/rooms/<%= other %><%= room ? "/#{room.id.not_nil!}/edit" : "/new" %>">
+          <% if can_administer %><a class="btn--faux flex-inline" tabindex="-1" data-turbo-action="replace" href="/rooms/<%= other %><%= room.persisted? ? "/#{room.id!}/edit" : "/new" %>">
             <label class="switch" for="room_type">
               <input<%= checked_attr(is_open) %> class="switch__input" id="room_type" type="checkbox">
               <span class="switch__btn round"></span>
@@ -27,7 +27,7 @@
           </a><% end %>    </li>
           <hr class="separator full-width" style="--border-style: solid">
         <% end %><% if users.size > 20 %><input autocorrect="off" autocomplete="off" class="input input--transparent full-width" data-1p-ignore="true" id="search" placeholder="Filter…" type="search">
-        <% end %><div contents="" data-filter-target="list"><% users.each_with_index do |member, i| %><% mid = member.id.not_nil! %><% if divider > 0 && i == divider %><hr class="separator full-width" style="--border-style: solid">
+        <% end %><div contents="" data-filter-target="list"><% users.each_with_index do |member, i| %><% mid = member.id! %><% if divider > 0 && i == divider %><hr class="separator full-width" style="--border-style: solid">
             <% end %><li class="flex align-center gap margin-none" data-value="<%= member.name.to_s.downcase %>">
               <figure class="avatar flex-item-no-shrink" style="--avatar-size: 4ch;">
                 <%= avatar_link(member) %>
@@ -36,7 +36,7 @@
                 <div class="overflow-ellipsis fill-shade"><strong><%= member.name.to_s %></strong></div>
               </div>
               <hr aria-hidden="true" class="separator">
-              <% if can_administer %><% if is_open || (room.nil? && mid == user.id.not_nil!) %><% unless is_open %><input name="user_ids[]" type="hidden" value="<%= mid %>"><% end %><%= icon("check.svg", 20, "colorize--black flex-item-no-shrink") %>
+              <% if can_administer %><% if is_open || (!room.persisted? && mid == user.id!) %><% unless is_open %><input name="user_ids[]" type="hidden" value="<%= mid %>"><% end %><%= icon("check.svg", 20, "colorize--black flex-item-no-shrink") %>
               <% else %><label class="switch flex-item-no-shrink">
                 <input<%= checked_attr(selected.includes?(mid)) %> class="switch__input" name="user_ids[]" type="checkbox" value="<%= mid %>">
                 <span class="switch__btn round"></span>

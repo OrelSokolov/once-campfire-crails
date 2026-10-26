@@ -10,11 +10,12 @@ class Rooms::DirectsController < ApplicationController
   attr_reader direct_members : Array(User) = [] of User
 
   def new
-    @user = current_user.not_nil!
+    @user = current_user!
+    @room = Rooms::Direct.new
   end
 
   def edit
-    user = current_user.not_nil!
+    user = current_user!
     room = user.rooms.directs.find?(params["room_id"].to_s)
     return head(:not_found) unless room
     @user = user
@@ -22,26 +23,26 @@ class Rooms::DirectsController < ApplicationController
     @direct = true
     members = User.where(
       %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)),
-      room.id.not_nil!).order("id").to_a
-    uid = user.id.not_nil!
+      room.id!).order("id").to_a
+    uid = user.id!
     others = members.reject { |m| m.id == uid }.map(&.name.to_s)
     @direct_title = ChatLayout.display_sentence(others, user.name.to_s)
     @direct_members = members.size > 1 ? members.reject { |m| m.id == uid } : members
   end
 
   def create
-    user = current_user.not_nil!
-    ids = selected_user_ids.unshift(user.id.not_nil!).uniq!
+    user = current_user!
+    ids = selected_user_ids.unshift(user.id!).uniq!
     ids.reject! { |id| User.where("id = ? AND status = 0", id).take.nil? }
 
     room = find_existing_direct(ids)
     unless room
       now = Time.utc
-      room = Rooms::Direct.new(creator_id: user.id.not_nil!,
+      room = Rooms::Direct.new(creator_id: user.id!,
         created_at: now, updated_at: now)
       room.save!
       ids.each do |member_id|
-        Membership.new(room_id: room.id.not_nil!, user_id: member_id,
+        Membership.new(room_id: room.id!, user_id: member_id,
           involvement: room.default_involvement, connections: 0,
           created_at: now, updated_at: now).save!
       end

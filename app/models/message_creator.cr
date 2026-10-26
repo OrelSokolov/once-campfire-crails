@@ -30,12 +30,12 @@ module MessageCreator
           # has_rich_text :body — the body= setter queues the rich_text row;
           # save! persists it through the after_save upsert (pinned conn).
           record = Message.new(
-            room_id: room.id.not_nil!,
-            creator_id: creator.id.not_nil!,
+            room_id: room.id!,
+            creator_id: creator.id!,
             client_message_id: client_message_id)
           record.body = body_html.empty? ? plain : body_html
           record.save! # belongs_to :room, touch: true touches rooms.updated_at
-          message_id = record.id.not_nil!
+          message_id = record.id!
 
           conn = ActiveRecord::Base.__session # pinned transaction connection
           Message::Attachment.store(conn, record, attachment, now) if attachment
@@ -56,7 +56,7 @@ module MessageCreator
     # Broadcast with the attachment when a file was stored (attachMessage → publishMessage:
     # presentation instead of the rich-text body).
     record = message[:record]
-    rendered = attachment ? ChatLayout.attachments_for([record.id.not_nil!])[record.id.not_nil!]? : nil
+    rendered = attachment ? ChatLayout.attachments_for([record.id!])[record.id!]? : nil
     Message::Broadcasts.broadcast_create(room, record, creator, rendered, base_url)
     record
   end
@@ -76,7 +76,7 @@ module MessageCreator
       "SELECT m.user_id, u.role, u.status " \
       "FROM memberships m JOIN users u ON u.id = m.user_id " \
       "WHERE m.room_id = ? AND m.user_id <> ?",
-      room.id.not_nil!, creator.id.not_nil!) do |rs|
+      room.id!, creator.id!) do |rs|
       {user_id: rs.read(Int64), role: rs.read(Int32), status: rs.read(Int32)}
     end
 

@@ -1,8 +1,8 @@
 class Users::PushSubscriptions::TestNotificationsController < ApplicationController
   def create
-    user = current_user.not_nil!
+    user = current_user!
     subscription = Push::Subscription.where("user_id = ? AND id = ?",
-      user.id.not_nil!, params["push_subscription_id"].to_s).take
+      user.id!, params["push_subscription_id"].to_s).take
 
     if subscription && (vapid_private = ENV["VAPID_PRIVATE_KEY"]?) &&
        (vapid_public = ENV["VAPID_PUBLIC_KEY"]?)
@@ -16,7 +16,7 @@ class Users::PushSubscriptions::TestNotificationsController < ApplicationControl
                       vapid_public : String, vapid_private : String) : Nil
     badge = ActiveRecord::Base.connection.query_one(
       "SELECT count(*) FROM memberships WHERE user_id = ? AND unread_at IS NOT NULL",
-      user.id.not_nil!, as: Int64)
+      user.id!, as: Int64)
     payload = JSON.build do |j|
       j.object do
         j.field "title", "Campfire Test"

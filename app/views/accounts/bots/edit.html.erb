@@ -1,5 +1,5 @@
 <%= page_open("Edit chat bot", "/account/bots") %><section class="panel">
-  <%= form_with url: "/account/bots/#{@bot.not_nil!.id.not_nil!}", method: "patch", scope: "user", class: "flex flex-column gap" do |form| %>
+  <%= form_with model: @bot.not_nil!, url: account_bot_path(@bot.not_nil!), class: "flex flex-column gap" do |form| %>
     <h1 class="for-screen-reader">Chat Bot Setup</h1>
     <label class="align-center center avatar__form gap" data-controller="upload-preview">
       <div class="btn input--file">
@@ -14,20 +14,20 @@
     <div class="flex align-center gap">
       <%= translation_button("bot_name") %>
       <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-        <%= form.text_field :name, value: @bot.try(&.name).to_s, class: "input", autocomplete: "name", autofocus: true, placeholder: "Name the bot", required: true, data: {"1p-ignore" => true} %>
+        <%= form.text_field :name, class: "input", autocomplete: "name", autofocus: true, placeholder: "Name the bot", required: true, data: {"1p-ignore" => true} %>
         <%= icon("bot.svg", 24, "colorize--black") %>
       </label>
     </div>
     <div class="flex align-center gap">
       <%= translation_button("webhook_url") %>
       <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-        <%= form.url_field :webhook_url, value: @bot.try(&.webhook_url).to_s, class: "input", placeholder: "Webhook URL" %>
+        <%= form.url_field :webhook_url, class: "input", placeholder: "Webhook URL" %>
         <%= icon("web.svg", 24, "colorize--black") %>
       </label>
     </div>
     <button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
   <% end %>
-  <hr class="separator full-width margin-block-double"><div class="flex align-center gap justify-space-between"><form action="/account/bots/<%= @bot.not_nil!.id.not_nil! %>" method="post"><input type="hidden" name="_method" value="delete"><button class="btn txt--small btn--negative" aria-label="Delete this chat bot" data-turbo-confirm="Are you sure you want to permanently remove this bot from the account? This can’t be undone."><%= icon("trash.svg") %><%= icon("bot.svg") %></button></form><form action="/account/bots/<%= @bot.not_nil!.id.not_nil! %>/key" method="post"><input type="hidden" name="_method" value="put"><button class="btn full-width txt--small btn--negative" aria-label="Generate a new key" data-turbo-confirm="Are you sure you want to change the bot key? All usage of this bot must be updated."><%= icon("refresh.svg") %><%= icon("key.svg") %></button></form>
+  <hr class="separator full-width margin-block-double"><div class="flex align-center gap justify-space-between"><form action="/account/bots/<%= @bot.not_nil!.id! %>" method="post"><input type="hidden" name="_method" value="delete"><button class="btn txt--small btn--negative" aria-label="Delete this chat bot" data-turbo-confirm="Are you sure you want to permanently remove this bot from the account? This can’t be undone."><%= icon("trash.svg") %><%= icon("bot.svg") %></button></form><form action="/account/bots/<%= @bot.not_nil!.id! %>/key" method="post"><input type="hidden" name="_method" value="put"><button class="btn full-width txt--small btn--negative" aria-label="Generate a new key" data-turbo-confirm="Are you sure you want to change the bot key? All usage of this bot must be updated."><%= icon("refresh.svg") %><%= icon("key.svg") %></button></form>
   </div>
 </section>
 <%= page_close %>

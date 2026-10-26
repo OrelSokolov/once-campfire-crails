@@ -16,7 +16,7 @@ class Membership
       end
 
       def connect(membership : Membership, connections : Int64) : Nil
-        where(id: membership.id.not_nil!).update_all(
+        where(id: membership.id!).update_all(
           {"connections" => connections, "connected_at" => Time.utc, "unread_at" => nil})
       end
     end

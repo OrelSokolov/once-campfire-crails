@@ -5,7 +5,7 @@ class Rooms::RefreshesController < ApplicationController
   helper :rooms
 
   def show
-    room = current_user.not_nil!.rooms.find?(params["id"].to_s)
+    room = current_user!.rooms.find?(params["id"].to_s)
     unless room
       response.status = :not_found
       return render(plain: "Room not found")
@@ -17,10 +17,10 @@ class Rooms::RefreshesController < ApplicationController
     @room = room
     new_messages = Message::Pagination.page_created_since(room, since)
 
-    new_ids = Set.new(new_messages.map(&.id.not_nil!))
+    new_ids = Set.new(new_messages.map(&.id!))
     @new_messages = new_messages
     @updated_messages = Message::Pagination.page_updated_since(room, since)
-      .reject { |m| new_ids.includes?(m.id.not_nil!) }
+      .reject { |m| new_ids.includes?(m.id!) }
 
     render(html: __render_view("show", format: "turbo_stream").to_s,
       content_type: "text/vnd.turbo-stream.html")
