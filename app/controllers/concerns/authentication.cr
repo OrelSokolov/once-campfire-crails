@@ -55,6 +55,11 @@ module Authentication
     @identity_entry.try(&.user)
   end
 
+  # Bang variant (Ruby-style): the authenticated user or a raise.
+  def current_user! : User
+    current_user.not_nil!
+  end
+
   def require_authentication : Nil
     bot_authentication
     redirect_to new_session_url unless current_user

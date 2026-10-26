@@ -334,15 +334,18 @@ module ChatLayout
   end
 
   # One message boost for rendering (boost + booster in a single JOIN).
+  # Carries message_id so the _boost partial can build the delete form
+  # without the Boost record (snapshot, not an AR object).
   struct BoostEntry
     attr_accessor id : Int64
+    attr_accessor message_id : Int64
     attr_accessor content : String
     attr_accessor booster_id : Int64
     attr_accessor booster_name : String
     attr_accessor booster_bio : String?
     attr_accessor booster_updated_at : Time?
 
-    def initialize(@id, @content, @booster_id, @booster_name,
+    def initialize(@id, @message_id, @content, @booster_id, @booster_name,
                    @booster_bio, @booster_updated_at)
     end
   end
@@ -361,7 +364,7 @@ module ChatLayout
       as: {Int64, Int64, String, Int64, String, String?, Time?})
     rows.each do |(mid, bid, content, booster_id, name, bio, updated)|
       list = table[mid] ||= [] of BoostEntry
-      list << BoostEntry.new(bid, content, booster_id, name, bio, updated)
+      list << BoostEntry.new(bid, mid, content, booster_id, name, bio, updated)
     end
     table
   end
@@ -876,7 +879,7 @@ module ChatLayout
   # message--emoji: non-empty plain text with no letters or digits
   # (express allEmoji: !!plain && !/[\p{L}\p{N}]/u) — emoji/punctuation
   # only; the class enables the large font (messages.css .message--emoji).
-  private def self.all_emoji?(body_html : String?) : Bool
+  def self.all_emoji?(body_html : String?) : Bool
     return false unless html = body_html
     text = html.gsub(/<[^>]*>/, " ")
     text = text.gsub("&nbsp;", " ").gsub("&amp;", "&").gsub("&lt;", "<")
@@ -1135,53 +1138,24 @@ module ChatLayout
 
   # _boosts.html.erb: turbo-frame boosting_message_<id> with the boosts
   # container (boosts_message_<id> — append stream target) and the lazy
-  # new_boost_message_<id> frame ("Add a boost" button).
+  # new_boost_message_<id> frame ("Add a boost" button). Rendered through
+  # the messages/boosts/_boosts ERB partial (BoostsERB context) — the
+  # collection _boost partial via render partial: collection:, as the
+  # oracle does off message.boosts.
   def self.boosts_dom(mid : Int64, boosts : Array(BoostEntry)) : String
-    String.build do |io|
-      io << %(<turbo-frame id="boosting_message_#{mid}">\n)
-      io << %(<div class="boosts flex flex-wrap align-center gap full-width" style="--column-gap: 0.4ch; --row-gap: 0" )
-      io << %(data-controller="turbo-streaming" data-action="turbo:submit-start-&gt;turbo-streaming#unsubscribe">\n)
-      io << %(<div class="flex-inline flex-wrap gap" id="boosts_message_#{mid}" data-turbo-streaming-target="container">\n)
-      boosts.each { |b| io << boost_dom(mid, b) << "\n" }
-      io << %(</div>\n)
-      io << %(<turbo-frame id="new_boost_message_#{mid}">\n)
-      io << %(<div class="flex-inline message__boost-inline" data-controller="soft-keyboard">\n)
-      io << %(<a class="boost__action txt-small btn" data-action="soft-keyboard#open" href="#{route_path("new_message_boost", mid)}">\n)
-      io << icon("boost.svg", 20) << "\n"
-      io << %(<span class="for-screen-reader">Add a boost</span>\n)
-      io << %(</a>      </div>\n)
-      io << %(</turbo-frame>  </div>\n)
-      io << %(</turbo-frame>\n)
-    end
+    # Trailing "\n": the caller template's literal newline after the
+    # render call (_message.html.erb) — the partial's own final newline
+    # is eaten by the Erubi trim of `<% end %>`.
+    BoostsERB.new.render(partial: "messages/boosts/boosts",
+      locals: {"message_id" => mid, "boosts" => boosts}).to_s + "\n"
   end
 
-  # _boost.html.erb: a boost with the booster's avatar, content (click
-  # reveals delete) and the delete form (button_to _method=delete).
+  # _boost.html.erb (single-entry entry point for the boosts broadcast
+  # in boosts/by_bots controllers; callers append "\n" — the partial's
+  # own trailing newline when rendered through a collection).
   def self.boost_dom(mid : Int64, b : BoostEntry) : String
-    medium = all_emoji?(b.content) ? " txt-medium" : ""
-    String.build do |io|
-      io << %(<div id="boost_#{b.id}" class="boost boost-item flex-inline postion--relative max-width align-center fill-white gap" )
-      io << %(data-controller="boost-delete" data-boost-delete-perform-class="boost--deleting" )
-      io << %(data-boost-delete-reveal-class="expanded" data-boost-delete-booster-id-value="#{b.booster_id}">\n)
-      io << %(<figure class="avatar boost__avatar flex-item-no-shrink">\n)
-      io << %(<a title=") << HTML.escape(user_title(b.booster_name, b.booster_bio))
-      io << %(" class="btn avatar" data-turbo-frame="_top" href="#{route_path("user", b.booster_id)}">)
-      io << %(<img aria-label=")
-      io << HTML.escape("#{b.booster_name} boosted #{b.content}")
-      io << %(" src="#{fresh_user_avatar_path(b.booster_id, b.booster_updated_at)}" width="48" height="48"></a>\n)
-      io << %(</figure>\n)
-      io << %(<span role="button" class="txt-small#{medium}" )
-      io << %(data-action="click-&gt;boost-delete#reveal keydown.enter-&gt;boost-delete#reveal:prevent" )
-      io << %(data-boost-delete-target="content">) << HTML.escape(b.content) << %(</span>\n)
-      io << %(<form action="/messages/#{mid}/boosts/#{b.id}" class="button_to" method="post">)
-      io << %(<input name="_method" type="hidden" value="delete">)
-      io << %(<button class="btn btn--negative flex-item-justify-end boost__delete" )
-      io << %(data-action="boost-delete#perform" data-boost-delete-target="button" type="submit">\n)
-      io << icon("minus.svg", 20) << "\n"
-      io << %(<span class="for-screen-reader">Delete this boost</span>\n)
-      io << %(</button></form></div>\n)
-      io << %(<span id="delete_boost_accessible_label" class="for-screen-reader">Press enter to delete this boost</span>)
-    end
+    BoostsERB.new.render(partial: "messages/boosts/boost",
+      locals: {"boost" => b}).to_s
   end
 
   # Message list DOM with fragment cache — port of Rails `render

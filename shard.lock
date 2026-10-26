@@ -11,7 +11,7 @@ shards:
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
-    version: 0.1.20
+    version: 0.1.23
 
   active_job_cr:
     git: https://github.com/orelsokolov/active_job.cr.git

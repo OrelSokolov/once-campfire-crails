@@ -269,3 +269,13 @@
   паритета, но загрузка не портирована — FirstRun игнорирует поле.
 - `app/controllers/rooms/involvements_controller.cr`: `update` не делает
   `broadcast_visibility_changes` оракула — проверить, известен ли гэп.
+
+## rich_text_area value: editable_body (2026-10-26)
+
+messages/edit передаёт `value: @message.body.to_s`; оракул —
+`value: editable_body(@message)` (ActionText::Fragment.replace:
+перестройка аттачментов из attachable — Trix-era embeds с деталями в
+атрибутах узла, mention'ы с generic content-type, рукописные embeds).
+Трансформация требует ActionText::Attachment.from_node +
+render_action_text_attachment — не портировано; тела без
+edit-ломающихся аттачментов рендерятся идентично.

@@ -32,6 +32,13 @@ soft_check:
   - messaging/test_custom_boost_with_text/custom-boost.png
   - sidebar/test_narrow_viewport_renders_the_mobile_layout/mobile.png
 
+  # Аватарные webp-варианты (resize_to_limit 512x512 + webp): Rails кодирует
+  # libvips/libwebp, порт — своим растеризатором image_processing_cr; байтовый
+  # парити энкодеров недостижим, пиксельный шум ~0.2-0.35% сидит ровно в
+  # круглых зонах аватаров (см. notes/style-parity.md).
+  - messaging/test_quick_boosting_with_an_emoji/quick-boost.png
+  - rooms/test_watercooler_pages_through_history_on_scroll/watercooler-paged.png
+
   # Путь в soft_check — относительный путь внутри дерева группы (без префикса
   # имени группы): артефакты лежат в code-artifacts/<side>/capybara-tests/...,
   # поэтому пишем "capybara-tests/*", а не "code/capybara-tests/*".

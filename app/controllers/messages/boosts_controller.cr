@@ -43,7 +43,7 @@ class Messages::BoostsController < ApplicationController
       if entry
         broadcast_action_to([room, "messages"], :append,
           target: "boosts_message_#{mid}",
-          html: ChatLayout.boost_dom(mid, entry) + "\n",
+          html: ChatLayout.boost_dom(mid, entry),
           attributes: {"maintain_scroll" => "true"})
       end
     end

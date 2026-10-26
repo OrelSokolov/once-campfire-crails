@@ -497,3 +497,114 @@ rooms/_form, rooms/directs/new, profile_form_with).
 - Осталось осознанным: page-cache вручную (cached_responses) вместо
   around_action — ETag/Cache-Control byte-parity (см. инкремент
   2.7/expires_in выше).
+
+## STYLE_1to1 — 2.4 lexxy-формы + фаза 3 бусты, 2026-10-26
+
+- **`FormBuilder#rich_text_area`/`rich_textarea_tag`** — action_view.cr
+  **v0.1.21**: `<lexxy-editor>` (Rails 8.2 ActionText lexxy-editor),
+  class-дефолт `lexxy-content`, name/id из скоупа (id только при
+  form_with_generates_ids, явный `id:` бьёт), явный `value:` бьёт атрибут
+  модели, data-direct-upload-url/blob-url-template — из
+  переопределяемых `rich_text_direct_upload_url`/
+  `rich_text_blob_url_template` хост-контекста (Rails: main_app
+  .rails_direct_uploads_url/rails_service_blob_url), блок (mention
+  prompts) не экранируется. Спек: spec/rich_text_area_spec.cr (3
+  кейса), весь suite 255/255.
+- **composer_form_tag/content_for :footer** — rooms/show/_composer
+  .html.erb вербатим с оракулом: ChatERB включает umbrella
+  `ActionView::Helpers` (FormBuilder.@view типизирован модулем —
+  отдельных инклудов недостаточно) + composer_form_tag 1:1 (RoomsHelper
+  оракула; data-options/data-actions приватными методами), footer
+  читается через `content_for(:footer)` в RoomsHelper#room_page.
+  messages/edit: form.rich_text_area с `value: body.to_s` —
+  editable_body-трансформация аттачментов (Trix-era embeds/mentions
+  rebuild) не портирована (notes/known-gaps.md).
+- **Новые хелперы/роуты**: app/helpers/rich_text_helper.cr (1:1),
+  drop_target_helper.cr (1:1), RichTextHelper wired глобально
+  (`helper :rich_text`), роут `as: "autocompletable_users"` (Rails
+  auto-name). tag.lexxy_prompt с дефисными kwargs невозможен (TagBuilder
+  macro re-emission) — content_tag("lexxy-prompt", ...) в
+  mention_prompt_tag.
+- **Латентный баг HEAD вскрыт пересборкой**: `current_user!` в
+  authentication.cr и ApplicationCable::Channel вызывал сам себя
+  (миграция bang-методов) — стек-оверфлоу на любом запросе;
+  исправлен на `current_user.not_nil!`.
+- **Фаза 3, бусты**: messages/boosts/_boosts + _boost — ERB-партиалы
+  (вербатим-структура оракула, с отступами и голым `->` в литеральных
+  атрибутах), рендер через BoostsERB (по образцу ChatERB) и
+  `render partial: "messages/boosts/boost", collection:`
+  (erb_cr collection-рендер, счётчик игнорируется диспетчером
+  локалей). ChatLayout.boosts_dom/boost_dom — делегаты (boost_dom
+  остаётся входной точкой бусткастов в boosts/by_bots контроллерах);
+  BoostEntry получил message_id; FragmentCache::RENDER_VERSION s1→s2.
+  Верификация: DOM-эквивалент рендера до/после (html.parser,
+  токены+отсортированные атрибуты); байты теперь совпадают с СЫРЫМ
+  оракулом (rails_oracle_boosts_full.html), а не только с
+  нормализованными артефактами: button_to form class→method→action,
+  _method-инпут type→name→value + ` />`, `<img ... />` у аватаров.
+  Нормализация харнесса раньше маскировала оба отклонения.
+- **Erubi-семантика пробелов**: erubi (trim) стирает whitespace-хвост
+  перед code-тегом `<% %>` и newline после него; port template_processor
+  стирает только newline после — блоки приносят хвостовые отступы в
+  `<%= helper do %>`-захват (`</button>` с отступом). Нормализуется
+  харнессом; при желании 1:1 — отдельный патч erb_cr.
+
+## STYLE_1to1 — вскрытые регрессии HEAD (stale bin/app маскировал), 2026-10-26
+
+Пересборка bin/app (прошлая сборка — 23 окт, до коммитов bang-методов и
+2.4-форм) вскрыла три регрессии, невидимые для twinshot на старом
+бинарнике:
+
+- **`current_user!` саморекурсия** (authentication.cr,
+  ApplicationCable::Channel) — миграция bang-методов оставила
+  `def current_user!; current_user!; end`; стек-оверфлоу на любом
+  запросе. Фикс: `current_user.not_nil!`.
+- **FormBuilder затирал явный `name:`** — action_view.cr **v0.1.22**:
+  `__ff_input`/`hidden_field`/`text_area`/`check_box`/`radio_button`
+  ставят скоуп-имя только при отсутствии явного name: (Rails
+  add_default_name_and_id). Инкремент 2.4-форм перевёл rooms/_form на
+  `model: room` (скоуп rooms_open), а шаблонная явная `name: "room[name]"`
+  молча затиралась → params.require(:room) пустой, сабмиты комнат/ботов
+  падали.
+- **bots#create двойная вставка membership** — after_create_commit
+  :grant_membership_to_open_rooms (миграция колбэков) уже даёт новому
+  юзеру membership во все open-комнаты («on conflict do nothing»), а
+  контроллер повторял цикл Room.opens вручную → UNIQUE constraint
+  (memberships.room_id, user_id) → 500 на создании бота. Ручной цикл
+  удалён (оракул: User.create_bot! без ручных membership).
+
+Урок: после инкрементов, меняющих bin/-бинарник, пересобирать bin/app ДО
+twinshot review — харнесс грузит bin/app (harness/boot.rb:168), не
+рабочее дерево.
+
+## STYLE_1to1 — финал review default: последние два диф-паттерна, 2026-10-26
+
+Прогон final3 (35 фейлов «2 structural lines») разложился ровно на два
+паттерна; оба закрыты, review default — 129/129 (структура), png-фейлы 0:
+
+- **`hidden_field` с nil-атрибутом писал `value=""`** — Rails читает
+  value_before_type_cast и опускает атрибут при nil (пустая строка
+  по-прежнему даёт `value=""`). action_view.cr **v0.1.23**
+  (`raw_value(attr).nil?`-гейт в `hidden_field`); билдер композера
+  `message[client_message_id]` на каждой room-странице — именно этот
+  паттерн дал большинство фейлов.
+- **Хвост `accounts/_invite`**: оракул после erubi-trim оставляет
+  текстовый узел `  ` (два пробела) между `</form>` и `</div>`:
+  `<% end %><% end %>  </div>` одной строкой (порт-процессор дропает
+  один перенос после кодового тега, чисто пробельный текст эмиссирует
+  как есть).
+
+Механика артефактов (важно для будущих дифов): HTML-артефакты идут через
+браузер (page.html/outerHTML), пайплайн стирает whitespace-узлы,
+содержащие `\n`, но сохраняет чисто пробельные (без переноса) —
+идентификатор `\n    ` в артефакте невидим, `  ` — видим и структурно
+значим.
+
+Оставшиеся png-варнинги (soft_check в twinshot.yml: quick-boost.png,
+watercooler-paged.png, ранее custom-boost.png): аватарные webp-варианты
+`resize_to_limit [512,512] + webp` — Rails кодирует libvips/libwebp,
+порт — image_processing_cr; байтовый парити энкодеров недостижим,
+пиксельный шум 0.2–0.35% сидит ровно в круглых зонах аватаров
+(подтверждено кластеризацией диф-пикселей: три 32px круга аватаров
+сообщений + 45px аватар хедера в watercooler). HTML этих же тестов
+байт-в-байт идентичен.

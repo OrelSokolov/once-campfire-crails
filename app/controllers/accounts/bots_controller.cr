@@ -26,13 +26,9 @@ class Accounts::BotsController < ApplicationController
       created_at: now, updated_at: now)
     bot.save!
     sync_webhook(bot.id!, nested("webhook_url"))
-    # The port writes short STI types ('Open') while the oracle seed stores full
-    # names ('Rooms::Open'); the opens scope covers both spellings.
-    Room.opens.each do |room|
-      Membership.new(room_id: room.id!, user_id: bot.id!,
-        involvement: "mentions", connections: 0,
-        created_at: now, updated_at: now).save!
-    end
+    # Open-room memberships come from the User after_create_commit
+    # callback (grant_membership_to_open_rooms), as in the oracle —
+    # a manual loop here double-inserts and trips the unique index.
     redirect_to account_bots_url
   end
 

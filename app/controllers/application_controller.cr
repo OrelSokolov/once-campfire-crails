@@ -7,8 +7,9 @@ abstract class ApplicationController < ActionController::Base
   })
 
   # Non-conventional helper modules: ClipboardHelper/QrCodeHelper are
-  # shared across accounts/bots/users views, so wire them globally.
-  helper :clipboard, "qr_code"
+  # shared across accounts/bots/users views, so wire them globally;
+  # RichTextHelper likewise (composer edit form / message edit form).
+  helper :clipboard, "qr_code", "rich_text"
 
   include Authentication
   include Authorization

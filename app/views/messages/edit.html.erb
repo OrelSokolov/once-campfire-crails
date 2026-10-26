@@ -5,7 +5,14 @@
       </div>
       <% else %><div class="composer--edit composer--rich-text">
         <%= form_with model: @message.not_nil!, url: room_message_path(room.not_nil!.id, mid), id: "form_message_#{mid}", data: {controller: "form", action: "lexxy:file-accept->form#preventAttachment keydown.esc->form#cancel keydown.ctrl+enter->form#submit:prevent keydown.meta+enter->form#submit:prevent"} do |form| %>
-          <div class="full-width input input--actor min-width fill-white"><lexxy-editor rows="1" class="input lexxy-content" aria-multiline="true" aria-label="Edit message" autofocus="autofocus" permitted-attachment-types="application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed" data-action="lexxy:change-&gt;typing-notifications#start keydown-&gt;composer#submitByKeyboard:capture" data-direct-upload-url="<%= origin %>/rails/active_storage/direct_uploads" data-blob-url-template="<%= origin %>/rails/active_storage/blobs/redirect/:signed_id/:filename" id="message_body" name="message[body]" value="<%= @message.not_nil!.body.to_s %>"><lexxy-prompt trigger="@" name="mention" src="/autocompletable/users?room_id=<%= @room.not_nil!.id %>" remote-filtering="true" empty-results="No matches"></lexxy-prompt></lexxy-editor>
+          <div class="full-width input input--actor min-width fill-white"><%= form.rich_text_area :body,
+                value: @message.not_nil!.body.to_s,
+                rows: 1,
+                class: "input lexxy-content",
+                aria: { multiline: "true", label: "Edit message" },
+                autofocus: true,
+                "permitted-attachment-types": "application/vnd.campfire.mention application/vnd.actiontext.opengraph-embed",
+                data: { action: rich_text_data_actions } do %><%= mention_prompt_tag @room.not_nil! %><% end %>
           </div>
           <a data-form-target="cancel" hidden="hidden" href="<%= room_message_path(room.not_nil!.id, mid) %>">Close editor and discard changes</a>
           <div class="message__edit-btns flex align-center justify-space-between gap full-width pad-block-start-half"><button name="button" type="submit" class="btn btn--reversed"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>

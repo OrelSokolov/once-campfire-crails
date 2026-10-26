@@ -42,3 +42,8 @@ once-campfire/
 # Локальный override шардов (dev): теги не запушены
 /shard.override.yml
 twinshot-report/
+
+# локальные смоук-остатки в корне (не путать с db/*.sqlite3)
+/development.sqlite3
+/server.pid
+/sqlite3:/

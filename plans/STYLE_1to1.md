@@ -159,9 +159,24 @@ Crystal, (c) стилистическая проблема порта. План 
   Явные `value:` у полей убраны — значения идут из модели, nil → атрибут
   опускается (семантика Rails TextField). Проверено: все экраны 200,
   байты action/scope/_method, живой PATCH-сабмит `/account.1` → 302.
-  Не переведены (вне инкремента): composer_form_tag/rich_text_area
-  (нужен FormBuilder#rich_text_area в шарде, у порта lexxy-билдер;
-  вместе с content_for :footer), 2 ручные формы ChatLayout (фаза 3).
+- [x] `composer_form_tag`/`rich_text_area` + `content_for :footer`
+  (2026-10-26, инкремент «2.4-lexxy»): FormBuilder#rich_text_area +
+  rich_textarea_tag — action_view_cr **v0.1.21** (`<lexxy-editor>`,
+  class-дефолт lexxy-content, name/id из скоупа, явный `value:` бьёт
+  атрибут модели, data-direct-upload-url/blob-url-template —
+  переопределяемые rich_text_direct_upload_url/rich_text_blob_url_template
+  хост-контекста). Adopted: rooms/show/_composer.html.erb вербатим с
+  оракулом (content_for :footer, form_with через composer_form_tag,
+  form.rich_text_area с mention_prompt_tag; ChatERB включает
+  ActionView::Helpers umbrella + FormHelper), messages/edit —
+  form.rich_text_area (value: body.to_s — editable_body-трансформация
+  аттачментов не портирована, notes/known-gaps.md). Новые хелперы:
+  app/helpers/rich_text_helper.cr (1:1 rich_text_helper.rb), 1:1
+  drop_target_helper.cr; роут `as: "autocompletable_users"`;
+  RichTextHelper глобально wired (helper :rich_text). Диффы рендера
+  композера до/после — только порядок атрибутов (сортировка харнесса) и
+  пробелы, новая версия байт-точнее к Rails (`value=""` у hidden_field,
+  отступы перед закрывающими тегами).
 - [x] `button_to` блоком/`method: :delete` — все ручные `<form
   class="button_to">` переведены на шардовый `button_to` (2026-10-25);
   байты — insertion-порядок сырого гема (см. notes/style-parity.md:
@@ -237,13 +252,23 @@ Crystal, (c) стилистическая проблема порта. План 
   инкремент 2 (2026-10-26): accounts/_invite.html.erb — invite-секция
   system_welcome через render(partial:), web_share_session_button →
   ClipboardHelper; маппинг «oracle-путь → генератор» в комментариях
-  chat_layout.cr. Осталось: boost_dom/messages_html (горячий путь
-  fragment-кэша — только вместе с коллекционным рендером;
-  дизайн-разведка 2026-10-26: ERB-партиалы messages/boosts/_boosts +
-  _boost на BoostEntry-снапшотах через render partial:/collection:,
-  контекст-класс по образцу ChatERB, бамп FragmentCache::RENDER_VERSION,
-  байт-точки — порядок атрибутов button_to, _method-инпут, \n после
-  </form>; see notes/style-parity.md инкременты).
+  chat_layout.cr. Инкремент 3 (2026-10-26): messages/boosts/_boosts +
+  _boost — ERB-партиалы на BoostEntry-снапшотах через render partial:
+  collection: (контекст-класс BoostsERB по образцу ChatERB; ChatLayout
+  .boosts_dom/.boost_dom — делегаты, BoostEntry получил message_id;
+  FragmentCache::RENDER_VERSION s1→s2). Байты — сырой оракул-эталон
+  (rails_oracle_boosts_full.html): button_to form class→method→action,
+  _method-инпут type→name→value, `<img ... />` через image_tag;
+  DOM-эквивалент со старой версией подтверждён до/после. Инкремент 4
+  (2026-10-26, финал review default): последний структурный диф-хвост —
+  `_invite`-хвост `<% end %><% end %>  </div>` (текстовый узел `  `
+  оракула между `</form>` и `</div>`) и hidden_field nil → без `value`
+  (action_view.cr v0.1.23); аватарные webp-варнинги — soft_check
+  (twinshot.yml), rationale в notes/style-parity.md. review default:
+  129/129 структура, 0 png-фейлов. Осталось:
+  messages_html/message_dom (горячий путь fragment-кэша целиком —
+  разбор message_dom/message_actions/presentation_dom на партиалы
+  _message.html.erb/_actions — следующий инкремент фазы 3).
 - [x] Убрать двойное именование `Campfire::ResponseCache` /
   `ResponseCache`-алиасы (осталось только полное имя).
 - [x] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом

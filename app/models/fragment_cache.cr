@@ -17,7 +17,7 @@ module Campfire
 
     # Render version in the key: changing the render pipeline (e.g. enabling HtmlSanitizer)
     # resets the cache so stale patched fragments don't outlive their epoch.
-    RENDER_VERSION = "s1"
+    RENDER_VERSION = "s2"
 
     def self.key(m : Message) : String
       updated = m.updated_at || m.created_at || Time.utc

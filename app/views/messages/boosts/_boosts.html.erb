@@ -1,0 +1,17 @@
+<%= turbo_frame_tag "boosting_message_#{message_id}" do %>
+  <div class="boosts flex flex-wrap align-center gap full-width" style="--column-gap: 0.4ch; --row-gap: 0"
+      data-controller="turbo-streaming" data-action="turbo:submit-start->turbo-streaming#unsubscribe">
+    <div class="flex-inline flex-wrap gap" id="boosts_message_<%= message_id %>" data-turbo-streaming-target="container">
+      <%= render partial: "messages/boosts/boost", collection: boosts %>
+    </div>
+
+    <%= turbo_frame_tag "new_boost_message_#{message_id}" do %>
+      <div class="flex-inline message__boost-inline" data-controller="soft-keyboard">
+        <%= link_to new_message_boost_path(message_id), class: "boost__action txt-small btn", data: { action: "soft-keyboard#open" } do %>
+          <%= image_tag "boost.svg", size: 20, aria: { hidden: "true" } %>
+          <span class="for-screen-reader">Add a boost</span>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+<% end %>

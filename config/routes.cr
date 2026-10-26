@@ -62,7 +62,7 @@ CRails.application.routes.draw do
   post   "/users/:user_id/ban", to: "users/bans#create"
   delete "/users/:user_id/ban", to: "users/bans#destroy"
 
-  get "/autocompletable/users", to: "autocompletable/users#index"
+  get "/autocompletable/users", to: "autocompletable/users#index", as: "autocompletable_users"
 
   direct :fresh_user_avatar, User do |user, options|
     route_for :user_avatar, user.avatar_token, v: user.updated_at!.to_fs(:number)

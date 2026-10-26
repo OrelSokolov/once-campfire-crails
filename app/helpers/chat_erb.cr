@@ -2,7 +2,10 @@
 # (markup lives in templates compiled at build time via compile_template,
 # like the jbuilder partials); helpers delegate to ChatLayout.
 class ChatERB
-  include ERB::Rendering
+  # Full ActionView surface (like the controllers' render context):
+  # form_with/composer_form_tag needs FormBuilder, whose @view is typed
+  # ActionView::Helpers — individual module includes don't satisfy it.
+  include ActionView::Helpers
   # The sidebar/composer/_direct templates render both in controller
   # context and here, so the named *_path helpers must work in both;
   # route_set is assigned by railties at boot.
@@ -10,6 +13,10 @@ class ChatERB
   # Block capture form of turbo_frame_tag (turbo_cr shard) for
   # rooms/involvements/** (bell, show).
   include Turbo::FramesHelper
+  # Oracle app/helpers/rich_text_helper.rb + drop_target_helper.rb —
+  # editor surface shared with the message edit form.
+  include RichTextHelper
+  include DropTargetHelper
 
   def initialize(@room : Room? = nil, @footer : String = "", @sidebar : String = "",
                  @origin : String = "", @involvement : String = "mentions",
@@ -71,15 +78,40 @@ class ChatERB
     @origin.empty? ? "/" : "#{@origin}/"
   end
 
-  # rich_text_area (ActionText): absolute route URLs — rails_direct_uploads_url
-  # and the blob-redirect template.
-  def direct_uploads_url : String
-    @origin.empty? ? "/rails/active_storage/direct_uploads" : "#{@origin}/rails/active_storage/direct_uploads"
+  # Request origin (rich_text_area data-URL defaults, see RichTextHelper).
+  def origin : String
+    @origin
   end
 
-  def blob_url_template : String
-    base = @origin.empty? ? "" : @origin
-    "#{base}/rails/active_storage/blobs/redirect/:signed_id/:filename"
+  # Oracle RoomsHelper#composer_form_tag — rendered only through ChatERB
+  # (the composer template lives here).
+  def composer_form_tag(room : Room, &) : String
+    form_with model: Message.new, url: room_messages_path(room.id),
+      id: "composer", class: "margin-block flex-item-grow contain", data: composer_data_options(room) do |form|
+      yield form
+    end
+  end
+
+  private def composer_data_options(room : Room)
+    {
+      controller:                "composer drop-target",
+      action:                    composer_data_actions,
+      composer_messages_outlet:  "#message-area",
+      composer_toolbar_class:    "composer--rich-text",
+      composer_room_id_value:    room.id,
+    }
+  end
+
+  private def composer_data_actions : String
+    drag_and_drop_actions = "drop-target:drop@window->composer#dropFiles"
+
+    attachment_actions =
+      "lexxy:file-accept->composer#preventAttachment refresh-room:online@window->composer#online"
+
+    remaining_actions =
+      "typing-notifications#stop paste->composer#pasteFiles turbo:submit-end->composer#submitEnd refresh-room:offline@window->composer#offline"
+
+    [drop_target_actions, drag_and_drop_actions, attachment_actions, remaining_actions].join(" ")
   end
 
   def involvement : String

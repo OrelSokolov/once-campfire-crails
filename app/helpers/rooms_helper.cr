@@ -18,7 +18,11 @@ module RoomsHelper
       io << ChatLayout.body_open(room,
         ua: request.headers["User-Agent"]?.to_s, origin: origin)
       io << ChatLayout.message_area(room, messages_html, base_url: origin)
-      io << ChatLayout.page_close(ChatERB.new(room: room, origin: origin).composer.to_s,
+      # rooms/show/_composer renders into content_for :footer (oracle
+      # show.html.erb), the layout reads it back in _body_close.
+      chat_erb = ChatERB.new(room: room, origin: origin)
+      chat_erb.composer
+      io << ChatLayout.page_close(chat_erb.content_for(:footer).to_s,
         sidebar_turbo_frame_tag(src: user_sidebar_path).raw)
     end
     Campfire::ResponseCache::Page.new(html)

@@ -34,7 +34,7 @@ class Messages::Boosts::ByBotsController < ApplicationController
     if (entry = ChatLayout.boosts_for([mid])[mid]?.try(&.last?))
       broadcast_action_to([room, "messages"], :append,
         target: "boosts_message_#{mid}",
-        html: ChatLayout.boost_dom(mid, entry) + "\n",
+        html: ChatLayout.boost_dom(mid, entry),
         attributes: {"maintain_scroll" => "true"})
     end
     render(template: "messages/boosts/by_bots/show", status: :created)

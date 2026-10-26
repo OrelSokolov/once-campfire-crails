@@ -15,6 +15,6 @@ class ApplicationCable::Channel < ActionCable::Channel::Base
 
   # Bang variant (Ruby-style): the connected user or a raise.
   def current_user! : User
-    current_user!
+    current_user.not_nil!
   end
 end
