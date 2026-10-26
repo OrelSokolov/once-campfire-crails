@@ -33,9 +33,9 @@
 - **`icon()` вместо `image_tag "x.svg"`** — пребилд-манифест даёт
   `/assets/<fingerprinted>` src; `image_tag` с голым именем выдал бы
   `/images/x.svg` и сломал бы byte-parity HTML.
-- **`form_with url: "/account.#{id}"` вместо `form_with model:`** — механика
-  есть (railties_cr подключает `FormHelper.polymorphic_path`), но замена
-  отложена: URL и сконы форм должны совпасть до байта.
+- **`form_with url: "/account.#{id}"` вместо `form_with model:`** — ЗАКРЫТО
+  2026-10-26 (инкремент «2.4-формы», см. ниже): все формы на `model:`,
+  `/account.<id>` генерируется polymorphic-резолвером.
 - **`boosts_dom` вместо `render "messages/boosts/boosts"`** — HTML
   сообщения/бустов собирает ChatLayout (compile-time), view-уровневого
   `render`-партиала в порте нет.
@@ -393,3 +393,78 @@ web_share_session_button переехал из Users::ProfilesHelper в Clipboar
 байт-в-байт. Последняя ручная форма ChatLayout — boost_dom (горячий путь
 fragment-кэша сообщений, конверсия = разбор messages_html на коллекционный
 рендер, отдельный инкремент фазы 3).
+
+## STYLE_1to1 — 2.5 GlobalID: GlobalID.create, единое GlobalID.app, 2026-10-26
+
+active_record_cr **v0.1.21** + turbo_cr **v0.1.7** + action_cable_cr **v0.1.6**:
+
+- **`GlobalID.create(record)`** (active_record_cr v0.1.21) возвращает
+  `GlobalID::Reference` (в геме — инстанс GlobalID; имя занято модулем) с
+  `to_s`/`to_param`; распарсенный Reference хранит app-сегмент URI, `to_s`
+  round-trip'ит. Identification-поверхность на AR::Base: `to_gid` /
+  `to_gid_param` (переехали из turbo_cr — как в globalid-railtie).
+- **`gid_model_name`-шов**: гем строит gid из `model.class.name`; у порта
+  STI-строки таблицы комнат материализуются базовым классом Room, поэтому
+  `Base#gid_model_name` (дефолт `class.name`) переопределяется в Room —
+  ручной `Room#to_gid_param` удалён, байты gid не изменились (смоук:
+  b64("gid://campfire/Rooms::Open/<id>") в обе стороны, round-trip через
+  Locator, обе орфографии STI).
+- **Единое имя приложения**: `Turbo.app` (default "crails") и
+  `ActionCable.gid_app` (ENV) убраны — `GlobalID.app` settable-property
+  (default ENV CRAILS_APP_NAME, устанавливается в config/cable.cr
+  `GlobalID.app = "campfire"`), как единственный GlobalID.app рантайма
+  оракула. turbo-спек ставит `GlobalID.app = "oracle"` (было Turbo.app).
+- **`serialize_broadcasting` → `to_gid_param` записи** (action_cable_cr
+  v0.1.6): имена стримов `stream_for`/`broadcast_to` для записей теперь
+  byte-for-byte совпадают с turbo_stream_from (раньше — b64 из
+  `gid_app`/`class.name`: "gid://app/Room/N"); RoomChannel/
+  TypingNotificationsChannel имена стримов теперь как у оракула.
+  Осталось: cookie-фикстура stream_for_spec дрейфует против типизации
+  action_pack_cr CookieOptions (pre-existing, connection-секция; gid-часть
+  проверена byte-точным мини-спеком sf_gid_param).
+- **Неопубликованные lib-патчи 2.1-хвоста**: инкремент про
+  STI-нормализацию/or/merge/insert_all/excluding/signed_id описывает
+  изменения, которых ещё нет в опубликованном active_record.cr — v0.1.20
+  занят GlobalID-коммитом; их публикация должна выйти v0.1.21+.
+
+## STYLE_1to1 — 2.4 form_with model:, 2026-10-26 (инкремент «2.4-формы»)
+
+Все формы, где оракул пишет `form_with model:`, переведены с `url:`+`scope:`
+на модель (accounts/edit ×4, bots new/edit, accounts/users/_user,
+custom_styles/edit, first_runs, joins, messages/edit обе, messages/boosts/new,
+rooms/_form, rooms/directs/new, profile_form_with).
+
+- **Формы байт-паритетны**: `action="/account.<id>"` даёт polymorphic-резолвер
+  (path_for для REST-маршрутов аппендит остаточный позиционный аргумент через
+  «.» — Journey-семантика `(.:format)`), сконы полей — `form_scope` модели
+  (Room — STI-нормализованный `rooms_open`, см. Room#form_scope; остальные —
+  underscored class name). Явные `value:` убраны: значения из модели, nil →
+  атрибут опускается (Rails TextField).
+- **Латентный баг закрыт**: PATCH/PUT `/account.<id>` раньше не матчился
+  вовсе (форма аккаунта 404ила на сабмите); опциональный `(.:format)`-сегмент
+  (флаг на REST-маршрутах) матчит обе формы, суффикс → params["format"].
+- **Нейминг REST-маршрутов как в Rails**: create зовёт collection-имя,
+  update/destroy — member-имя (раньше оставались безымянными; polymorphic
+  `model:` и `_path`-хелперы теперь резолвятся: account, account_bot,
+  room_message, message_boosts…). Роуты порта: добавлены имена `join`,
+  `user_profile` (patch), `account_user` (patch/destroy) — зеркалит
+  `as:`-имена routes.rb оракула.
+- **Поддержка шардов**: `FormModel` на `ActiveRecord::Base` (form_scope/
+  form_model_name — ActiveModel::Naming; form_attributes — через
+  virtual-dispatch стаб `attributes` на Base); action_view_cr `form_models`
+  структурно по `Array` — литерал `[message, Boost.new]` типизируется
+  `Array(Message | Boost)` и из-за инвариантности дженериков не попадает в
+  `when Array(FormModel)` (без фикса boosts-форма теряла и URL, и сконы).
+- **Экранирование data-action в ERB**: в Hash-опциях пишется голый `->`
+  (`data: {action: "x->c#m"}`), tag_options сам экранирует в `-&gt;`;
+  `-&gt;` в исходнике даёт двойное экранирование.
+- **Не переведено**: composer_form_tag (FormBuilder#rich_text_area + блочный
+  lexxy-виджет — нужен в шарде; вместе с content_for :footer), 2 ручные
+  формы ChatLayout (фаза 3).
+- **Параллельная сессия**: работа велась одновременно с GlobalID-инкрементом
+  (2.5) в том же worktree — lib/* дважды перезаписывались shards install,
+  часть app-правок путешествовала через stash. Форм-патчи шардов живут в
+  lib/ (бэкап action_pack routes: tmp/routes_patched_backup.cr); публикация
+  active_record 0.1.22 (FormModel) подхвачена параллельным WIP в
+  ~/myshards/active_record.cr; action_view (form_models/Array) и action_pack
+  (нейминг + .:format) — не опубликованы, версии 0.1.20/0.2.19 свободны.

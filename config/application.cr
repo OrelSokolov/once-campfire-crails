@@ -1,6 +1,7 @@
 require "active_storage_cr"
 
 require "../app/middleware/public_cache"
+require "./initializers/time_formats"
 
 # Disk-сервис сообщений: root как у гема (CAMPFIRE_STORAGE_ROOT ||
 # storage), fan-out путь key[0,2]/key[2,2]/key — в DiskService шарда

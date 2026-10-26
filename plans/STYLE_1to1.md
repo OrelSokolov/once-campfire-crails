@@ -126,14 +126,44 @@ Crystal, (c) стилистическая проблема порта. План 
 ### 2.4. action_view_cr — вьюхи (~20 файлов)
 - [x] `image_tag` — механика есть (пребилд-манифест), `icon()` остаётся
   для byte-parity (notes/style-parity.md).
-- [ ] `form_with model:` — отложено (byte-parity URL/скопов форм).
+- [x] `form_with model:` (2026-10-26, инкремент «2.4-формы»): все формы,
+  где оракул пишет `model:`, переведены с `url:`+`scope:` на модель —
+  accounts/edit ×4 (`action="/account.<id>"` байт-в-байт), bots new/edit,
+  accounts/users/_user, custom_styles/edit (form.text_area), first_runs,
+  joins, messages/edit (обе формы), messages/boosts/new
+  (`model: [@message, Boost.new]` → polymorphic `/messages/<id>/boosts`),
+  rooms/_form + directs/new (`model: room` → `/rooms/<sti>/<id>` через
+  `Room#form_scope/form_model_name` — STI-нормализация обеих орфографий
+  type, как у `#dom_id`), profile_form_with. Поддержка шардов:
+  `FormModel` на `ActiveRecord::Base` (active_record_cr 0.1.22-WIP:
+  form_scope/form_model_name из ActiveModel::Naming, form_attributes из
+  attributes-хеша через virtual-dispatch стаб), `form_models` в
+  action_view_cr структурно по `Array` (инвариантность дженериков:
+  литерал `[message, Boost.new]` типизируется `Array(Message | Boost)` и
+  не матчится с `when Array(FormModel)`) + расширенные сигнатуры
+  `model : FormModel | Array`; action_pack_cr: нейминг REST-маршрутов как
+  в Rails (create/update/destroy зовут collection/member-имена — раньше
+  неименованные) + опциональный `(.:format)`-сегмент: матчинг
+  `/account.<id>` (латентный 404 сабмита account-форм закрыт) и
+  dotted-append остаточных позиционных аргументов в path_for. Роуты-имена:
+  `join`, `user_profile` (patch), `account_user` (patch/destroy).
+  Явные `value:` у полей убраны — значения идут из модели, nil → атрибут
+  опускается (семантика Rails TextField). Проверено: все экраны 200,
+  байты action/scope/_method, живой PATCH-сабмит `/account.1` → 302.
+  Не переведены (вне инкремента): composer_form_tag/rich_text_area
+  (нужен FormBuilder#rich_text_area в шарде, у порта lexxy-билдер;
+  вместе с content_for :footer), 2 ручные формы ChatLayout (фаза 3).
 - [x] `button_to` блоком/`method: :delete` — все ручные `<form
   class="button_to">` переведены на шардовый `button_to` (2026-10-25);
   байты — insertion-порядок сырого гема (см. notes/style-parity.md:
   артефакты харнесса сортируют атрибуты, не гнаться за ними). Остались
   2 ручные формы в ChatLayout (статический билдер — фаза 3).
 - [~] `content_for :nav/:footer` — точечно; основной механизм
-  `page_open`/`page_close`; `@page_title`/`@body_class` — нет.
+  `page_open`/`page_close`; `@page_title`/`@body_class` — нет (механизм
+  есть в rooms/layouts — render layout: c `@page_title`/content_for;
+  перевод остальных ~14 экранов = переиндексация каждого хелпера
+  page_open на чтение ivar/content_for, вместе с переносом nav-хелперов
+  в ERB — следующий инкремент 2.4/3).
 - [~] `render partial:, collection:, as: :user`; `dom_id(@room, :list)` —
   отложено в фазу 3: сайдбар/профили собираются compile-time (ChatERB/
   ChatLayout, SidebarDirect), перевод на collection-рендер = разбор
@@ -148,8 +178,15 @@ Crystal, (c) стилистическая проблема порта. План 
   v0.1.5 (kwargs-форма + per-type JSON-эмиттер), `Base#slice` —
   active_record_cr v0.1.18; typing_notifications 1:1, `current_user` в
   каналах (2026-10-25).
-- [~] GlobalID: `Locator.locate(gid, only:)`/`to_gid_param` — есть;
-  `Room#to_gid_param` вручную (STI-нормализация), `GlobalID.create` нет.
+- [x] GlobalID (2026-10-26): `GlobalID.create(record)` → Reference
+  (to_s/to_param, round-trip) + Identification на AR::Base (`to_gid`/
+  `to_gid_param` переехали из turbo_cr) — active_record_cr **v0.1.21**;
+  STI-шов `Room#gid_model_name` вместо ручного `to_gid_param` (байты
+  gid неизменны); единое `GlobalID.app` (Turbo.app/ActionCable.gid_app
+  убраны — turbo_cr **v0.1.7**); `serialize_broadcasting` →
+  `to_gid_param` записи: имена стримов stream_for/broadcast_to
+  byte-parity с turbo_stream_from (action_cable_cr **v0.1.6**). Смоук:
+  tmp/verify25.cr (worktree); turbo oracle-спек 6/6.
 
 ### 2.6. turbo_cr / jbuilder_cr (~10 файлов)
 - [x] `turbo_stream.append/remove/replace` — TagBuilder в шарде 1:1;

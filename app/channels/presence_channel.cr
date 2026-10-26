@@ -30,7 +30,7 @@ class PresenceChannel < RoomChannel
   private def broadcast_read_room : Nil
     if (m = membership) && (uid = current_user_id)
       ActionCable.server.broadcast("user_#{uid}_reads",
-        {"room_id" => m.room_id, "at" => Time.utc.to_unix_f})
+        {"room_id" => m.room_id, "at" => Time.current.to_f})
     end
   end
 end

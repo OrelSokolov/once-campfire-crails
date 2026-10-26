@@ -25,6 +25,7 @@ module Authentication
 
   @identity_entry : Campfire::IdentityCache::Entry? = nil
   @identity_checked : Bool = false
+  @authenticated_by : ActiveSupport::StringInquirer? = nil
 
   # Only a successfully authenticated bot key disables CSRF protection
   # (protect_from_forgery unless: -> { authenticated_by.bot_key? }).
@@ -43,6 +44,7 @@ module Authentication
     return nil unless (entry = find_session_by_cookie)
     @identity_checked = true
     @identity_entry = entry
+    set_authenticated_by(:session)
     Current.session = @identity_entry.try(&.session)
     Current.user = @identity_entry.try(&.user)
     @identity_entry.try(&.session)
@@ -53,22 +55,46 @@ module Authentication
     @identity_entry.try(&.user)
   end
 
+  # Bang variant (Ruby-style): the authenticated user or a raise.
+  def current_user! : User
+    current_user!
+  end
+
   def require_authentication : Nil
+    bot_authentication
     redirect_to new_session_url unless current_user
   end
 
+  # authentication.rb:38-44 — a valid bot_key authenticates as the bot
+  # user (tracked through authenticated_by, like the oracle).
+  def bot_authentication : Nil
+    if (key = params["bot_key"]?.try(&.to_s.presence)) &&
+       (bot = User.authenticate_bot(key.strip))
+      Current.user = bot
+      set_authenticated_by(:bot_key)
+    end
+  end
+
   # authentication.rb:101-103 — bots authenticated via bot_key are forbidden
-  # on regular controllers; the port checks the key directly (bot_request?).
+  # on regular controllers.
   def deny_bots : Nil
-    head :forbidden if bot_request?
+    head :forbidden if authenticated_by.bot_key?
+  end
+
+  def set_authenticated_by(method : Symbol) : Nil
+    @authenticated_by = method.to_s.inquiry
+  end
+
+  def authenticated_by : ActiveSupport::StringInquirer
+    @authenticated_by ||= "".inquiry
   end
 
   def start_new_session_for(user : User) : Nil
     session = Session.start!(user, request.headers["User-Agent"]?, remote_ip)
     Current.session = session
     Current.user = user
-    cookies.signed.set("session_token", session.token.not_nil!,
-      expires: Time.utc + 20.years, httponly: true, same_site: :lax)
+    set_authenticated_by(:session)
+    cookies.signed.permanent[:session_token] = { value: session.token!, httponly: true, same_site: :lax }
   end
 
   # X-Forwarded-For is honored only when the socket peer is a trusted proxy,

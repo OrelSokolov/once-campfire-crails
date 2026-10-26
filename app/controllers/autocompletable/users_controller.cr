@@ -3,17 +3,17 @@
 class Autocompletable::UsersController < ApplicationController
   @users : Array(User) = [] of User
   def index
-    user = current_user.not_nil!
+    user = current_user!
     # The rich text editor's mentions prompt filters with `filter`, the
     # autocomplete inputs with `query`
-    filter = (params["filter"]? || params["query"]?).to_s.downcase
+    filter = (params["filter"]?.presence || params["query"]?.presence).to_s.downcase
 
     scope = if room_id = params["room_id"]?.try(&.to_s.to_i64?)
               User.where(
                 %(id IN (SELECT m.user_id FROM memberships m
                  JOIN memberships me ON me.room_id = m.room_id
                  WHERE me.user_id = ? AND m.room_id = ? AND status = 0)),
-                user.id.not_nil!, room_id)
+                user.id!, room_id)
             else
               User.active
             end

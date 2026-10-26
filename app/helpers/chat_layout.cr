@@ -139,7 +139,7 @@ module ChatLayout
         if r.name.nil?
           noun = "Ping"
           members = User.where(
-            %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), r.id.not_nil!)
+            %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), r.id!)
             .order("id").to_a
             .reject { |m| viewer && m.id == viewer.id }
           names = members.map(&.name.to_s)
@@ -180,7 +180,7 @@ module ChatLayout
                                     ua : String = "", origin : String = "") : String
     return "" unless viewer
     membership = Membership.where(
-      "room_id = ? AND user_id = ?", room.id.not_nil!, viewer.id.not_nil!).take
+      "room_id = ? AND user_id = ?", room.id!, viewer.id!).take
     return "" unless membership
     involvement = membership.involvement.to_s.presence || "mentions"
     ChatERB.new(room: room, involvement: involvement, origin: origin,
@@ -311,7 +311,7 @@ module ChatLayout
   def self.room_display_name(room : Room) : String
     if room.direct?
       members = User.where(
-        %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), room.id.not_nil!)
+        %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), room.id!)
         .order("id").map(&.name.to_s)
       sentence(members)
     else
@@ -325,7 +325,7 @@ module ChatLayout
   def self.avatar_link(user : User?, loading : String? = nil) : String
     lazy = loading ? %( loading="#{loading}") : ""
     return %(<a class="btn avatar" data-turbo-frame="_top" href="/users/0"><img aria-hidden="true" src="/users/0/avatar" width="48" height="48"></a>) unless user
-    uid = user.id.not_nil!
+    uid = user.id!
     String.build do |io|
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
       io << %(" class="btn avatar" data-turbo-frame="_top" href="#{route_path("user", uid)}">)
@@ -629,7 +629,7 @@ module ChatLayout
   private def self.mention_dom(sgid : String) : String
     user = mention_user(sgid)
     return "" unless user
-    uid = user.not_nil!.id.not_nil!
+    uid = user.not_nil!.id!
     String.build do |io|
       io << %(<span class="mention">)
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
@@ -816,7 +816,7 @@ module ChatLayout
                        attachment : Attachment? = nil,
                        boosts : Array(BoostEntry)? = nil,
                        base_url : String = "") : String
-    mid = m.id.not_nil!
+    mid = m.id!
     cid = m.client_message_id.to_s
     created = m.created_at || Time.utc
     updated = m.updated_at || created
@@ -849,8 +849,8 @@ module ChatLayout
     String.build do |io|
       io << %(<div id="message_#{mid}" class="message#{emoji}" data-controller="reply" )
       io << %(data-user-id="#{m.creator_id}" data-message-id="#{mid}" )
-      io << %(data-message-timestamp="#{created.to_unix_ms}" data-message-updated-at="#{updated.to_unix_ms}" )
-      io << %(data-sort-value="#{created.to_unix_ms}" data-messages-target="message" )
+      io << %(data-message-timestamp="#{created.to_fs(:epoch)}" data-message-updated-at="#{updated.to_fs(:epoch)}" )
+      io << %(data-sort-value="#{created.to_fs(:epoch)}" data-messages-target="message" )
       io << %(data-search-results-target="message" data-refresh-room-target="message" )
       io << %(data-reply-composer-outlet="#composer" data-client-message-id=") << HTML.escape(cid) << %(">\n)
       io << %(<h2 class="message__day-separator"><time datetime="#{created.to_rfc3339}" data-local-time-target="date"></time></h2>\n)
@@ -1197,7 +1197,7 @@ module ChatLayout
     misses = [] of Message
     messages.each do |m|
       if (html = FragmentCache.get(FragmentCache.key(m), epoch))
-        hits[m.id.not_nil!] = html
+        hits[m.id!] = html
       else
         misses << m
       end
@@ -1205,29 +1205,29 @@ module ChatLayout
 
     rooms = {} of Int64 => Room
     if r = room
-      rooms[r.id.not_nil!] = r
+      rooms[r.id!] = r
     else
-      room_ids = misses.map(&.room_id.not_nil!).uniq
+      room_ids = misses.map(&.room_id!).uniq
       unless room_ids.empty?
-        Room.where(id: room_ids).each { |r| rooms[r.id.not_nil!] = r }
+        Room.where(id: room_ids).each { |r| rooms[r.id!] = r }
       end
     end
     creators = {} of Int64 => User
-    creator_ids = misses.map(&.creator_id.not_nil!).uniq
+    creator_ids = misses.map(&.creator_id!).uniq
     unless creator_ids.empty?
-      User.where(id: creator_ids).each { |u| creators[u.id.not_nil!] = u }
+      User.where(id: creator_ids).each { |u| creators[u.id!] = u }
     end
 
     # Attachments and boosts with one IN query per entity (no N+1).
-    attachments = attachments_for(messages.map(&.id.not_nil!))
-    boosts = boosts_for(messages.map(&.id.not_nil!))
+    attachments = attachments_for(messages.map(&.id!))
+    boosts = boosts_for(messages.map(&.id!))
 
     messages.each do |m|
-      if (html = hits[m.id.not_nil!]?)
+      if (html = hits[m.id!]?)
         io << html
-      elsif (r = rooms[m.room_id.not_nil!]?)
-        html = message_dom(m, r, creators[m.creator_id.not_nil!]?,
-          attachments[m.id.not_nil!]?, boosts[m.id.not_nil!]?, base_url)
+      elsif (r = rooms[m.room_id!]?)
+        html = message_dom(m, r, creators[m.creator_id!]?,
+          attachments[m.id!]?, boosts[m.id!]?, base_url)
         FragmentCache.set(FragmentCache.key(m), epoch, html)
         io << html
       end
@@ -1246,7 +1246,7 @@ module ChatLayout
   # template is the messages controller's target "template".
   def self.message_area(room : Room, messages_html : String,
                         base_url : String = "") : String
-    user = Current.user.not_nil!
+    user = Current.user!
     signed_name = HTML.escape(Turbo::Streams::StreamName.signed_stream_name([room, "messages"]))
     # messages_helper.rb:16 — messages_page_url_value: room_messages_url(room)
     # (absolute URL: the JS paginator does new URL(value) with no base).
@@ -1274,7 +1274,7 @@ module ChatLayout
       io << %(<figure class="avatar message__avatar">\n)
       io << %(<a title=") << HTML.escape(user_title(user.name, user.bio))
       io << %(" class="btn avatar" data-turbo-frame="_top" href="#{route_path("user", user.id)}">)
-      io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(user.id.not_nil!, user.updated_at)}" width="48" height="48"/></a>\n)
+      io << %(<img aria-hidden="true" src="#{fresh_user_avatar_path(user.id!, user.updated_at)}" width="48" height="48"/></a>\n)
       io << %(</figure>\n)
       io << %(<div class="message__body">\n)
       io << %(<div class="message__body-content">\n)
@@ -1303,7 +1303,7 @@ module ChatLayout
       refresh_url = base_url.empty? ? "/rooms/#{room.id}/refresh" : "#{base_url}/rooms/#{room.id}/refresh"
       io << %(<div id="messages_#{room.dom_id}" class="messages" data-controller="maintain-scroll refresh-room" )
       io << %(data-action="turbo:before-stream-render@document-&gt;maintain-scroll#beforeStreamRender visibilitychange@document-&gt;refresh-room#visibilityChanged online@window-&gt;refresh-room#online" )
-      io << %(data-messages-target="messages" data-refresh-room-loaded-at-value="#{(room.updated_at || Time.utc).to_unix_ms}" )
+      io << %(data-messages-target="messages" data-refresh-room-loaded-at-value="#{(room.updated_at || Time.utc).to_fs(:epoch)}" )
       io << %(data-refresh-room-url-value="#{HTML.escape(refresh_url)}">\n)
       io << messages_html
       io << %(</div>\n)
