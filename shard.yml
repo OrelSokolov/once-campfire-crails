@@ -21,7 +21,7 @@ dependencies:
     version: ~> 0.1.1
   active_support_cr:
     github: OrelSokolov/active_support.cr
-    version: ~> 0.1.12
+    version: ~> 0.1.13
   attr_reader_cr:
     github: OrelSokolov/attr_reader.cr
     version: ~> 0.1.0
