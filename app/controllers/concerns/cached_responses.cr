@@ -7,6 +7,12 @@ module CachedResponses
     @db_epoch ||= PageCache.epoch
   end
 
+  # Oracle's CachedResponses#read_record_cache_version: the version handed to
+  # RecordCache — read requests only (GET/HEAD).
+  def read_record_cache_version : String?
+    db_epoch if {"GET", "HEAD"}.includes?(request.method)
+  end
+
   def cache_page(name : String, user_id : Int64?, & : -> Campfire::ResponseCache::Page) : Campfire::ResponseCache::Page
     epoch = db_epoch
     key = PageCache.key(name, request, user_id)

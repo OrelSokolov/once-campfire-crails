@@ -106,9 +106,14 @@ class MessagesController < ApplicationController
 
   # RoomScoped#set_room: the room is looked up within the current user's memberships,
   # so a non-member gets 404 for reads and writes alike (create calls set_room by hand).
+  # The oracle (concerns/room_scoped.rb) snapshots membership+room in RecordCache —
+  # same here, so the membership query does not run on every request.
   private def set_room
-    if room = current_user!.rooms.find?(params["id"].to_s)
-      @room = room
+    if room = RecordCache.fetch(
+         ["room", self.class.name, Current.user!.id!.to_s, params["id"].to_s],
+         read_record_cache_version
+       ) { [current_user!.rooms.find?(params["id"].to_s)] of ActiveRecord::Base? }.first
+      @room = room.as(Room)
     else
       response.status = :not_found
       render(plain: "Room not found")

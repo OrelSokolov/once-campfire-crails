@@ -12,7 +12,9 @@ COPY . .
 # without_mt: fork-воркеры serverX (WEB_CONCURRENCY).
 RUN crystal build src/app.cr -o bin/app-release --release -Dwithout_mt
 
-FROM alpine:3.20
+# 3.22 = the Alpine release of the crystal:1.21-alpine build stage: shared
+# .so versions (libxml2 et al.) must match, or musl fails on relocating.
+FROM alpine:3.22
 RUN apk add --no-cache gc libevent pcre2 sqlite-libs libgcc libstdc++ yaml vips glib
 WORKDIR /app
 COPY --from=build /app/bin/app-release ./bin/app-release

@@ -279,3 +279,23 @@ messages/edit передаёт `value: @message.body.to_s`; оракул —
 Трансформация требует ActionText::Attachment.from_node +
 render_action_text_attachment — не портировано; тела без
 edit-ломающихся аттачментов рендерятся идентично.
+
+## RecordCache: снапшоты — объекты, не attributes (2026-10-27)
+
+Порт app/models/record_cache.rb оракула. Отличия от оракула:
+- Оракул сериализует `attributes_before_type_cast` в FragmentCache.store и
+  на hit декодирует JSON + instantiate; порт хранит per-worker сами объекты
+  (`Array(ActiveRecord::Base?)`) — десериализация на каждый hit стоила бы
+  дороже сохранённого запроса. Следствие: запись из кэша — тот же объект,
+  что в прошлом запросе; read-пути относятся к записям как к неизменяемым
+  (как IdentityCache/FragmentCache).
+- У оракула version = ResponseCache.version (capture_response_cache_version);
+  в порте — db_epoch (PRAGMA data_version, мемо на запрос), hit
+  перепроверяется по свежей эпохе, как cache_page. Бюджет —
+  CAMPFIRE_RESPONSE_CACHE_MB (как у оракула ResponseCache.budget),
+  ограничение записей LIMIT=4096 с LRU (аналог MAX_ENTRY_BYTES-бюджета).
+- messages#set_room кэширует Room.find? по current_user!.rooms (снапшот
+  ["room", ...]) вместо оракульского снапшота ["membership", user, room]
+  с парой [membership, room]: порт не тянет @membership в запросы
+  сообщений. При миграции на полный RoomScoped-концерн оракула ключ
+  сменить на membership-пару.

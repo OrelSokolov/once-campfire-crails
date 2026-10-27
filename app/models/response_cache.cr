@@ -58,6 +58,7 @@ module Campfire
       @@epoch = ""
       Campfire::IdentityCache.reset!
       Campfire::FragmentCache.reset!
+      RecordCache.reset!
     end
 
     def self.epoch : String
