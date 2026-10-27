@@ -1,4 +1,11 @@
-<%= page_open(@user.not_nil!) %><section class="panel panel--wide txt-align-center flex flex-column position-relative" style="view-transition-name: custom-styles"><%= form_with model: @account.not_nil!, url: account_custom_styles_path, class: "flex flex-column gap", data: {action: "keydown.ctrl+enter->form#submit keydown.meta+enter->form#submit", controller: "form"} do |form| %>
+<% @page_title = "Custom CSS" %>
+
+<% content_for :nav do %>
+  <div class="flex-item-justify-start">
+    <%= link_back_to edit_account_path %>
+  </div>
+<% end %>
+<section class="panel panel--wide txt-align-center flex flex-column position-relative" style="view-transition-name: custom-styles"><%= form_with model: @account.not_nil!, url: account_custom_styles_path, class: "flex flex-column gap", data: {action: "keydown.ctrl+enter->form#submit keydown.meta+enter->form#submit", controller: "form"} do |form| %>
     <div class="panel__button">
       <%= translation_button("custom_styles") %>
     </div>
@@ -15,4 +22,3 @@
     </label>
     <%= form.button class: "btn btn--reversed center txt-large", type: "submit" do %><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span><% end %>
     <% end %></section>
-<%= page_close %>

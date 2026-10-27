@@ -4,8 +4,19 @@ class Accounts::BotsController < ApplicationController
   before_action :ensure_can_administer
 
   @bots : Array(User) = [] of User
-  @bot_rooms : Hash(Int64, Array(NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String))))) = {} of Int64 => Array(NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String))))
   @bot : User?
+
+  # Oracle app/views/accounts/bots/_bot|_form.html.erb: index renders the
+  # bot collection, new/edit share the form partial. The rooms loop of the
+  # _bot partial (oracle: bot.rooms.without_directs.ordered) queries
+  # Room.visible_for directly — the same per-bot SQL as the oracle.
+  compile_partials({
+    "accounts/bots/bot"  => {path: "app/views/accounts/bots/_bot.html.erb",
+                             locals: {"bot" => User}},
+    "accounts/bots/form" => {path: "app/views/accounts/bots/_form.html.erb",
+                             locals: {"form" => ActionView::Helpers::FormHelper::FormBuilder,
+                                      "bot"  => User}},
+  })
 
   def new
     @bot = User.new(role: :bot)
@@ -34,22 +45,6 @@ class Accounts::BotsController < ApplicationController
 
   def index
     @bots = User.active_bots.ordered.to_a
-    @bots.each do |bot|
-      bid = bot.id!
-      bot_key = "#{bid}-#{bot.bot_token.to_s}"
-      # Covers both type spellings: seed 'Rooms::Direct', port 'Direct'.
-      rooms = [] of NamedTuple(legend: String, commands: Array(NamedTuple(icn: String, label: String, sr: String, cmd: String)))
-      Room.visible_for(bot).without_directs.ordered.each do |room|
-        rid = room.id!
-        text = "curl -d 'Hello!' #{origin}/rooms/#{rid}/#{bot_key}/messages"
-        upload = %{curl -F "attachment=@/path/to/file" #{origin}/rooms/#{rid}/#{bot_key}/messages}
-        rooms << {legend: room.name.to_s, commands: [
-          {icn: "messages-outlined.svg", label: "posting messages", sr: "Copy message command", cmd: text},
-          {icn: "attachment.svg", label: "posting attachments", sr: "Copy attachment command", cmd: upload},
-        ]}
-      end
-      @bot_rooms[bid] = rooms
-    end
   end
 
   def edit

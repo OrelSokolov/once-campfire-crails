@@ -24,8 +24,8 @@ class FirstRunsController < ApplicationController
     redirect_to root_url if Account.any?
   end
 
-  # avatar is permitted for parity with the reference; avatar upload (has_secure_*) is
-  # not ported and FirstRun ignores the field.
+  # avatar attaches through FirstRun (has_one_attached setter), as in the
+  # oracle's User.new(user_params).
   private def user_params : ActionController::Parameters
     params.require(:user).permit(:name, :avatar, :email_address, :password)
   end

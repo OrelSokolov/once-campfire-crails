@@ -7,6 +7,9 @@ class AccountsController < ApplicationController
 
   before_action :ensure_can_administer, only: [:update]
 
+  # edit.html.erb footer badge (oracle version_helper.rb).
+  helper :version
+
   # Data for edit.html.erb: account, viewer, the restrict switch, invite link + QR path,
   # and the account's users — admins in the first block, then members, ordered by name.
   @account : Account?
@@ -31,7 +34,7 @@ class AccountsController < ApplicationController
     account = set_account
     user = current_user!
     @user = user
-    @restrict = account.restrict_room_creation_to_administrators?
+    @restrict = account.settings.restrict_room_creation_to_administrators?
     @join_url = origin + "/join/" + account.join_code.to_s
     users = User.visible_to(user)
     @admins = users.where("role = 1").ordered.to_a
@@ -49,10 +52,11 @@ class AccountsController < ApplicationController
     @account.not_nil!
   end
 
-  # Strong Parameters (Rails account_params): name + the settings switch
-  # (settings: {}). :logo joins the permit when has_one_attached lands (phase 4).
+  # Strong Parameters (Rails account_params): name, logo upload, the
+  # settings switch (settings: {}). The logo file reaches the attachment
+  # through update!'s logo= setter (has_one_attached).
   private def account_params : ActionController::Parameters
     params.require(:account)
-      .permit("name", {"settings" => {} of String => Array(String)})
+      .permit("name", :logo, {"settings" => {} of String => Array(String)})
   end
 end

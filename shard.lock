@@ -7,7 +7,7 @@ shards:
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.21
+    version: 0.2.22
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
@@ -19,11 +19,11 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.25
+    version: 0.1.27
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git
-    version: 0.1.3
+    version: 0.1.4
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git

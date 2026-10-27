@@ -1,4 +1,11 @@
-<%= page_open("Chat bots", "/account/edit") %><section class="panel panel--wide txt-align-center flex flex-column position-relative" style="view-transition-name: chat-bots">
+<% @page_title = "Chat bots" %>
+
+<% content_for :nav do %>
+  <div class="flex-item-justify-start">
+    <%= link_back_to edit_account_path %>
+  </div>
+<% end %>
+<section class="panel panel--wide txt-align-center flex flex-column position-relative" style="view-transition-name: chat-bots">
   <div class="flex align-center gap">
     <div class="panel__button">
       <%= translation_button("chat_bots") %>
@@ -13,33 +20,6 @@
   </div>
   <div class="pad-inline pad-block-start ">
     <menu class="flex flex-column gap margin-none pad">
-      <% @bots.each do |bot| %><% bid = bot.id! %><li class="flex flex-column gap flush fill-shade border-radius pad-block pad-inline-double">
-        <div class="flex align-center gap">
-          <figure class="avatar flex-item--no-shrink" style="--avatar-size: 2.65em;">
-            <%= avatar_link(bot, "lazy") %>
-          </figure>
-          <div class="min-width">
-            <div class="overflow-ellipsis txt-large"><strong><%= bot.name.to_s %></strong></div>
-          </div>
-          <a href="<%= edit_account_bot_path(bid) %>" class="btn flex-item-justify-end" style="view-transition-name: chat-bot-<%= bid %>">
-            <%= icon("pencil.svg") %>
-            <span class="for-screen-reader">Edit <%= bot.name.to_s %></span>
-          </a>  </div>
-        <% @bot_rooms[bid].each do |r| %><fieldset class="gap max-width pad border border-radius">
-          <legend class="min-width txt-align-start pad-inline">
-            <strong class="overflow-ellipsis"><%= r[:legend] %></strong>
-          </legend>
-          <% r[:commands].each do |c| %><div class="flex align-center gap">
-            <%= icon(c[:icn], 24, "colorize--black") %>
-            <div class="flex-item-grow">
-              <input type="text" class="input full-width fill-white" value="<%= c[:cmd] %>" aria-label="curl command for <%= c[:label] %>" readonly>
-            </div>
-            <div class="txt-small">
-              <%= copy_button(c[:cmd], c[:sr]) %>        </div>
-          </div>
-        <% end %></fieldset>
-      <% end %></li>
-      <% end %></menu>
+      <%= render partial: "accounts/bots/bot", collection: @bots %></menu>
   </div>
 </section>
-<%= page_close %>

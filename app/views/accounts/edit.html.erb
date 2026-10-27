@@ -1,4 +1,9 @@
-<%= page_open(@user.not_nil!) %><section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
+<% @page_title = "Account settings" %>
+
+<% content_for :nav do %>
+  <%= raw account_nav(@user.not_nil!) %>
+<% end %>
+<section class="panel txt-align-center flex flex-column gap" style="view-transition-name: account-settings">
   <% if @user.not_nil!.administrator? %>
     <div class="align-center center avatar__form gap" data-controller="upload-preview">
       <%= form_with model: @account.not_nil!, method: "patch", class: "txt--medium", data: {controller: "form"} do |form| %>
@@ -66,4 +71,6 @@
     </menu>
   </div>
 </section>
-<%= page_close %>
+<% content_for :footer do %>
+  <div class="txt-align-center center margin-block-double txt-subtle">Campfire&trade; version <%= version_badge %></div>
+<% end %>

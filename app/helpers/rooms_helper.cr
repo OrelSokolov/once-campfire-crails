@@ -59,12 +59,6 @@ module RoomsHelper
       ChatLayout.messages_html(collection, db_epoch, @room, origin))
   end
 
-  # rooms/directs/edit.html.erb shell (the directs edit screen keeps its own
-  # wrapper; the opens/closeds pages moved to rooms/layouts/*).
-  def page_open(title : String, back_path : String) : ERB::SafeString
-    page_shell_open(title, nav_html: nav_back_to(back_path).raw)
-  end
-
   # Oracle rooms_helper.rb link_back_to_last_room_visited: back to the last
   # visited room. The crails port keeps the @room-based selection (edit
   # pages to the room itself, new pages to the root); the oracle reads the

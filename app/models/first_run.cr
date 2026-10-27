@@ -29,6 +29,13 @@ class FirstRun
       created_at: now, updated_at: now).save!
     user.save!
 
+    # Oracle: User.new(user_params) carries the avatar upload through the
+    # has_one_attached setter; the port attaches right after the user row
+    # exists (the attachment needs the record id).
+    if avatar = user_params["avatar"]?.as?(ActionController::UploadedFile)
+      user.avatar = avatar
+    end
+
     room = Rooms::Open.new(
       name: FIRST_ROOM_NAME,
       creator_id: user.id!,

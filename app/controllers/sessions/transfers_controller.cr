@@ -1,6 +1,4 @@
 class Sessions::TransfersController < ApplicationController
-  helper :session_transfers
-
   allow_unauthenticated_access
 
   @token : String = ""

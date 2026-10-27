@@ -192,11 +192,21 @@
   портированы; анализ изображения синхронный внутри транзакции.
 - `app/models/membership.cr`: `Relation#joins` по belongs_to не поддержан —
   сырые JOIN-фрагменты; строковый `ar_enum` с lenient-чтением из БД.
-- `app/models/account.cr`: `has_json :settings` вручную (с 2026-10-27 —
-  `restrict_room_creation_to_administrators?` принимает и строки, и boolean:
-  запись идёт через `update!(account_params)`, типизированный каст — с
-  has_json в шарде, фаза 4 п.4); `logo_variant` —
+- `app/models/account.cr`: `has_json :settings` — закрыто 2026-10-27
+  (active_record_cr v0.1.26, порт SchematizedJson): типизированный аксессор
+  кастует форм-строки при записи; ручной переходной парсер строк/boolean
+  удалён. Остаточные отклонения шарда: неизвестный ключ присваивания →
+  ArgumentError (Rails: NoMethodError), nil-присваивание очищает
+  (reload делит путь assign_attributes — строки БД с не-схемными ключами
+  при reload рейзят, в приложении не встречаются), записи дублируют
+  контейнер (dirty tracking); `logo_variant` —
   nil при ошибке vips → контроллер отдаёт сток-иконку.
+  `has_one_attached :logo` + `permit :logo` (upload через
+  `update!`→`logo=<UploadedFile>`) — закрыто 2026-10-27 (active_storage_cr
+  v0.1.4 + active_record_cr v0.1.27 + action_pack_cr v0.2.22): файловый
+  параметр идёт в сеттер аттачмента, невыбранный файл (`filename=""`)
+  парсится как nil (Rack) и не меняет аттачмент.
+  `FirstRun` avatar — тот же путь (`user.avatar = file` после save).
 - `app/models/first_run.cr`: `join_code` — base64url без padding (по express
   routes.js), а не `alphanumeric(12)` группами по 4.
 - `app/models/application_platform.cr`: инлайн мини-порта useragent;
@@ -277,16 +287,21 @@
 - `app/helpers/**`: helper wiring через action_pack 0.2.14 (маркер
   `include ActionController::Helper` + конвенция/`helper :sym`) вместо
   Rails include-all: конфликты имён между crails-обёртками
-  (page_open/page_close/copy_button/avatar_link/last_room_visited_path/
+  (copy_button/avatar_link/last_room_visited_path/
   fresh_account_logo_path/translation_button/version), у оракула этих
-  методов в хелперах нет (page_open и пр. — crails-обёртки над ChatLayout);
+  методов в хелперах нет; page_shell-шимы (page_open/page_close и пр.)
+  сняты (2026-10-27, инкремент 1.3 — вьюхи пишут @page_title/
+  content_for напрямую);
   `helper :all` разблокируется после переноса HTML в ERB-партиалы.
   Кнопки (инкремент 2, фаза 3b): ChatLayout qr_button/copy_button/
   web_share_button удалены, оракульные блочные `button_to_copy_to_clipboard`
   (ClipboardHelper)/`link_to_zoom_qr_code` (QrCodeHelper)/
   `web_share_session_button` (Users::ProfilesHelper) зарегистрированы;
-  crails-обёртки `copy_button` в bots/profiles остаются как тонкие
-  делегаты до миграции вьюх на блочный API (учтены в конфликтах выше);
+  crails-обёртка `copy_button` в bots удалена (2026-10-27: вьюхи
+  перенесены на оракульные партиалы _bot/_form, _bot использует
+  блочный `button_to_copy_to_clipboard` напрямую); profiles-обёртка
+  остаётся тонким делегатом до миграции вьюх на блочный API (учтена
+  в конфликтах выше);
   accounts-обёртка удалена (2026-10-27, инкремент 6: edit рендерит
   accounts/invite, join_code — `button_to account_join_code_path`).
   nav_back (инкремент 3): `link_back_to`/`link_back` — оракульный API в

@@ -13,9 +13,6 @@ module Users::ProfilesHelper
     def initialize(@room, @membership)
     end
   end
-  def page_open(user : User) : ERB::SafeString
-    page_shell_open(user.name.to_s, nav_html: profile_nav)
-  end
 
   def install_instructions : ERB::SafeString
     ChatERB.new(ua: @ua).render("install_instructions")
@@ -90,16 +87,9 @@ module Users::ProfilesHelper
     end
   end
 
+  # users/profiles/_nav.html.erb: back link + logout form (form_with —
+  # the oracle's content_for :nav block).
   def profile_nav : String
-    String.build do |io|
-      io << nav_back.raw << "\n"
-      io << %(<div class="flex-item-justify-end">\n)
-      io << %(<form accept-charset="UTF-8" action="/session" data-controller="sessions" method="post"><input name="_method" type="hidden" value="delete">\n)
-      io << %(<input data-sessions-target="pushSubscriptionEndpoint" id="push_subscription_endpoint" name="push_subscription_endpoint" type="hidden">\n)
-      io << %(<button class="btn" data-action="sessions#logout:prevent">\n)
-      io << ChatLayout.icon("logout.svg", nil) << "\n"
-      io << %(<span class="for-screen-reader">Log out</span>\n</button>\n)
-      io << %(</form>  </div>)
-    end
+    render(partial: "users/profiles/nav").raw
   end
 end

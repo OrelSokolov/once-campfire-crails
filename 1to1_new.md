@@ -149,6 +149,14 @@
       (+фолбэк на ApplicationController для abstract-контекста); flash-блок
       layout на ActionController::Flash (prepare_login → flash.now).
       Детали — plans/STYLE_1to1.md фаза 3, инкремент 8.
+- [x] Инкремент «1.3 — снятие page_shell-шимов» (2026-10-27): вьюхи
+      пишут @page_title/@body_class/content_for напрямую (first_runs,
+      joins, transfers, accounts/edit+footer version_badge, bots
+      index/new/edit, custom_styles, users/show, profiles/show,
+      push_subscriptions, rooms/directs/edit, searches+sidebar);
+      page_shell_open/page_shell_close, page_open/page_close-обёртки
+      и пустые хелпер-модулы (first_runs/joins/session_transfers)
+      удалены; accounts/edit — helper :version (VersionHelper).
 - [ ] Инкременты дальше: nav-хелперы ~14 экранов в ERB-партиалы + link_to
       do nav-ссылки → helper :all.
 
@@ -181,8 +189,25 @@
       легаси-bool, unpermitted, uploaded file). Фулл-сборка/capybara/twinshot
       deferred: дерево было красное от параллельного инкремента фазы 3 —
       прогнать после его зелёного.
+- [x] `has_json :settings` (2026-10-27, active_record_cr v0.1.26): порт
+      rails-main SchematizedJson (activemodel/schematized_json.rb) —
+      типизированный аксессор над json/jsonb-колонкой: методы ключа
+      (`settings.key?`/`key =`/`key`) из схемы (:boolean/:integer/:string
+      или реальные дефолты, reverse-merge при чтении и before_save),
+      сеттер колонки кастует форм-строки ("true" → true) при
+      update!/assign_attributes, загрузка строк — сырой (__assign_raw_).
+      Account — оракул 1:1 (`has_json :settings,
+      restrict_room_creation_to_administrators: false`), ручной
+      restrict_room_creation_to_administrators? удалён; вызовы переведены
+      на `*.settings.restrict_room_creation_to_administrators?`
+      (rooms_controller, chat_erb, accounts_controller). Отклонения:
+      неизвестный ключ → ArgumentError (Rails NoMethodError), nil-присваивание
+      очищает, а не рейзит (reload делит путь), записи дублируют контейнер
+      (dirty tracking), ридеры толерантны к легаси-строкам в БД. Verified:
+      спека шарда (spec/sqlite_oracle_spec.cr, Preference-модель) +
+      tmp/has_json_smoke.cr + tmp/update22_smoke.cr.
 - [ ] Пагинация `set_page_and_extract_portion_from` / page-скопы.
-- [ ] `has_one_attached do |attachable| variants end` + `has_json :settings`.
+- [ ] `has_one_attached do |attachable| variants end` (`has_json :settings` — закрыт 2026-10-27, v0.1.26, см. выше).
 - [x] `belongs_to ..., default: -> { Current.user }` — закрыто в STYLE_1to1
       2.1 (active_record_cr v0.1.18, 2026-10-25); запись здесь устарела.
 - [ ] Переименование `*_helpers` → `*_helper` оракула (после view context).

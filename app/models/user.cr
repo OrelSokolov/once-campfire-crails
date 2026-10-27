@@ -7,6 +7,11 @@ class User < ApplicationRecord
   has_many :messages, foreign_key: "creator_id"
   has_many :searches, foreign_key: "user_id", class_name: "Search"
 
+  # The reference's User::Avatar concern: has_one_attached :avatar (the
+  # attach proxy + avatar= setter for update!(params) uploads), plus the
+  # preloading association readers (avatar_blob keeps the app's
+  # ActiveStorageBlob type).
+  has_one_attached :avatar
   preloadable_attachment :avatar
 
   ar_enum :status, {active: 0, deactivated: 1, banned: 2}, default: :active
@@ -40,6 +45,12 @@ class User < ApplicationRecord
       bcrypt = Crypto::Bcrypt::Password.new(DUMMY_BCRYPT)
     end
     bcrypt.verify(password) && user ? user : nil
+  end
+
+  # Оракул (user.rb): инициалы для initials-аватара
+  # (users/avatars/show.svg.erb).
+  def initials
+    name.to_s.scan(/\b\w/).join
   end
 
   def reset_remote_connections : Nil

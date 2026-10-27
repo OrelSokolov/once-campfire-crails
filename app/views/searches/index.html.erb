@@ -1,4 +1,10 @@
-<%= page_open %><div class="message-area" id="message-area">
+<% @page_title = "Search" %>
+<% @body_class = "sidebar searches" %>
+
+<% content_for :nav do %>
+  <%= raw search_nav(@query, @messages.size, @recents) %>
+<% end %>
+<div class="message-area" id="message-area">
   <div class="message-area--empty min-width center">
     <figure class="center pad">
       <img aria-hidden="true" class="colorize--black translucent" src="<%= search_icon_src %>">
@@ -23,4 +29,9 @@
         <img aria-hidden="true" src="<%= asset("arrow-up.svg") %>">
         <span class="for-screen-reader">Search</span>
     </button>      </div>
-  </form>  </div><% end %><%= page_close %>
+  </form>  </div><% end %>
+<% content_for :sidebar do %>
+  <div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">
+    <%= raw recent_searches_html(@recents) %>
+  </div>
+<% end %>

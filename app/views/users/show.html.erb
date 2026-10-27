@@ -1,6 +1,11 @@
 <% viewer = @viewer.not_nil! %>
 <% subject = @subject.not_nil! %>
-<%= page_open(viewer, subject) %><section class="panel txt-align-center">
+<% @page_title = subject.name.to_s %>
+
+<% content_for :nav do %>
+  <%= raw user_nav(viewer, subject) %>
+<% end %>
+<section class="panel txt-align-center">
   <div class="flex flex-column gap <%= subject.banned? ? "banned" : "" %>">
     <div class="avatar txt-xx-large center" style="background: white">
       <img alt="Profile avatar" class="avatar" src="<%= fresh_user_avatar_path(subject) %>">
@@ -29,4 +34,3 @@
       <% end %>
     </div><% end %><% end %></div>
 </section>
-<%= page_close %>

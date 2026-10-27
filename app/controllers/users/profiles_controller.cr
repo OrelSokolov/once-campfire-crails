@@ -8,11 +8,14 @@ class Users::ProfilesController < ApplicationController
   @qr_path : String = ""
 
   # Oracle users/profiles/show.html.erb renders the _membership partial
-  # collection twice (shared + direct rooms).
+  # collection twice (shared + direct rooms); the nav comes from the
+  # content_for :nav block (_nav partial).
   compile_partials({
     "users/profiles/membership" => {path: "app/views/users/profiles/_membership.html.erb",
                                      locals: {"membership" => Users::ProfilesHelper::MembershipEntry}},
-  })
+    "users/profiles/nav"        => {path: "app/views/users/profiles/_nav.html.erb",
+                                     locals: {} of String => Nil},
+  }, dedent: true)
 
   def show
     user = current_user!

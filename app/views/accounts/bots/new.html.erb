@@ -1,30 +1,11 @@
-<%= page_open("New chat bot", "/account/bots") %><section class="panel">
+<% @page_title = "New chat bot" %>
+
+<% content_for :nav do %>
+  <div class="flex-item-justify-start">
+    <%= link_back_to account_bots_path %>
+  </div>
+<% end %>
+<section class="panel">
   <%= form_with model: @bot.not_nil!, url: account_bots_path, class: "flex flex-column gap" do |form| %>
-    <h1 class="for-screen-reader">Chat Bot Setup</h1>
-    <label class="align-center center avatar__form gap" data-controller="upload-preview">
-      <div class="btn input--file">
-        <%= icon("camera.svg") %>
-        <%= form.file_field :avatar, class: "input", accept: "image/*", data: {action: "upload-preview#previewImage", "upload-preview-target": "input"} %>
-        <span class="for-screen-reader">Upload bot avatar</span>
-      </div>
-      <div class="avatar input--file txt-xx-large" style="--avatar-size: var(--btn-size);">
-        <img alt="Bot avatar" data-upload-preview-target="image" height="48" src="<%= bot_avatar_src %>" width="48">
-      </div>
-    </label>
-    <div class="flex align-center gap">
-      <%= translation_button("bot_name") %>
-      <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-        <%= form.text_field :name, class: "input", autocomplete: "name", autofocus: true, placeholder: "Name the bot", required: true, data: {"1p-ignore" => true} %>
-        <%= icon("bot.svg", 24, "colorize--black") %>
-      </label>
-    </div>
-    <div class="flex align-center gap">
-      <%= translation_button("webhook_url") %>
-      <label class="flex align-center gap flex-item-grow txt-large input input--actor">
-        <%= form.url_field :webhook_url, class: "input", placeholder: "Webhook URL" %>
-        <%= icon("web.svg", 24, "colorize--black") %>
-      </label>
-    </div>
-    <button class="btn btn--reversed center txt-large" type="submit"><%= icon("check.svg") %><span class="for-screen-reader">Save changes</span></button>
+    <%= render partial: "accounts/bots/form", locals: {"form" => form, "bot" => @bot.not_nil!} %>
   <% end %></section>
-<%= page_close %>

@@ -2,6 +2,15 @@
 # PBKDF2-SHA256(secret, "active_record/signed_id", 1000, 64)-derived
 # HMAC-SHA256 key (campfire-express src/rails.js: key()/verifyId).
 class Users::AvatarsController < ApplicationController
+  # show.svg.erb — вьюха экшена (оракул: render formats: :svg в
+  # render_initials). Автокомпиляция покрывает только .html.erb/
+  # .turbo_stream.erb/.json.jbuilder, поэтому шаблон компилируется
+  # явно; dedent: false — отступы в SVG значимы, вывод побайтово
+  # как в Rails.
+  compile_template "__av_tpl_show", "app/views/users/avatars/show.svg.erb", dedent: false
+
+  # show.svg.erb: @user.initials / avatar_background_color(@user).
+  @user : User?
 
   allow_unauthenticated_access # avatars are publicly linked
 
@@ -25,6 +34,10 @@ class Users::AvatarsController < ApplicationController
     end
 
     user = User.find?(user_id)
+    # Оракул: from_avatar_token → find_signed! поднимает RecordNotFound
+    # (→ 404) для валидного токена удалённого пользователя; шаблон
+    # рассчитывает на @user.
+    return render(plain: "avatar not found", status: 404) unless user
     blob = user.try(&.avatar_blob)
     unless blob
       if user.try(&.role) == 2
@@ -106,10 +119,12 @@ class Users::AvatarsController < ApplicationController
     render(html: svg, content_type: "image/svg+xml")
   end
 
+  # Оракул render_initials: render formats: :svg — show.svg.erb.
   private def render_initials(user : User?, cache_key : String? = nil,
                               cache_epoch : String? = nil,
                               public_path : Bool = false) : Nil
-    svg = initials_svg(user)
+    @user = user
+    svg = __av_tpl_show.raw
     if cache_key && cache_epoch
       AvatarCache.set(cache_key, cache_epoch, svg, "image/svg+xml")
     end

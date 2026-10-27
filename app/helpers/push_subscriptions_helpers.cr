@@ -1,10 +1,6 @@
 # PushSubscriptionsHelpers: ERB helpers for app/views/users/push_subscriptions/index.html.erb.
 module PushSubscriptionsHelpers
   include ActionController::Helper
-  def page_open : ERB::SafeString
-    page_shell_open("Push notification subscriptions",
-      nav_html: nav_back_to(last_room_visited_path).raw)
-  end
 
   # Non-browser or empty UA (curl, nil) yields an empty string.
   def user_agent_summary(user_agent : String?) : String
@@ -14,7 +10,8 @@ module PushSubscriptionsHelpers
     "#{agent.browser} #{agent.version} on #{agent.platform}".strip
   end
 
-  private def last_room_visited_path : String
+  # Oracle last_room_visited helper: back link target of the nav.
+  def last_room_visited_path : String
     user = current_user!
     room = nil
     if last = cookies[:last_room]?

@@ -1,0 +1,48 @@
+<li class="flex flex-column gap flush fill-shade border-radius pad-block pad-inline-double">
+  <div class="flex align-center gap">
+    <figure class="avatar flex-item--no-shrink" style="--avatar-size: 2.65em;">
+      <%= avatar_link(bot, "lazy") %>
+    </figure>
+    <div class="min-width">
+      <div class="overflow-ellipsis txt-large"><strong><%= bot.name.to_s %></strong></div>
+    </div>
+    <a href="<%= edit_account_bot_path(bot.id!) %>" class="btn flex-item-justify-end" style="view-transition-name: chat-bot-<%= bot.id! %>">
+      <%= icon("pencil.svg") %>
+      <span class="for-screen-reader">Edit <%= bot.name.to_s %></span>
+    </a>
+  </div>
+  <% bot_key = "#{bot.id!}-#{bot.bot_token.to_s}" %>
+  <% Room.visible_for(bot).without_directs.ordered.each do |room| %>
+    <fieldset class="gap max-width pad border border-radius">
+      <legend class="min-width txt-align-start pad-inline">
+        <strong class="overflow-ellipsis"><%= room.name.to_s %></strong>
+      </legend>
+      <% curl_text_line = "curl -d 'Hello!' #{origin}/rooms/#{room.id!}/#{bot_key}/messages" %>
+      <div class="flex align-center gap">
+        <%= icon("messages-outlined.svg", 24, "colorize--black") %>
+        <div class="flex-item-grow">
+          <input type="text" class="input full-width fill-white" value="<%= curl_text_line %>" aria-label="curl command for posting messages" readonly>
+        </div>
+        <div class="txt-small">
+          <%= button_to_copy_to_clipboard(curl_text_line) do %>
+            <%= icon("copy-paste.svg", 20) %>
+            <span class="for-screen-reader">Copy message command</span>
+          <% end %>
+        </div>
+      </div>
+      <% curl_upload_line = %[curl -F "attachment=@/path/to/file" #{origin}/rooms/#{room.id!}/#{bot_key}/messages] %>
+      <div class="flex align-center gap">
+        <%= icon("attachment.svg", 24, "colorize--black") %>
+        <div class="flex-item-grow">
+          <input type="text" class="input full-width fill-white" value="<%= curl_upload_line %>" aria-label="curl command for posting attachments" readonly>
+        </div>
+        <div class="txt-small">
+          <%= button_to_copy_to_clipboard(curl_upload_line) do %>
+            <%= icon("copy-paste.svg", 20) %>
+            <span class="for-screen-reader">Copy attachment command</span>
+          <% end %>
+        </div>
+      </div>
+    </fieldset>
+  <% end %>
+</li>

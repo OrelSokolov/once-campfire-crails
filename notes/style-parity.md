@@ -738,12 +738,14 @@ action_view_cr, публикация в хвосте фазы 7; см. инкр�
   `settings: {}` — весь вложенный хэш). `:logo` не пермитится до
   has_one_attached (фаза 4 п.4) — иначе assign падал бы на отсутствующем
   сеттере; загрузка лого и так не реализована в порте.
-- **Account#restrict_room_creation_to_administrators?** — переходно
-  принимает строки и boolean: rails-main SchematizedJson
-  (activemodel/lib/active_model/schematized_json.rb, `has_json`) кастует
-  форму-строки в boolean при записи; полный порт с типизированным writer —
-  вместе с `has_json :settings` в шарде (фаза 4 п.4). Ручной
-  `restrict_room_creation_to_administrators=` удалён (появится из has_json).
+- **Account#restrict_room_creation_to_administrators?** — закрыто
+  2026-10-27 (active_record_cr v0.1.26): порт rails-main SchematizedJson
+  (`has_json`, activemodel/lib/active_model/schematized_json.rb) в шарде —
+  типизированный writer кастует форму-строки в boolean при записи;
+  Account/вызовы — оракул 1:1 (`Current.account.settings.
+  restrict_room_creation_to_administrators?` / `Account.take.try(&.settings.
+  restrict_room_creation_to_administrators?)`). Ручной
+  `restrict_room_creation_to_administrators=`/парсер удалён.
 - **Квирк strong_parameters (не блокер)**: `Parameters.from` теряет nil в
   массивах значений (`nil.as?(Scalar)` → falsy → `|| e.to_s` → "") и
   проглатывает UploadedFile в String; живые параметры из HTTP-парсера идут
@@ -771,7 +773,8 @@ action_view_cr, публикация в хвосте фазы 7; см. инкр�
   порта метод-форма now(key, value), не `flash.now[:k] =`).
 - **content_for**: только блочная форма (`content_for :k do ... end`);
   форма-с-значением (`content_for :k, value`) в erb_cr отсутствует —
-  шаблоны порта используют блок, обёртки page_shell_* — блок с литералом.
+  шаблоны порта используют блок (вьюхи пишут content_for напрямую,
+  page_shell-обёртки сняты).
 - **__render_layout-фолбэк на ApplicationController**: action_pack_cr
   генерирует `__render_layout` только конкретным контроллерам; concern
   (AllowBrowser) компилируется в abstract-контексте, поэтому
@@ -780,12 +783,13 @@ action_view_cr, публикация в хвосте фазы 7; см. инкр�
 - **incompatible_browser**: @page_title ставится в concern (шаблон рендерится
   в ChatERB-контексте без доступа к ivar контроллера) — у оракула строка
   `<% @page_title = ... %>` в шаблоне.
-- **page_open/page_close** — переходные обёртки регистрации
-  (page_shell_open/page_shell_close): рендерят пустую строку, оболочку
-  даёт layout-конвейер. Параметр `screen` ChatLayout.page_open удалён
-  (не использовался телом). Nav-хелперы экранов остались crails-обёртками
-  (литеральные <a>) — их перенос в ERB-партиалы/link_to do = следующий
-  инкремент, разблокирующий helper :all.
+- **page_shell-шимы удалены** (инкремент 1.3): все вьюхи пишут
+  `@page_title`/`@body_class` и `content_for :nav/:footer/:sidebar`
+  напрямую (как оракул); page_shell_open/page_shell_close и
+  переходные page_open/page_close-обёртки хелперов удалены. Nav-обёртки
+  nav_back/nav_back_to остаются для _nav-партиалов; перенос экранов,
+  строивших nav вручную (joins), — литеральный div в content_for во вьюхе.
+  Footer accounts/edit — version_badge (VersionHelper, helper :version).
 - **messages/index** остаётся без layout (`layout false, only: :index`
   оракула) — ручной `__render_view("index")` в cache_page.
 

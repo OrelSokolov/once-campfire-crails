@@ -113,7 +113,7 @@ class RoomsController < ApplicationController
   # admin-only; directs are unrestricted (called from the Rooms::Opens/Closeds subclasses).
   def ensure_permission_to_create_rooms : Nil
     account = Account.take
-    if account.try(&.restrict_room_creation_to_administrators?) &&
+    if account.try(&.settings.restrict_room_creation_to_administrators?) &&
        !Current.user!.administrator?
       head(:forbidden)
     end

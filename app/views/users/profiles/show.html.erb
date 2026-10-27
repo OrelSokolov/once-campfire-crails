@@ -1,4 +1,9 @@
-<%= page_open(@user.not_nil!) %><section class="panel flex flex-column gap" style="view-transition-name: avatar-<%= @user.not_nil!.id %>">
+<% @page_title = @user.not_nil!.name.to_s %>
+
+<% content_for :nav do %>
+  <%= raw profile_nav %>
+<% end %>
+<section class="panel flex flex-column gap" style="view-transition-name: avatar-<%= @user.not_nil!.id %>">
   <%= install_instructions %>
   <div class="align-center center avatar__form gap" data-controller="upload-preview">
     <%= profile_form_with class: "txt-medium" do |form| %>
@@ -78,4 +83,3 @@
     </div>
   </fieldset>
 </section>
-<%= page_close %>

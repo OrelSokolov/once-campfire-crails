@@ -188,12 +188,12 @@ Crystal, (c) стилистическая проблема порта. План 
   `_actions` через `hidden_field_tag` (action_view_cr: gating
   `remove_hidden_field_autocomplete`, oracle ft_hidden_no_ac),
   FragmentCache RENDER_VERSION s2→s3.
-- [~] `content_for :nav/:footer` — точечно; основной механизм
-  `page_open`/`page_close`; `@page_title`/`@body_class` — нет (механизм
-  есть в rooms/layouts — render layout: c `@page_title`/content_for;
-  перевод остальных ~14 экранов = переиндексация каждого хелпера
-  page_open на чтение ivar/content_for, вместе с переносом nav-хелперов
-  в ERB — следующий инкремент 2.4/3).
+- [x] `content_for :nav/:footer/:sidebar` + `@page_title`/`@body_class`
+  во вьюхах напрямую (2026-10-27, инкремент 1.3: сняты page_shell-шимы
+  page_open/page_close; механизм — как в rooms/layouts, все ~14 экранов
+  переведены); nav-хелперы частично остаются crails-обёртками
+  (nav_back/nav_back_to, _nav-партиалы) — их перенос в link_to do =
+  следующий инкремент.
 - [~] `render partial:, collection:, as: :user`; `dom_id(@room, :list)` —
   отложено в фазу 3: сайдбар/профили собираются compile-time (ChatERB/
   ChatLayout, SidebarDirect), перевод на collection-рендер = разбор
@@ -380,9 +380,10 @@ Crystal, (c) стилистическая проблема порта. План 
   инкрементом позже. Verified: review default 126/129 passed (3 warn —
   soft_check webp-аватары), структура 129/129.
 Осталось: полный 1:1-текст вьюх (плоские отступы/locals вместо
-  message.room и т.п.) + удаление переходных page_shell_open/close-шимов
-  (вьюхи ещё зовут их вместо @page_title/content_for напрямую); bots-вьюхи
-  не 1:1 (оракул использует _bot/_form партиалы) — после этого helper :all.
+  message.room и т.п.); переходные page_shell_open/close-шимы удалены
+  (вьюхи пишут @page_title/content_for напрямую — инкремент 1.3);
+  bots-вьюхи не 1:1 (оракул использует _bot/_form партиалы) —
+  после этого helper :all.
 - [x] Убрать двойное именование `Campfire::ResponseCache` /
   `ResponseCache`-алиасы (осталось только полное имя).
 - [x] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом

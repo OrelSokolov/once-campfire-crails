@@ -78,29 +78,6 @@ module ApplicationHelper
     "account-has-logo" if Current.account.try(&.logo_attachment)
   end
 
-  # ————— Transitional layout wrappers (STYLE_1to1 phase 3) —————
-  # The crails page_open/page_close helpers register the layout inputs
-  # (@page_title/@body_class, content_for :nav/:footer/:sidebar) and
-  # render nothing; the action render pipeline wraps the template output
-  # in layouts/application.html.erb (action_pack_cr __render_layout).
-
-  def page_shell_open(title : String, body_class : String? = nil,
-                      nav_html : String = "") : ERB::SafeString
-    @page_title = title
-    @body_class = body_class
-    content_for(:nav) { ERB::SafeString.new(nav_html) } unless nav_html.empty?
-    ERB::SafeString.new("")
-  end
-
-  def page_shell_close(footer_html : String? = nil,
-                       sidebar_html : String? = nil) : ERB::SafeString
-    content_for(:footer) { ERB::SafeString.new(footer_html) } if footer_html
-    content_for(:sidebar) { ERB::SafeString.new(sidebar_html) } if sidebar_html
-    ERB::SafeString.new("")
-  end
-
-  # —————
-
   # Prebuilt asset path (icons without width/height and other template assets).
   def asset(name : String) : String
     ChatLayout.asset(name)
@@ -149,12 +126,6 @@ module ApplicationHelper
     url = origin + request.path
     url += "?#{request.query}" if request.query.to_s.presence
     url
-  end
-
-  # Default page close: footer/sidebar stay empty (accounts/searches and
-  # the chat screens register their own through page_shell_close).
-  def page_close : ERB::SafeString
-    page_shell_close
   end
 
   # dom_id(room, prefix) — the oracle's RecordIdentifier resolves the STI

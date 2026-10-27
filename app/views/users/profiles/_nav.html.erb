@@ -1,0 +1,10 @@
+<%= nav_back %>
+<div class="flex-item-justify-end">
+  <%= form_with url: session_path, method: "delete", data: {controller: "sessions"} do %>
+    <%= hidden_field_tag "push_subscription_endpoint", nil, data: {"sessions-target": "pushSubscriptionEndpoint"} %>
+
+    <button class="btn" data-action="sessions#logout:prevent">
+      <%= icon("logout.svg", nil) %>
+      <span class="for-screen-reader">Log out</span>
+    </button>
+  <% end %>  </div>

@@ -57,10 +57,11 @@ class SearchesController < ApplicationController
       @recents = recents
       @return_room = return_room
       @epoch = db_epoch
-      # page_open/page_close register the layout inputs during the template
-      # render; the shell comes from __render_layout (layouts/application).
-      # The template renders before the layout block — a nested render
-      # inside would clobber the layout's shared output buffer.
+      # The template sets @page_title/@body_class and registers
+      # content_for :nav/:footer/:sidebar itself; the shell comes from
+      # __render_layout (layouts/application). The template renders before
+      # the layout block — a nested render inside would clobber the
+      # layout's shared output buffer.
       content = __render_view("index").to_s
       Campfire::ResponseCache::Page.new(__render_layout { content }.to_s)
     end

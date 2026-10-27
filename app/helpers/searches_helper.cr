@@ -1,16 +1,5 @@
 module SearchesHelper
   include ActionController::Helper
-  def page_open : ERB::SafeString
-    page_shell_open("Search", body_class: "sidebar searches",
-      nav_html: search_nav(query, messages.size, recents))
-  end
-
-  # The template registers :footer itself (content_for :footer); the
-  # sidebar holds the recent searches list.
-  def page_close : ERB::SafeString
-    page_shell_close(sidebar_html: %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">\n) + recent_searches_html(recents) + %(</div>))
-  end
-
   # Oracle searches/index.html.erb: `render partial: "messages/message",
   # collection: @messages, cached: ...` inside search_results_tag. Search
   # results span rooms, so each miss renders against its own room

@@ -13,12 +13,16 @@ dependencies:
   railties_cr:
     github: OrelSokolov/railties.cr
     version: ~> 0.1.16
+  # bumped явно: 0.1.27 — attachment params routing (update!(params) →
+  # logo=<UploadedFile>) + 0.1.26 has_json settings-аксессор.
   active_record_cr:
     github: OrelSokolov/active_record.cr
-    version: ~> 0.1.24
+    version: ~> 0.1.27
+  # bumped явно: 0.1.4 — attach(UploadedFile)/name= сеттер, фикс имени
+  # attachment (":avatar" → "avatar").
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
-    version: ~> 0.1.1
+    version: ~> 0.1.4
   active_support_cr:
     github: OrelSokolov/active_support.cr
     version: ~> 0.1.13

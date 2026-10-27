@@ -1,9 +1,6 @@
 # ERB helpers for app/views/users/show.html.erb, included in UsersController.
 module UsersHelper
   include ActionController::Helper
-  def page_open(viewer : User, subject : User) : ERB::SafeString
-    page_shell_open(subject.name.to_s, nav_html: user_nav(viewer, subject))
-  end
 
   # Oracle users_helper button_to_direct_room_with(user).
   def button_to_direct_room_with(user : User) : ERB::SafeString
