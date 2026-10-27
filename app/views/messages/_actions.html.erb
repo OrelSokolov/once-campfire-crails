@@ -1,0 +1,44 @@
+<div class="message__actions" data-controller="soft-keyboard">
+<details class="position-relative" data-controller="popup" data-popup-orientation-top-class="popup-orientation-top" data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside">
+<summary class="btn message__action-btn message__options-btn">
+<%= image_tag "menu-dots-horizontal.svg", aria: { hidden: "true" }, size: 20, class: "colorize--black" %>
+<span class="for-screen-reader">Message options</span>
+</summary>
+<div class="message__actions-menu border shadow" data-popup-target="menu">
+<div class="quick-boosts">
+<% boost_path = message_boosts_path(message) %>
+<% boost_frame = dom_id message, :boosting %>
+<% EmojiHelper::REACTIONS.each do |character, title| %>
+<form data-turbo-frame="<%= boost_frame %>" data-action="popup#close" action="<%= boost_path %>" accept-charset="UTF-8" method="post">
+<%= hidden_field_tag "boost[content]", character %>
+<button name="button" type="submit" title="<%= title %>" class="btn message__action-btn" data-emoji="<%= character %>">
+<figure class="margin-none boost-character"><%= character %></figure>
+<span class="for-screen-reader"><%= title %></span>
+</button>
+</form>
+<% end %>
+<%= link_to new_message_boost_path(message), class: "btn message__action-btn message__boost-btn", data: { turbo_frame: dom_id(message, :new_boost), action: "soft-keyboard#open popup#close" } do %>
+<%= image_tag "boost.svg", aria: { hidden: "true" }, class: "colorize--black", size: 20 %>
+<span class="for-screen-reader">New boost</span>
+<% end %>      </div>
+<div class="flex flex-wrap border-top margin-block-start-half pad-block-start-half message__actions-grid">
+<% if attachment %>
+<a class="btn message__action-btn center full-width hide-in-ios-pwa" title="Download" aria-label="Download" href="<%= attachment_download_path(attachment) %>">
+<%= image_tag "download.svg", aria: { hidden: "true" }, size: 20, class: "colorize--black" %>
+</a>
+<button class="btn message__action-btn center full-width" data-controller="web-share" data-action="web-share#share" data-web-share-files-value="<%= attachment_blob_path(attachment) %>" data-web-share-title-value="<%= attachment.filename %>" title="Share" aria-label="Share" hidden="">
+<%= image_tag "share.svg", aria: { hidden: "true" }, size: 20, class: "colorize--black" %>
+</button>
+<% else %>
+<button class="btn message__action-btn center full-width" data-action="reply#reply" title="Reply" aria-label="Reply">
+<%= image_tag "reply.svg", aria: { hidden: "true" }, size: 20, class: "colorize--black" %>
+</button>
+<% end %>
+<button class="btn message__action-btn center full-width" title="Copy link" aria-label="Copy link" data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-content-value="<%= url %>">
+<%= image_tag "link.svg", aria: { hidden: "true" }, size: 20, class: "colorize--black" %>
+</button>
+<a class="btn message__action-btn center full-width message__edit-btn" data-turbo-frame="edit_message_<%= message.id %>" title="Edit" aria-label="Edit" href="<%= edit_room_message_path(room, message) %>">
+<%= image_tag "pencil.svg", aria: { hidden: "true" }, size: 20, class: "colorize--black" %>
+</a>      </div>
+</div>
+</details></div>

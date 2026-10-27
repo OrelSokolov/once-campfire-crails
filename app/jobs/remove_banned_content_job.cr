@@ -8,13 +8,6 @@ class RemoveBannedContentJob < ApplicationJob
   end
 
   def perform(user : User) : Nil
-    # remove_banned_content of the reference: each message is destroyed
-    # (boosts / rich_text / search index ride on destroy callbacks) and
-    # its removal is broadcast to the room's stream.
-    user.messages.order("id").each do |message|
-      room_id = message.room_id!
-      message.destroy
-      Message::Broadcasts.broadcast_remove(room_id, message.id!)
-    end
+    user.remove_banned_content
   end
 end

@@ -1,2 +1,2 @@
-<%= nav_back %><% if viewer.id == subject.id %><div class="flex align-center gap flex-item-justify-end"><a href="/users/me/profile" class="btn"><%= icon("pencil.svg") %><span class="for-screen-reader">Edit my profile</span></a></div><% else %><div class="flex align-center gap flex-item-justify-end">
+<%= nav_back %><% if viewer.id == subject.id %><div class="flex align-center gap flex-item-justify-end"><%= link_to user_profile_path, class: "btn" do %><%= icon("pencil.svg") %><span class="for-screen-reader">Edit my profile</span><% end %></div><% else %><div class="flex align-center gap flex-item-justify-end">
 </div><% end %>

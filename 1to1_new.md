@@ -86,10 +86,13 @@
       инстанс-`perform(record, ...)` 1:1 к оракулу. Kind-строки JobQueue
       ("push"/"webhook"/...) — стабильный контракт (pending-джобы в очередях
       БД). verified: tmp/verify_jobs.cr (7/7).
-- [ ] Перенос логики джоб в модели (отдельный пункт): `bot.deliver_webhook`,
-      `message.broadcast_unread_room`, `user.remove_banned_content`,
-      `room.destroy_one_message_at_a_time` / `reset_remote_connections_of` —
-      сейчас логика остаётся в джобах, оракул держит её в моделях.
+- [x] Перенос логики джоб в модели (2026-10-26): `bot.deliver_webhook` →
+      User::Bot (Bot::WebhookJob шлёт `bot: User` 1:1 с оракулом; вебхук-строка
+      резолвится по bot id — модели Webhook нет), `message.broadcast_unread_room`
+      → Message::Broadcasts (instance + `*_later`-пара), `user.remove_banned_content`
+      → User::Bannable, `room.destroy_one_message_at_a_time` /
+      `reset_remote_connections_of` — уже были в Room#<DestroyJob делегирует.
+      verified: сборка 0 ошибок, tmp/verify_jobs.cr 7/7.
 
 ## Фаза 3b — перенос HTML из ChatLayout в ERB-партиалы (НАЧАТА 2026-10-25)
 
@@ -136,18 +139,52 @@
       девиация); wiring `helper "users/sidebar"` в Rooms и Welcome;
       ChatLayout.chat_sidebar_frame удалён. verified: сборка 0 ошибок,
       capybara 72/0, compare 2/129 (оба = baseline png).
-- [ ] Инкременты дальше (по нарастающей сложности): head/body_open →
-      layouts/application.html.erb, page_open/page_close → layout-обёртки,
-      затем messages/boosts/attachments (message_dom — ядро ChatLayout).
+- [x] Инкремент «1.2 — layout-обёртки» (2026-10-27): layouts/
+      application.html.erb 1:1 с оракулом (включает глобальный
+      __render_layout action_pack_cr), page_open/page_close → регистрация
+      @page_title/@body_class/content_for (page_shell_open/close),
+      ChatLayout.head/body_open/page_open/page_close удалены (chat-экран —
+      ChatLayout.chat_nav), ручные сборки (room_page, rooms new/edit,
+      sidebars, sessions, searches, allow_browser) — явный __render_layout
+      (+фолбэк на ApplicationController для abstract-контекста); flash-блок
+      layout на ActionController::Flash (prepare_login → flash.now).
+      Детали — plans/STYLE_1to1.md фаза 3, инкремент 8.
+- [ ] Инкременты дальше: nav-хелперы ~14 экранов в ERB-партиалы + link_to
+      do nav-ссылки → helper :all.
 
-## Фаза 4 — средние патчи (НЕ НАЧАТА)
+## Фаза 4 — средние патчи (НАЧАТА: 2/5)
 
-- [ ] `allow_browser versions:` (action_pack_cr) — убрать ручной UA-парсинг
-      из concern AllowBrowser.
-- [ ] `update!(ActionController::Parameters)` + вложенные settings-хэши.
+- [x] `allow_browser versions:` (action_pack_cr v0.2.20, 2026-10-27) —
+      макрос allow_browser versions: (:modern / named tuple / константа
+      кортежа; only:/except:/if:/unless:; block: Symbol | блок макроса |
+      дефолт 406 public/406-unsupported-browser.html), детекция — порт
+      гема useragent (Edge/IE/Opera/Vivaldi/Chrome/Safari/Gecko + bot?);
+      concern AllowBrowser теперь 1:1 с оракулом (VERSIONS +
+      allow_browser versions: VERSIONS do ... end вместо
+      verify_supported_browser и ручного UA-парсинга). Отклонение:
+      `block: -> {...}` лямбда непортируема (нет instance_exec).
+- [x] `update!(ActionController::Parameters)` + вложенные settings-хэши
+      (2026-10-27): мост `active_record_cr/src/active_record_cr/parameters.cr`
+      (опциональный require — файл ссылается на ActionController::Parameters
+      из action_pack_cr; подключён в src/app.cr) — update!/update/
+      assign_attributes принимают Parameters 1:1; вложенные хэши/массивы →
+      JSON::Any (json-колонки), Int32→Int64, unpermitted →
+      UnfilteredParameters (аналог ForbiddenAttributesError), UploadedFile →
+      ArgumentError. AccountsController#update — оракул 1:1
+      (`account.update!(account_params)`; `permit "name", {"settings" => {}}`,
+      `:logo` — после has_one_attached, п.4). Account#restrict...? до has_json
+      (п.4) принимает строки и boolean: rails-main SchematizedJson
+      (activemodel/schematized_json.rb) кастует форму-строки в boolean;
+      полный порт — вместе с has_json. verified: смоук моста
+      (tmp/parameters_bridge_smoke.cr) + модельный смоук на sqlite
+      (tmp/update22_smoke.cr: update! с вложенным settings, flip true/false,
+      легаси-bool, unpermitted, uploaded file). Фулл-сборка/capybara/twinshot
+      deferred: дерево было красное от параллельного инкремента фазы 3 —
+      прогнать после его зелёного.
 - [ ] Пагинация `set_page_and_extract_portion_from` / page-скопы.
 - [ ] `has_one_attached do |attachable| variants end` + `has_json :settings`.
-- [ ] `belongs_to ..., default: -> { Current.user }`.
+- [x] `belongs_to ..., default: -> { Current.user }` — закрыто в STYLE_1to1
+      2.1 (active_record_cr v0.1.18, 2026-10-25); запись здесь устарела.
 - [ ] Переименование `*_helpers` → `*_helper` оракула (после view context).
 
 ## Уже в плане Phase 7 (notes/style-parity.md) — не дублировать

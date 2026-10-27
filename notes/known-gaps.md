@@ -40,6 +40,17 @@
   WAL обязателен (DELETE-журнал в fork-конфигурации ловил "readonly
   database"), `wal_autocheckpoint=0` + PASSIVE-чекпоинт-фибера;
   `BEGIN IMMEDIATE` + `retry_on_lock`; `reset!` после fork (serverX Cluster).
+- Гонка подготовленных выражений (2026-10-27, проявление P0 из
+  docs/segfault-investigation): при определённых таймингах SELECT
+  ассоциации теряет WHERE-биндинг — `Room#destroy_one_message_at_a_time`
+  джобой Room::DestroyJob дочитывала ВСЕ сообщения таблицы и уничтожала
+  их (повторяемо ~50% прогонов LiveTest: 169→3 сообщений, бусты 0;
+  изолированный find_each скоупится верно — чисто рантайм-гонка).
+  Guard: повторная проверка FK у каждой строки перед destroy
+  (`room_id == id` / `creator_id == id` в destroy_one_message_at_a_time
+  и remove_banned_content). Корень — та же коррупция
+  `DB::Statement#exec:args`, что роняет процесс ~1 раз за прогон;
+  лечится в рамках segfault-инвестигации (upstream repro).
 
 ## Action Cable / трансляции
 
@@ -181,7 +192,10 @@
   портированы; анализ изображения синхронный внутри транзакции.
 - `app/models/membership.cr`: `Relation#joins` по belongs_to не поддержан —
   сырые JOIN-фрагменты; строковый `ar_enum` с lenient-чтением из БД.
-- `app/models/account.cr`: `has_json :settings` вручную; `logo_variant` —
+- `app/models/account.cr`: `has_json :settings` вручную (с 2026-10-27 —
+  `restrict_room_creation_to_administrators?` принимает и строки, и boolean:
+  запись идёт через `update!(account_params)`, типизированный каст — с
+  has_json в шарде, фаза 4 п.4); `logo_variant` —
   nil при ошибке vips → контроллер отдаёт сток-иконку.
 - `app/models/first_run.cr`: `join_code` — base64url без padding (по express
   routes.js), а не `alphanumeric(12)` группами по 4.
@@ -191,15 +205,19 @@
   (рано закрытый сокет реконнектится и перечитывает живую сессию).
 - `app/models/room/message_pusher.cr`: WebPush.deliver → nil для
   не-https/private адресов → skip.
-- `app/jobs/bot/webhook_job.cr`: ответ бота — `webhooks: false` (аналог
-  `notifyMessage(result, { webhooks: false })` express).
+- `app/models/user/bot.cr` (перенос из джобы, 2026-10-26): ответ бота —
+  `webhooks: false` (аналог `notifyMessage(result, { webhooks: false })`
+  express).
 - `app/jobs/**`: ActiveJob-слой — макрос `serialized(**args)` вместо
-  неявной сериализации Rails; `Bot::WebhookJob` принимает
-  `webhook_id : Int64` + `message` (модели Webhook нет; оракул шлёт
-  `perform(bot, message)`); логика джоб осталась в джобах, а не в моделях
-  (`bot.deliver_webhook` и пр.) — перенос запланирован отдельно (1to1_new,
-  фаза 3). Kind-строки Campfire::JobQueue ("push"/"webhook"/...) —
-  стабильный контракт поверх pending-джоб в БД-очередях.
+  неявной сериализации Rails; `_aj_globalid`, джобы принимают записи
+  (компромиссы — notes). Логика джоб — в моделях 1:1 с оракулом
+  (2026-10-26): `User::Bot#deliver_webhook`/`#deliver_webhook_later`,
+  `Message#broadcast_unread_room`, `User#remove_banned_content`; джобы
+  тонкие (`perform → model.call`). Вебхук-строка резолвится по bot id
+  (модели Webhook нет; оракул — `webhook.deliver`); enqueue-пары — в
+  `*_later`-методах моделей (Room#push_later — прецедент). Kind-строки
+  Campfire::JobQueue ("push"/"webhook"/...) — стабильный контракт поверх
+  pending-джоб в БД-очередях.
 
 ## Хелперы / вьюхи
 
@@ -212,9 +230,20 @@
   (byte-parity: `boosts_dom` сам завершает вывод `\n`).
 - `app/helpers/users/avatars_helper.cr`: цвет аватара `Digest::CRC32` вместо
   `Zlib.crc32` (байт-в-байт идентичен Ruby).
-- `app/helpers/messages_helper.cr`: `messages_page_html` — DOM записи =
-  `message_dom` комнаты; отдача через fragment-кэш, авторы промахов — одним
-  IN-запросом.
+- `app/helpers/messages_helper.cr` (+ searches/rooms): collection-рендер
+  `render partial: "messages/message", collection:, cached: true` —
+  типизированные render-оверлоады поверх ChatLayout.messages_html;
+  cached-лямбда оракула (content-key) не воспроизводится — fragment-кэш
+  порта epoch-keyed; DOM записи = `message_dom` комнаты, авторы промахов —
+  одним IN-запросом.
+- `app/helpers/chat_erb.cr`: сайдбар — коллекция directs это снапшоты
+  SidebarDirect {room, unread, members}, а не Membership-записи оракула
+  (broadcast-путь directs#create рендерит тот же партиал от Membership;
+  локал партиала — union через alias SidebarDirectLocal); `cached:` у
+  ChatERB#render — no-op (сайдбар целиком в ResponseCache).
+- `app/helpers/users/profiles_helper.cr`: коллекции membership-строк —
+  view-модель MembershipEntry {room, membership} (batch-preload комнат),
+  оракул читает membership.room у preloaded-ассоциаций.
 - `app/helpers/html_sanitizer.cr`: один проход с объединённым allowlist
   вместо трёх санитайзер-слоёв оракула; применяется в той же точке.
 - `app/helpers/chat_layout.cr`: CSRF_TOKEN — случайное значение на процесс
@@ -256,8 +285,10 @@
   web_share_button удалены, оракульные блочные `button_to_copy_to_clipboard`
   (ClipboardHelper)/`link_to_zoom_qr_code` (QrCodeHelper)/
   `web_share_session_button` (Users::ProfilesHelper) зарегистрированы;
-  crails-обёртки `copy_button` в accounts/bots/profiles остаются как тонкие
-  делегаты до миграции вьюх на блочный API (учтены в конфликтах выше).
+  crails-обёртки `copy_button` в bots/profiles остаются как тонкие
+  делегаты до миграции вьюх на блочный API (учтены в конфликтах выше);
+  accounts-обёртка удалена (2026-10-27, инкремент 6: edit рендерит
+  accounts/invite, join_code — `button_to account_join_code_path`).
   nav_back (инкремент 3): `link_back_to`/`link_back` — оракульный API в
   ApplicationHelper, div-обёртки `nav_back`/`nav_back_to` переходные.
   chat_sidebar_frame (инкремент 4): `sidebar_turbo_frame_tag`

@@ -7,11 +7,11 @@ shards:
 
   action_pack_cr:
     git: https://github.com/orelsokolov/action_pack.cr.git
-    version: 0.2.19
+    version: 0.2.21
 
   action_view_cr:
     git: https://github.com/orelsokolov/action_view.cr.git
-    version: 0.1.23
+    version: 0.1.25
 
   active_job_cr:
     git: https://github.com/orelsokolov/active_job.cr.git
@@ -19,7 +19,7 @@ shards:
 
   active_record_cr:
     git: https://github.com/orelsokolov/active_record.cr.git
-    version: 0.1.24
+    version: 0.1.25
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git
@@ -43,7 +43,7 @@ shards:
 
   erb_cr:
     git: https://github.com/orelsokolov/erb.cr.git
-    version: 0.1.5
+    version: 0.1.6
 
   icr:
     git: https://github.com/orelsokolov/icr.cr.git

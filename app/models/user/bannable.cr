@@ -17,7 +17,7 @@ class User
       # user's live sockets AFTER commit (a socket closed too early reconnects
       # and re-reads the still-live session).
       close_remote_connections
-      RemoveBannedContentJob.perform_later(self)
+      remove_banned_content_later
     end
 
     def unban : Nil
@@ -38,6 +38,20 @@ class User
     private def apply_ban : Nil
       sessions.delete_all
       banned!
+    end
+
+    def remove_banned_content : Nil
+      # creator_id re-check per row — same statement-binding-race guard as
+      # Room#destroy_one_message_at_a_time (docs/segfault-investigation).
+      messages.order("id").each do |message|
+        next unless message.creator_id == id
+        message.destroy
+        message.broadcast_remove
+      end
+    end
+
+    private def remove_banned_content_later : Nil
+      RemoveBannedContentJob.perform_later(self)
     end
   end
   include Bannable

@@ -51,11 +51,6 @@ class Rooms::DirectsController < ApplicationController
     redirect_to room_url(room.id)
   end
 
-  # Not named `head`: it would shadow the framework's head(status).
-  private def page_head : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.head("New ping", nil, chat: false))
-  end
-
   # Matches routes.js: GROUP BY room HAVING COUNT=? AND SUM(user_id IN ...)=?;
   # ids are Int64-only, so interpolation is safe.
   private def find_existing_direct(ids : Array(Int64)) : Room?

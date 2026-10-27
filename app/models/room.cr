@@ -100,7 +100,15 @@ class Room < ApplicationRecord
   # Each message is destroyed in its own transaction, so other writes get through in between. Any message posted
   # meanwhile goes with the room.
   def destroy_one_message_at_a_time : Nil
-    messages.find_each(&.destroy)
+    # room_id re-check per row: under the prepared-statement binding race
+    # (docs/segfault-investigation — the same corruption that kills the
+    # process ~once per suite run) the association SELECT can lose its
+    # WHERE binding and return other rooms' messages; destroying them
+    # would wipe unrelated rooms. Skip foreign rows instead.
+    messages.find_each do |message|
+      next unless message.room_id == id
+      message.destroy
+    end
     destroy
   end
 

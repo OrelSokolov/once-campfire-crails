@@ -40,7 +40,7 @@ module Users::SidebarHelper
       members = members_by_room[room.id!]? || [user]
       members = members.reject { |m| m.id == user.id }
       members = [user] if members.empty?
-      ChatERB::SidebarDirect.new(room.id!, sidebar_epoch_ms(room),
+      ChatERB::SidebarDirect.new(room,
         sidebar_room_unread?(user, room.id!), members)
     end
     shared = shared_rooms.map do |room|
@@ -62,9 +62,10 @@ module Users::SidebarHelper
                sidebar_turbo_frame_tag { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
                "</body>\n</html>\n"
            else
-             ChatLayout.page_open("sidebar", "Campfire") +
-               sidebar_turbo_frame_tag { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n" +
-               ChatLayout.page_close
+             @page_title = "Campfire"
+             __render_layout {
+               sidebar_turbo_frame_tag { ERB::SafeString.new("\n" + sidebar) }.to_s + "\n"
+             }.to_s
            end
     Campfire::ResponseCache::Page.new(html)
   end
@@ -90,10 +91,5 @@ module Users::SidebarHelper
   private def sidebar_room_unread?(user : User, room_id : Int64) : Bool
     Membership.where("room_id = ?", room_id)
       .where("user_id = ?", user.id!).unread.any?
-  end
-
-  private def sidebar_epoch_ms(room : Room) : Int64
-    t = room.updated_at.as(Time)
-    (t.to_unix * 1000) + (t.nanosecond // 1_000_000)
   end
 end

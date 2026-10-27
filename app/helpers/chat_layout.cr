@@ -71,92 +71,35 @@ module ChatLayout
     route_for(:account_logo, v: account.try(&.updated_at).try(&.to_fs(:number)), size: size)
   end
 
-  # user is Current.user (set by ApplicationController before render;
-  # reset by the dispatcher between requests, as in Rails).
-  def self.head(title : String, room_id : Int64?, chat : Bool,
-                head_extra : String = "") : String
-    user = Current.user
-    String.build do |io|
-      io << "<!DOCTYPE html>\n<html>\n<head>\n<title>" << HTML.escape(title) << "</title>\n"
-      io << %(<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, interactive-widget=resizes-content">\n)
-      # layouts/application.html.erb:7-21 — exact meta tag order.
-      # csp_meta_tag is empty (CSP not configured); Rails emits no
-      # csrf-token meta (form protection relies on Sec-Fetch-Site, no
-      # tokens).
-      io << %(<meta name="view-transition" content="same-origin">\n)
-      io << %(<meta name="color-scheme" content="light dark">\n)
-      io << %(<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">\n)
-      io << %(<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">\n)
-      io << %(<meta name="apple-mobile-web-app-capable" content="yes">\n)
-      if u = user
-        # current_user_meta_tags: safe_join with no separator — both meta
-        # tags on one line; Rails writes them via tag.meta self-closing.
-        io << %(<meta name="current-user-id" content="#{u.id}"/>)
-        io << %(<meta name="current-user-name" content=") << HTML.escape(u.name.to_s) << %("/>\n)
-      end
-      io << %(<meta name="action-cable-url" content="/cable">\n)
-      io << %(<meta name="vapid-public-key" content="#{VAPID_PUBLIC_KEY}">\n)
-      io << %(<meta name="turbo-prefetch" content="true">\n)
-      # tag.link manifest/icon/apple-touch-icon → fresh_account_logo
-      account = Account.take
-      if account
-        logo = fresh_account_logo_path(account)
-        io << %(<link rel="manifest" href="/webmanifest.json">\n)
-        io << %(<link rel="icon" href="#{logo}" type="image/png">\n)
-        io << %(<link rel="apple-touch-icon" href="#{logo}">\n)
-      end
-      io << STYLESHEETS << "\n"
-      # custom_styles_tag — before the importmap (layouts/application.html.erb:30-32)
-      if account && (styles = account.custom_styles.to_s) != ""
-        io << %(<style data-turbo-track="reload">) << styles << %(</style>\n)
-      end
-      io << IMPORTMAP << "\n"
-      if chat && room_id
-        io << %(<meta name="turbo-cache-control" content="no-preview">\n)
-        io << %(<meta name="current-room-id" content="#{room_id}">\n)
-      end
-      io << head_extra
-      io << "</head>\n"
-    end
-  end
-
-  # <body> + nav#nav — port of rooms/show/_nav.html.erb: current room
-  # chip (btn--reversed room--current), settings button with the
-  # menu-dots-horizontal icon, involvement bell. Direct rooms
-  # (name NULL): room_display_name — the other members' names.
-  def self.body_open(room : Room? = nil,
-                     ua : String = "", origin : String = "") : String
+  # rooms/show/_nav.html.erb (content_for :nav of the chat page): current
+  # room chip (btn--reversed room--current), settings button with the
+  # menu-dots-horizontal icon, involvement bell. Direct rooms (name NULL):
+  # room_display_name — the other members' names. The <nav> wrapper and
+  # everything around it is layouts/application.html.erb.
+  def self.chat_nav(room : Room, ua : String = "", origin : String = "") : String
     viewer = Current.user
     String.build do |io|
-      cls = viewer && viewer.administrator? ? "sidebar admin" : "sidebar"
-      io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
-      io << %(<a href="#main-content" class="skip-navigation btn">Skip to main content</a>\n)
-      io << %(<nav id="nav">\n)
-      if r = room
-        noun = "room"
-        io << %(<span class="btn btn--reversed btn--faux room--current">\n)
-        io << %(<h1 class="room__contents txt-medium overflow-ellipsis">\n)
-        if r.name.nil?
-          noun = "Ping"
-          members = User.where(
-            %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), r.id.not_nil!)
-            .order("id").to_a
-            .reject { |m| viewer && m.id == viewer.id }
-          names = members.map(&.name.to_s)
-          io << %(<span class="for-screen-reader">Ping with</span>\n)
-          io << HTML.escape(sentence(names)) << "\n"
-        else
-          io << HTML.escape(r.name.to_s) << "\n"
-        end
-        io << %(</h1>\n</span>\n)
-        io << %(<a class="btn" data-room-id="#{r.id}" href="#{room_edit_path(r)}" )
-        io << %(style="view-transition-name: edit-room-#{r.id}">\n)
-        io << %(<img aria-hidden="true" height="20" src="#{asset("menu-dots-horizontal.svg")}" width="20">\n)
-        io << %(<span class="for-screen-reader">Settings for this #{noun}</span>\n</a>\n)
-        io << involvement_bell(r, viewer, ua: ua, origin: origin)
+      noun = "room"
+      io << %(<span class="btn btn--reversed btn--faux room--current">\n)
+      io << %(<h1 class="room__contents txt-medium overflow-ellipsis">\n)
+      if room.name.nil?
+        noun = "Ping"
+        members = User.where(
+          %(id IN (SELECT user_id FROM memberships WHERE room_id = ?)), room.id.not_nil!)
+          .order("id").to_a
+          .reject { |m| viewer && m.id == viewer.id }
+        names = members.map(&.name.to_s)
+        io << %(<span class="for-screen-reader">Ping with</span>\n)
+        io << HTML.escape(sentence(names)) << "\n"
+      else
+        io << HTML.escape(room.name.to_s) << "\n"
       end
-      io << "</nav>\n"
-      io << %(<main id="main-content">\n)
+      io << %(</h1>\n</span>\n)
+      io << %(<a class="btn" data-room-id="#{room.id}" href="#{room_edit_path(room)}" )
+      io << %(style="view-transition-name: edit-room-#{room.id}">\n)
+      io << %(<img aria-hidden="true" height="20" src="#{asset("menu-dots-horizontal.svg")}" width="20">\n)
+      io << %(<span class="for-screen-reader">Settings for this #{noun}</span>\n</a>\n)
+      io << involvement_bell(room, viewer, ua: ua, origin: origin)
     end
   end
 
@@ -204,7 +147,7 @@ module ChatLayout
     end
   end
 
-  # ===== Page layout for non-chat screens (layout_start.eta/layout_end.eta)
+  # ===== Shared asset/icon helpers =====
 
   # <img> icon from the reference asset prebuild. size=nil means no
   # width/height (Rails image_tag without size). Delegates to the static
@@ -221,35 +164,6 @@ module ChatLayout
     opts["size"] = "#{size}x#{size}" if size
     opts["class"] = cls if cls
     ::ActionView::Helpers::AssetTagHelper.image_tag(asset(name), opts).to_s
-  end
-
-  # head + <body class=body_class(+admin)> + nav + main — layout_start
-  # for form/account/profile/bots/... screens. In the reference only a
-  # few pages set @body_class (rooms/show: sidebar, searches:
-  # sidebar searches, signup screens: signup) — no other classes exist.
-  def self.page_open(screen : String, title : String,
-                     body_class : String? = nil, nav_html : String = "",
-                     head_extra : String = "") : String
-    user = Current.user
-    cls = body_class.to_s
-    # Oracle body_classes: [body_class, admin].compact.join(" ") — no
-    # leading space when body_class is empty.
-    if user && user.administrator?
-      cls = cls.empty? ? "admin" : "#{cls} admin"
-    end
-    String.build do |io|
-      io << head(title, nil, chat: false, head_extra: head_extra)
-      io << %(<body class="#{cls}" data-controller="local-time lightbox">\n)
-      io << %(<a href="#main-content" class="skip-navigation btn">Skip to main content</a>\n)
-      io << %(<nav id="nav">\n) << nav_html << %(\n</nav>\n)
-      io << %(<main id="main-content">\n)
-    end
-  end
-
-  # footer(+composer/version) + aside + app-logo —
-  # layouts/_body_close.html.erb (ChatERB).
-  def self.page_close(footer_html : String = "", sidebar_html : String = "") : String
-    ChatERB.new(footer: footer_html, sidebar: sidebar_html).body_close.to_s
   end
 
   # rooms/show/_invitation.html.erb + accounts/_invite.html.erb — the
@@ -810,9 +724,11 @@ module ChatLayout
     end
   end
 
-  # Single message DOM — port of the oracle's _message.html.erb: id from
-  # message.id (dom_id; client_message_id is only a data attribute),
-  # turbo-frame edit_message_<id> around the body, presentation div
+  # Single message DOM — rendered through the messages/_message ERB
+  # partial (MessagesERB context, oracle app/views/messages/_message +
+  # _actions + _presentation + boosts/_boosts): id from message.id
+  # (dom_id; client_message_id is only a data attribute), turbo-frame
+  # edit_message_<id> around the body, presentation div
   # message_<id>_presentation, boosts (boosts/_boosts). An attachment
   # replaces the rich-text body (message_attachment_presentation).
   def self.message_dom(m : Message, room : Room, creator : User?,
@@ -820,60 +736,8 @@ module ChatLayout
                        boosts : Array(BoostEntry)? = nil,
                        base_url : String = "") : String
     mid = m.id.not_nil!
-    cid = m.client_message_id.to_s
-    created = m.created_at || Time.utc
-    updated = m.updated_at || created
-    permalink = route_path("room_at_message", room.id, mid)
-    sound = attachment ? nil : message_sound(m.body.to_s)
-    presentation_html = if attachment
-      attachment_presentation(attachment)
-    elsif sound
-      sound_presentation(sound)
-    else
-      text_presentation(m.body.to_s)
-    end
-    # message--emoji: plain_text_body.all_emoji? — a sound ("/play …") is
-    # not an emoji message; the class is derived from the body text, not
-    # from the player markup.
-    emoji = (attachment.nil? && sound.nil? && all_emoji?(presentation_html)) ? " message--emoji" : ""
     entries = boosts || boosts_for([mid])[mid]? || [] of BoostEntry
-
-    # message_tag rescue -> _unrenderable.html.erb: the record's author is
-    # deleted — a placeholder instead of the message (broken room).
-    unless creator
-      return %(<div class="message message--formatted message--failed center">\n) +
-             %(<div class="message__body">\n) +
-             %(<div class="message__body-content txt-align-center">\n) +
-             %(    Failed to load message content\n) +
-             %(  </div>\n</div>\n</div>\n)
-    end
-    creator = creator.not_nil!
-
-    String.build do |io|
-      io << %(<div id="message_#{mid}" class="message#{emoji}" data-controller="reply" )
-      io << %(data-user-id="#{m.creator_id}" data-message-id="#{mid}" )
-      io << %(data-message-timestamp="#{created.to_fs(:epoch)}" data-message-updated-at="#{updated.to_fs(:epoch)}" )
-      io << %(data-sort-value="#{created.to_fs(:epoch)}" data-messages-target="message" )
-      io << %(data-search-results-target="message" data-refresh-room-target="message" )
-      io << %(data-reply-composer-outlet="#composer" data-client-message-id=") << HTML.escape(cid) << %(">\n)
-      io << %(<h2 class="message__day-separator"><time datetime="#{created.to_rfc3339}" data-local-time-target="date"></time></h2>\n)
-      io << %(<figure class="avatar message__avatar">\n) << avatar_link(creator) << %(\n</figure>\n)
-      io << %(<turbo-frame id="edit_message_#{mid}">\n<div class="message__body">\n<div class="message__body-content">\n)
-      io << %(<div class="message__meta">\n<h3 class="message__heading">\n)
-      io << %(<span class="message__author" title=")
-      io << HTML.escape(user_title(creator.try(&.name), creator.try(&.bio)))
-      io << %(">\n<strong data-reply-target="author">) << HTML.escape(creator.try(&.name).to_s) << %(</strong>\n</span>\n)
-      io << %(<a target="_top" class="message__permalink" href="#{permalink}">)
-      io << %(<time class="message__timestamp" datetime="#{created.to_rfc3339}" data-local-time-target="time"></time></a>\n)
-      io << %(<span class="message__room">\n<a target="_top" data-reply-target="link" href="#{permalink}">)
-      io << HTML.escape(room_display_name(room)) << %(</a>\n</span>\n)
-      io << %(</h3>\n)
-      io << message_actions(mid, room, permalink, attachment, base_url)
-      io << %(</div>\n)
-      io << presentation_dom(mid, presentation_html, lexxy_wrapper: attachment.nil? && sound.nil?)
-      io << boosts_dom(mid, entries)
-      io << %(</div>\n</div>\n</turbo-frame>\n</div>\n)
-    end
+    MessagesERB.new(m, room, creator, attachment, entries, base_url).render_message
   end
 
   # message--emoji: non-empty plain text with no letters or digits
@@ -1074,67 +938,7 @@ module ChatLayout
   # message_<id>_boosting turbo-frame), the custom boost button
   # (message__boost-btn -> new boost frame), Reply/Download+Share
   # (attachment), Copy link (absolute URL), Edit (edit_message_<id>).
-  private def self.message_actions(mid : Int64, room : Room, permalink : String,
-                                   attachment : Attachment?,
-                                   base_url : String) : String
-    url = base_url.empty? ? permalink : "#{base_url}#{permalink}"
-    boost_path = route_path("message_boosts", mid)
-    boost_frame = "boosting_message_#{mid}"
-
-    String.build do |io|
-      io << %(<div class="message__actions" data-controller="soft-keyboard">\n)
-      io << %(<details class="position-relative" data-controller="popup" )
-      io << %(data-popup-orientation-top-class="popup-orientation-top" )
-      io << %(data-action="keydown.esc-&gt;popup#close toggle-&gt;popup#toggle click@document-&gt;popup#closeOnClickOutside">\n)
-      io << %(<summary class="btn message__action-btn message__options-btn">\n)
-      io << icon("menu-dots-horizontal.svg", 20, "colorize--black") << "\n"
-      io << %(<span class="for-screen-reader">Message options</span>\n</summary>\n)
-      io << %(<div class="message__actions-menu border shadow" data-popup-target="menu">\n)
-      io << %(<div class="quick-boosts">\n)
-      EmojiHelper::REACTIONS.each do |character, title|
-        io << %(<form data-turbo-frame="#{boost_frame}" data-action="popup#close" )
-        io << %(action="#{boost_path}" accept-charset="UTF-8" method="post">\n)
-        io << %(<input type="hidden" name="boost[content]" id="boost_content" value=") << HTML.escape(character)
-        io << %(">\n)
-        io << %(<button name="button" type="submit" title=") << HTML.escape(title)
-        io << %(" class="btn message__action-btn" data-emoji=") << HTML.escape(character) << %(">\n)
-        io << %(<figure class="margin-none boost-character">) << character << %(</figure>\n)
-        io << %(<span class="for-screen-reader">) << HTML.escape(title) << %(</span>\n)
-        io << %(</button>\n</form>\n)
-      end
-      io << %(<a class="btn message__action-btn message__boost-btn" )
-      io << %(data-turbo-frame="new_boost_message_#{mid}" data-action="soft-keyboard#open popup#close" )
-      io << %(href="#{boost_path}/new">\n)
-      io << icon("boost.svg", 20, "colorize--black") << "\n"
-      io << %(<span class="for-screen-reader">New boost</span>\n</a>      </div>\n)
-      io << %(<div class="flex flex-wrap border-top margin-block-start-half pad-block-start-half message__actions-grid">\n)
-      if attachment
-        io << %(<a class="btn message__action-btn center full-width hide-in-ios-pwa" title="Download" )
-        io << %(aria-label="Download" href="#{blob_url(attachment)}?disposition=attachment">\n)
-        io << icon("download.svg", 20, "colorize--black") << "\n</a>\n"
-        io << %(<button class="btn message__action-btn center full-width" data-controller="web-share" )
-        io << %(data-action="web-share#share" data-web-share-files-value="#{blob_url(attachment)}" )
-        io << %(data-web-share-title-value=") << HTML.escape(attachment.filename)
-        io << %(" title="Share" aria-label="Share" hidden="">\n)
-        io << icon("share.svg", 20, "colorize--black") << "\n</button>\n"
-      else
-        io << %(<button class="btn message__action-btn center full-width" data-action="reply#reply" )
-        io << %(title="Reply" aria-label="Reply">\n)
-        io << icon("reply.svg", 20, "colorize--black") << "\n</button>\n"
-      end
-      io << %(<button class="btn message__action-btn center full-width" title="Copy link" aria-label="Copy link" )
-      io << %(data-controller="copy-to-clipboard" data-action="copy-to-clipboard#copy" )
-      io << %(data-copy-to-clipboard-success-class="btn--success" data-copy-to-clipboard-content-value=")
-      io << HTML.escape(url) << %(">\n)
-      io << icon("link.svg", 20, "colorize--black") << "\n</button>\n"
-      io << %(<a class="btn message__action-btn center full-width message__edit-btn" )
-      io << %(data-turbo-frame="edit_message_#{mid}" title="Edit" aria-label="Edit" )
-      io << %(href="#{route_path("edit_room_message", room.id, mid)}">\n)
-      io << icon("pencil.svg", 20, "colorize--black") << "\n"
-      io << %(</a>      </div>\n)
-      io << %(</div>\n</details></div>\n)
-    end
-  end
+  # Rendered through the messages/_actions ERB partial (MessagesERB).
 
   # _boosts.html.erb: turbo-frame boosting_message_<id> with the boosts
   # container (boosts_message_<id> — append stream target) and the lazy

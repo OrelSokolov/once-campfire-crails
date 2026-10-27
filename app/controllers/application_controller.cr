@@ -1,4 +1,17 @@
 abstract class ApplicationController < ActionController::Base
+  # layouts/application.html.erb inputs (oracle view ivars): page_title_tag
+  # fallback and body_classes. Set by the views/layout wrappers.
+  @page_title : String? = nil
+  @body_class : String? = nil
+
+  # Abstract-context fallback: concrete controllers get the compiled
+  # application layout (__av_layout) from the action_pack_cr codegen;
+  # concern code resolved against ApplicationController dispatches to the
+  # subclass method at runtime.
+  def __render_layout(& : -> String) : String
+    yield
+  end
+
   # layouts/_lightbox — the oracle layout partial (render "layouts/lightbox"),
   # available to every controller via the SessionsHelpers/ChatERB wrappers.
   compile_partials({
@@ -8,8 +21,9 @@ abstract class ApplicationController < ActionController::Base
 
   # Non-conventional helper modules: ClipboardHelper/QrCodeHelper are
   # shared across accounts/bots/users views, so wire them globally;
-  # RichTextHelper likewise (composer edit form / message edit form).
-  helper :clipboard, "qr_code", "rich_text"
+  # RichTextHelper likewise (composer edit form / message edit form);
+  # CableHelper — the layout's action-cable meta tag.
+  helper :clipboard, "qr_code", "rich_text", "cable"
 
   include Authentication
   include Authorization
@@ -30,7 +44,6 @@ abstract class ApplicationController < ActionController::Base
 
   before_action :set_current_request
   before_action :set_version_headers
-  before_action :verify_supported_browser
   before_action :reject_banned_ip
   before_action :require_authentication
   before_action :deny_bots

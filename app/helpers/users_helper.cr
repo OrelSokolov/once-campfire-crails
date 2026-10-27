@@ -2,8 +2,7 @@
 module UsersHelper
   include ActionController::Helper
   def page_open(viewer : User, subject : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("user", subject.name.to_s,
-      nav_html: user_nav(viewer, subject)))
+    page_shell_open(subject.name.to_s, nav_html: user_nav(viewer, subject))
   end
 
   # Oracle users_helper button_to_direct_room_with(user).
@@ -14,8 +13,8 @@ module UsersHelper
     end
   end
 
-  # users/_nav.html.erb: back link + "Edit my profile" for self.
-  # Literal <a>: link_to from action_view_cr renders href last, oracle output has it first.
+  # users/_nav.html.erb: back link + "Edit my profile" for self
+  # (link_to do — the oracle's nav block).
   def user_nav(viewer : User, subject : User) : String
     render(partial: "users/nav", locals: {"viewer" => viewer, "subject" => subject}).raw
   end

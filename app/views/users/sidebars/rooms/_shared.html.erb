@@ -1,0 +1,3 @@
+<a class="align-center gap room btn txt-nowrap<%= unread ? " unread" : "" %>" data-badge-dot-target="unread" data-room-id="<%= room.id %>" data-rooms-list-target="room" data-sorted-list-name="<%= room.name %>" data-sorted-list-target="item" href="<%= room_path(room.id) %>" id="list_<%= route_key(room) %>_<%= room.id %>" style="--column-gap: 0.5em">
+<span class="overflow-ellipsis"><%= room.name %></span>
+</a>

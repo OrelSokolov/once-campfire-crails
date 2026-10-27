@@ -1,11 +1,11 @@
 <%= nav_back_to(last_room_visited_path(user)) %><% if user.administrator? %>
 
   <div class="flex align-center gap flex-item-justify-end">
-    <a href="<%= account_bots_path %>" class="btn" style="view-transition-name: chat-bots">
+    <%= link_to account_bots_path, class: "btn", style: "view-transition-name: chat-bots" do %>
       <%= icon("bot.svg") %>
       <span class="for-screen-reader">Set up chat bots</span>
-    </a>
-    <a href="<%= edit_account_custom_styles_path %>" class="btn" style="view-transition-name: custom-styles">
+    <% end %>
+    <%= link_to edit_account_custom_styles_path, class: "btn", style: "view-transition-name: custom-styles" do %>
       <%= icon("art.svg") %>
       <span class="for-screen-reader">Custom styles</span>
-    </a>    </div><% end %>
+    <% end %>    </div><% end %>

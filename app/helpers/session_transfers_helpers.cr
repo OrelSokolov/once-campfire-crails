@@ -2,6 +2,6 @@
 module SessionTransfersHelpers
   include ActionController::Helper
   def page_open : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("transfer", "Campfire"))
+    page_shell_open("Campfire")
   end
 end

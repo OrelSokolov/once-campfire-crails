@@ -55,11 +55,9 @@
 
   <div class="margin-block pad-inline pad-block fill-shade border-radius">
     <menu class="flex flex-column gap margin-none pad">
-      <% viewer = @user.not_nil! %>
-<% @shared_memberships.each do |room, membership| %><%= membership_row(room, membership, viewer) %>
-      <% end %><% if !@shared_memberships.empty? && !@direct_memberships.empty? %><hr class="separator full-width" style="--border-style: solid">
-      <% end %><% @direct_memberships.each do |room, membership| %><%= membership_row(room, membership, viewer) %>
-      <% end %></menu>
+      <%= render partial: "users/profiles/membership", collection: @shared_memberships %>
+      <% if !@shared_memberships.empty? && !@direct_memberships.empty? %><hr class="separator full-width" style="--border-style: solid">
+      <% end %><%= render partial: "users/profiles/membership", collection: @direct_memberships %></menu>
   </div>
   <fieldset>
     <legend class="gap">

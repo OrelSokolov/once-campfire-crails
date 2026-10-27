@@ -15,15 +15,18 @@ module MessagesHelper
     ERB::SafeString.new(ChatLayout.attachment_presentation(attachment.not_nil!))
   end
 
-  # Each entry renders the same DOM as in the room (message_dom): a minimal
-  # <article> fails route-contract-v1 loadgen. The list is served through the
-  # fragment cache (no SQL on hits; miss authors loaded with a single IN query).
-  # Rails messages/index.html.erb (layout false) is a bare collection of message
-  # partials inserted as a fragment into .messages by the JS paginator.
-  def messages_page_html(room : Room, messages : Array(Message),
-                         epoch : String) : String
-    String.build do |io|
-      ChatLayout.messages_to(io, messages, epoch, room, origin)
-    end
+  # Oracle messages/index.html.erb: `render partial: "messages/message",
+  # collection: @messages, cached: ->(message) { ... }` — the collection
+  # render of the message partial. Each entry renders the same DOM as in
+  # the room (message_dom); the list is served through the fragment cache
+  # (no SQL on hits; miss rooms/authors loaded with one IN query per
+  # entity — ChatLayout.messages_to). The oracle's cached-lambda computes
+  # a content key; the port's FragmentCache is epoch-keyed (known-gaps),
+  # so `cached:` only carries the call shape.
+  def render(partial : String, *, collection : Array(Message),
+             cached : Bool = true) : ERB::SafeString
+    raise ArgumentError.new("Missing partial #{partial.inspect}") unless partial == "messages/message"
+    ERB::SafeString.new(
+      ChatLayout.messages_html(collection, db_epoch, @room, origin))
   end
 end

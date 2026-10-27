@@ -32,7 +32,7 @@ CRails.application.routes.draw do
   delete "/account/logo", to: "accounts/logos#destroy"
   patch "/account/users/:user_id", to: "accounts/users#update", as: "account_user"
   delete "/account/users/:user_id", to: "accounts/users#destroy", as: "account_user"
-  post "/account/join_code", to: "accounts/join_codes#create"
+  post "/account/join_code", to: "accounts/join_codes#create", as: "account_join_code"
 
   direct :fresh_account_logo do |options|
     route_for :account_logo, v: Current.account.try(&.updated_at).try(&.to_fs(:number)), size: options["size"]?

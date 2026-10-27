@@ -22,7 +22,7 @@
 <%= icon("share.svg", 20, "colorize--black") %>
 <% end %>
 
-<% if Current.user!.can_administer? %><%= button_to "/account/join_code", class: "btn btn--regenerate" do %>
+<% if Current.user!.can_administer? %><%= button_to account_join_code_path, class: "btn btn--regenerate" do %>
 <%= icon("refresh.svg", 20, "colorize--black") %>
 <span class="for-screen-reader">Regenerate join link</span>
 <% end %><% end %>  </div>

@@ -1,1 +1,1 @@
-<%= ERB::SafeString.new(messages_page_html(@room.not_nil!, @messages, db_epoch)) %>
+<%= render partial: "messages/message", collection: @messages, cached: true %>

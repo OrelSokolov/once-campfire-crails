@@ -1,16 +1,15 @@
 require "./application_record"
 
 class Account < ApplicationRecord
+  # Rails reads the switch through has_json :settings (typed accessor);
+  # until that port (phase 4) update!(account_params) stores the form's
+  # strings as-is, so both shapes are accepted here.
   def restrict_room_creation_to_administrators? : Bool
-    settings.try(&.["restrict_room_creation_to_administrators"]?.try(&.as_bool?)) == true
-  end
-
-  def restrict_room_creation_to_administrators=(value : Bool) : Nil
-    # dup: as_h returns a reference into the JSON::Any hash — mutating it in
-    # place would break dirty tracking (the snapshot would see the same value).
-    base = settings.try(&.as_h.dup) || {} of String => JSON::Any
-    base["restrict_room_creation_to_administrators"] = JSON::Any.new(value)
-    self.settings = JSON::Any.new(base)
+    case raw = settings.try(&.["restrict_room_creation_to_administrators"]?).try(&.raw)
+    when Bool   then raw
+    when String then raw == "true"
+    else             false
+    end
   end
 
   # The reference's has_one_attached :logo, looked up manually.

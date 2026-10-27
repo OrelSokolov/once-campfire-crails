@@ -1,19 +1,27 @@
 module SearchesHelper
   include ActionController::Helper
   def page_open : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("search", "Search",
-      body_class: "sidebar searches", nav_html: search_nav(query, messages.size, recents)))
+    page_shell_open("Search", body_class: "sidebar searches",
+      nav_html: search_nav(query, messages.size, recents))
   end
 
+  # The template registers :footer itself (content_for :footer); the
+  # sidebar holds the recent searches list.
   def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close(content_for(:footer).to_s,
-      %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">\n) + recent_searches_html(recents) + %(</div>)))
+    page_shell_close(sidebar_html: %(<div class="rooms position-relative flex flex-column gap overflow-y overflow-hide-scrollbar">\n) + recent_searches_html(recents) + %(</div>))
   end
 
-  def messages_html : ERB::SafeString
-    ERB::SafeString.new(String.build { |io|
-      ChatLayout.messages_to(io, messages, epoch, nil, origin)
-    })
+  # Oracle searches/index.html.erb: `render partial: "messages/message",
+  # collection: @messages, cached: ...` inside search_results_tag. Search
+  # results span rooms, so each miss renders against its own room
+  # (room: nil — ChatLayout.messages_to loads them with one IN query).
+  # `cached:` carries the oracle call shape; the port's cache is
+  # epoch-keyed (known-gaps).
+  def render(partial : String, *, collection : Array(Message),
+             cached : Bool = true) : ERB::SafeString
+    raise ArgumentError.new("Missing partial #{partial.inspect}") unless partial == "messages/message"
+    ERB::SafeString.new(
+      ChatLayout.messages_html(collection, epoch, nil, origin))
   end
 
   def search_icon_src : String

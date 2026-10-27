@@ -5,8 +5,11 @@
 
 ## Синтаксис Crystal (не воспроизводится в принципе)
 
-- **`private`-секция с отступом** (`private` + indented `def`) — Crystal
-  допускает только `private def foo` в одну строку.
+- **`private`-секция с отступом** (`private` + indented `def`) — bare `private`
+  переопределить нельзя (ключевое слово Crystal); близкое решение — шард
+  **privates.cr** (`privates do ... end`-макрос, AST-эквивалент `private def`),
+  принят в план (STYLE_1to1 2.8); остаточное отклонение — ` do`/`end`-обёртка
+  секции против plain-секции оракула.
 - **`include A, B, C` одной строкой** — Crystal требует отдельный `include`
   на каждый модуль.
 - **`%i[ show destroy ]`-литералы** — только `[:show, :destroy]`.
@@ -577,7 +580,36 @@ rooms/_form, rooms/directs/new, profile_form_with).
 twinshot review — харнесс грузит bin/app (harness/boot.rb:168), не
 рабочее дерево.
 
-## STYLE_1to1 — финал review default: последние два диф-паттерна, 2026-10-26
+## STYLE_1to1 фаза 3, инкремент 5 — message_dom → ERB-партиалы, 2026-10-26
+
+`ChatLayout.message_dom` (горячий путь fragment-кэша) разобран на
+партиалы оракула: `messages/_message`, `_actions`, `_presentation`,
+`_unrenderable` (app/views/messages/), контекст-класс
+`app/helpers/messages_erb.cr` (MessagesERB, по образцу BoostsERB).
+Ручной `ChatLayout.message_actions` удалён; `presentation_dom`/
+`boosts_dom` остаются для стрим-вызовов контроллеров (edit/replace,
+boosts#index). Смоук-харнесс: tmp/msgdom_session.cr — рендер 300
+сообщений bench.sqlite3 до/после, `cmp` идентичен (бусты и вложения
+покрыты), RENDER_VERSION не менялся.
+
+Компромиссы инкремента:
+
+- Локалы партиалов несут снапшоты (room/creator/attachment/boosts),
+  как у BoostsERB — оракул читает ассоциации сообщения; hot path не
+  должен делать N+1.
+- `MessagesERB#message_tag` строит открывающий div литералом: порядок
+  data-атрибутов оракула (client-message-id последним) не выражается
+  kwargs тег-билдера.
+- Иконки `_actions` — kwargs `aria:` перед `class:`: AssetTagHelper
+  мерджит остаток opts в порядке вставки, а оракул-байты держат
+  `aria-hidden` до `class` (при `class:`-первом получается наоборот).
+- `hidden_field_tag` шардовый пишет `autocomplete="off" />` — в
+  `_actions` инпут буста литеральный (`value>` без слэша), как в
+  оракул-байтах.
+- `local_datetime_tag`/`message_timestamp` — контекст-хелперы
+  (гем local_datetime): `<time>`-заглушки, заполняются клиентом.
+
+
 
 Прогон final3 (35 фейлов «2 structural lines») разложился ровно на два
 паттерна; оба закрыты, review default — 129/129 (структура), png-фейлы 0:
@@ -608,3 +640,176 @@ watercooler-paged.png, ранее custom-boost.png): аватарные webp-в�
 (подтверждено кластеризацией диф-пикселей: три 32px круга аватаров
 сообщений + 45px аватар хедера в watercooler). HTML этих же тестов
 байт-в-байт идентичен.
+
+## STYLE_1to1 — инкремент 6 (1.4): join_code/boost — последние ручные формы, 2026-10-27
+
+Закрыт хвост «2 ручные формы ChatLayout» (запись выше, 2.4):
+
+- **boost (горячий путь fragment-кэша)**: quick-boost hidden-инпуты
+  `messages/_actions.html.erb` — сырой `<input type="hidden" …>` →
+  `hidden_field_tag "boost[content]", character` (оракул пишет
+  хелпером; `<form>`/`<button>` и в оракуле литеральные). Байты стали
+  оракул-точнее: self-closing ` />` (раньше `>`). Для этого патч
+  action_view_cr (lib/, локально — публикация в хвосте фазы 7):
+  `hidden_field_tag` уважает `remove_hidden_field_autocomplete`
+  (8.1-дефолт `autocomplete="off"` сохранён, под флагом — без него,
+  как у всех остальных hidden-инпутов шарда); oracle-кейс
+  **ft_hidden_no_ac** снят с гема 8.1.4 (`ruby oracle/cases.rb` —
+  регенерация expected.yml стабильна на всех старых кейсах).
+  FragmentCache::RENDER_VERSION **s2→s3** (байты кэшируемых сообщений
+  меняются). Форма удаления буста (_boost, button_to) не тронута —
+  байт-инвариантна (смоук на 300 сообщениях bench.sqlite3).
+- **join_code**: роут `post "/account/join_code"` получил
+  `as: "account_join_code"`; `_invite.html.erb` —
+  `button_to account_join_code_path` (литеральная строка убрана).
+  Invite-секция `accounts/edit.html.erb` — инлайн-дубль (сырой `<a>`
+  QR, обёртка `copy_button`, сырой web-share `<button>`) заменён на
+  `render partial: "accounts/invite"` как у оракула; партиал
+  зарегистрирован в compile_partials AccountsController (dedent: true,
+  как в RoomsController). Мёртвые `@qr_path` (AccountsController) и
+  обёртка `AccountsHelper#copy_button` удалены (обёртки в bots/
+  profiles остаются до миграции их вьюх). Атрибутный порядок QR-ссылки
+  теперь link_to-owy (href последним) — байты реального гема, как у
+  оракула; инлайн-версия держала href первым.
+
+Смоук: /account/edit 200 (invite-секция целиком из партиала), POST
+/account/join_code → 302 + регенерация кода; спеки action_view_cr
+257/257.
+
+## STYLE_1to1 фаза 3, инкремент 7 (1.3) — collection-рендер сообщений/сайдбара/профилей, 2026-10-27
+
+`messages_page_html` и ручные циклы разобраны на collection-рендер
+оракула (`render partial:, collection:`):
+
+- **messages** (messages/index, searches/index,
+  rooms/refreshes/show.turbo_stream): шаблоны 1:1 оракулу —
+  `render partial: "messages/message", collection: @messages, cached:
+  true`. Реализация — типизированные render-оверлоады в
+  Messages/Searches/RoomsHelper поверх ChatLayout.messages_html
+  (fragment-кэш + batch-preload остаются); проверка имени партиала —
+  ArgumentError, как «Missing partial» шарда. `cached:` держит форму
+  вызова оракула, семантика другая (см. known-gaps: epoch-keyed кэш).
+  turbo_stream.append/replace принимают String — `.to_s` у
+  SafeString-результата рендера (байты как раньше).
+- **сайдбар** (users/sidebars/_show): directs/placeholders —
+  collection-рендер партиалов rooms/_direct и _direct_placeholder
+  (as_local), shared — each + render locals {room, unread} (как у
+  оракула). Локал _direct — union `Membership | SidebarDirect` (alias
+  SidebarDirectLocal: compile_partials резолвит Path — `A | B`-AST
+  в локалах макроса не резолвится); оверлоады
+  direct_members/unread? диспетчеризуют по типу: broadcast
+  (directs#create) — Membership + SQL, сайдбар — batch-снапшот без SQL.
+  SidebarDirect = {room, unread, members}: epoch_ms считается в
+  партиале от room.updated_at (как у оракула), а не хранится.
+  ChatERB#render принимает `cached:` (no-op: сайдбар целиком в
+  ResponseCache, fragment-кэш не нужен).
+- **профили** (users/profiles/show): `render partial:
+  "users/profiles/membership", collection:` ×2 (shared/direct);
+  items — view-модель Users::ProfilesHelper::MembershipEntry
+  {room, membership} (комнаты batch-preload одним запросом; оракул
+  читает preloaded membership.room). Партиал повторяет байты
+  удалённого ручного membership_row (литеральные `<a>`/`<hr>`:
+  порядок атрибутов hr — aria-hidden до class, как в верифицированных
+  байтах порта).
+
+Версия FragmentCache::RENDER_VERSION не менялась (DOM сообщения
+не тронут). Проверка: crails-харнесс 72 runs / 0 failures / 0 errors;
+twinshot compare — все экраны без boost-инпутов structure identical
+(sidebar-fragment целиком, sidebar/switched-to-pets, search
+no-results/empty, профили, auth/account); 39 структурных фейлов всего
+дерева — один паттерн: `autocomplete="off"` на quick-boost
+hidden-инпутах (незавершённый инкремент 6 — hidden_field_tag-патч
+action_view_cr, публикация в хвосте фазы 7; см. инкремент 6 выше).
+
+## Фаза 4 — 2.2 update!(ActionController::Parameters) + settings-хэши, 2026-10-27
+
+- **Мост `active_record_cr/parameters.cr`** (локальный lib-патч, НЕ
+  опубликован): update!/update/assign_attributes принимают
+  ActionController::Parameters — Rails-путь
+  `record.update!(account_params)`. Файл опциональный (ссылается на типы
+  action_pack_cr, которых нет в зависимостях active_record_cr) —
+  подключается приложением явно: `require "active_record_cr/parameters"`
+  (src/app.cr). Конверсия: вложенные Parameters/массивы → JSON::Any
+  (json-колонки), Int32→Int64, скаляры как есть; `to_h` — permit-checkpoint
+  (unpermitted → UnfilteredParameters ≈ ForbiddenAttributesError);
+  UploadedFile → ArgumentError (файлы — только через has_*_attached).
+- **AccountsController#update оракул 1:1**: `account.update!(account_params)`,
+  permit `"name", {"settings" => {} of String => Array(String)}` (эквивалент
+  `settings: {}` — весь вложенный хэш). `:logo` не пермитится до
+  has_one_attached (фаза 4 п.4) — иначе assign падал бы на отсутствующем
+  сеттере; загрузка лого и так не реализована в порте.
+- **Account#restrict_room_creation_to_administrators?** — переходно
+  принимает строки и boolean: rails-main SchematizedJson
+  (activemodel/lib/active_model/schematized_json.rb, `has_json`) кастует
+  форму-строки в boolean при записи; полный порт с типизированным writer —
+  вместе с `has_json :settings` в шарде (фаза 4 п.4). Ручной
+  `restrict_room_creation_to_administrators=` удалён (появится из has_json).
+- **Квирк strong_parameters (не блокер)**: `Parameters.from` теряет nil в
+  массивах значений (`nil.as?(Scalar)` → falsy → `|| e.to_s` → "") и
+  проглатывает UploadedFile в String; живые параметры из HTTP-парсера идут
+  мимо `from`. В путь settings не попадает.
+- **Верификация**: tmp/parameters_bridge_smoke.cr (конверсия/ошибки) +
+  tmp/update22_smoke.cr (update! на sqlite: вложенный settings, flip
+  true/false, легаси-bool, unpermitted, uploaded file). Фулл-сборка/
+  capybara/twinshot — после зелёного дерева параллельного инкремента
+  фазы 3 (на момент проверки дерево было красное от него).
+
+## layouts/application.html.erb (2026-10-27, инкремент «1.2 — layout-обёртки»)
+
+- **Плоский исходник layout**: оракул держит 2-4-пробельные отступы, порт —
+  плоский файл (как остальные ERB порта; DOM-сравнение харнесса
+  нормализует whitespace-текстовые узлы). Структура/порядок тегов 1:1.
+- **stylesheet_link_tag :all / javascript_importmap_tags**: преbuild-блоки
+  (ChatLayout::STYLESHEETS/IMPORTMAP, каждый link уже несёт
+  data-turbo-track="reload"). Вызов с dashed-kwarg
+  (`stylesheet_link_tag :all, "data-turbo-track": "reload"`) в Crystal
+  невыразим — хелпер игнорирует доп. аргументы (семантика :all = весь
+  преbuild-манифест, без Propshaft-резолва).
+- **flash-блок layout** — на существующем ActionController::Flash
+  (cookie-перенос + sweep); в приложении единственный потребитель —
+  sessions (prepare_login(alert:) → `flash.now("alert", ...)`; у Flash
+  порта метод-форма now(key, value), не `flash.now[:k] =`).
+- **content_for**: только блочная форма (`content_for :k do ... end`);
+  форма-с-значением (`content_for :k, value`) в erb_cr отсутствует —
+  шаблоны порта используют блок, обёртки page_shell_* — блок с литералом.
+- **__render_layout-фолбэк на ApplicationController**: action_pack_cr
+  генерирует `__render_layout` только конкретным контроллерам; concern
+  (AllowBrowser) компилируется в abstract-контексте, поэтому
+  ApplicationController держит identity-фолбэк, который перекрывается
+  сгенерированным методом в каждом конкретном классе.
+- **incompatible_browser**: @page_title ставится в concern (шаблон рендерится
+  в ChatERB-контексте без доступа к ivar контроллера) — у оракула строка
+  `<% @page_title = ... %>` в шаблоне.
+- **page_open/page_close** — переходные обёртки регистрации
+  (page_shell_open/page_shell_close): рендерят пустую строку, оболочку
+  даёт layout-конвейер. Параметр `screen` ChatLayout.page_open удалён
+  (не использовался телом). Nav-хелперы экранов остались crails-обёртками
+  (литеральные <a>) — их перенос в ERB-партиалы/link_to do = следующий
+  инкремент, разблокирующий helper :all.
+- **messages/index** остаётся без layout (`layout false, only: :index`
+  оракула) — ручной `__render_view("index")` в cache_page.
+
+## Инкремент 9 (1.1): nav-партиалы link_to do + публикация 0.1.25 + prepend-\\n, 2026-10-27
+
+- **hidden_field_tag v0.1.25 (публикация инкремента 6)**: патч
+  `remove_hidden_field_autocomplete` добрался до form_tag-пути (был
+  единственным негейтым hidden-инпутом). Именно он давал 37 из 39
+  структурных фейлов review (quick-boost `boost[content]`-инпуты на
+  каждом сообщении × 8 эмодзи). Спеки 257/257, expected.yml
+  не менялся (дефолт 8.1 в спеках остаётся с autocomplete).
+- **_message.html.erb — ведущие строки оригинала**: erb-комментарии +
+  пустая строка перед `<%= message_tag %>` сохраняют Rails-байты —
+  каждый партиал коллекции начинается с `\\n\\n\\n`, поэтому при
+  `container.prepend(fragment)` (message_paginator.js обеих сторон
+  идентичен) между messages-контейнером и первым prepend-сообщением
+  остаётся текстовая нода — watercooler-paged диф (2115 строк
+  структурного сдвига из-за одной ноды). Нормализация харнесса
+  коллапсирует whitespace-узлы, но «есть нода» vs «нет ноды» — видит.
+  Body партиала по-прежнему плоский и на locals (снапшоты
+  creator/room/attachment) — полный 1:1-текст (message.room/message.creator,
+  отступы, `<% cache %>`-блок) — следующий инкремент.
+- **nav-партиалы**: accounts/_nav, users/_nav, searches/_recent_searches
+  — `link_to do` вместо литеральных `<a>`; хелперы-обёртки удалены.
+- Review default: 126/129 passed, 3 warn (soft_check: аватарные webp
+  0.21–0.35% — энкодеры libvips vs image_processing_cr), структура
+  129/129 identical.

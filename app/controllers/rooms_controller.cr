@@ -43,8 +43,9 @@ class RoomsController < ApplicationController
   @__layout_locals : Hash(String, Room?) = {} of String => Room?
 
   # render layout: "rooms/layouts/new|edit" [, locals: {room: @room}] do ... end —
-  # Rails' layout-with-block. The layout sets @page_title and captures the nav
-  # (content_for :nav); the page shell wraps the layout's output.
+  # Rails' layout-with-block. The inner layout sets @page_title and captures
+  # the nav (content_for :nav); the application shell (layouts/application)
+  # comes from the implicit render pipeline of the action.
   def render(*, layout : String, locals : Hash? = nil, &) : ERB::SafeString
     case layout
     when "rooms/layouts/new", "rooms/layouts/edit"
@@ -57,9 +58,7 @@ class RoomsController < ApplicationController
                   __rooms_layout_edit { content }
                 end
       @__erb_buf = outer
-      shell = ChatLayout.page_open("room-form", @page_title.not_nil!,
-        nav_html: content_for("nav").to_s)
-      ERB::SafeString.new(shell + wrapped.raw + page_close.raw)
+      wrapped
     else
       raise ArgumentError.new("Missing layout #{layout.inspect}")
     end

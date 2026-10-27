@@ -17,7 +17,9 @@ module Campfire
 
     # Render version in the key: changing the render pipeline (e.g. enabling HtmlSanitizer)
     # resets the cache so stale patched fragments don't outlive their epoch.
-    RENDER_VERSION = "s2"
+    # s3: quick-boost hidden inputs via hidden_field_tag (self-closing ` />`,
+    # oracle form-tag bytes).
+    RENDER_VERSION = "s3"
 
     def self.key(m : Message) : String
       updated = m.updated_at || m.created_at || Time.utc

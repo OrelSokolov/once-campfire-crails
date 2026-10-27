@@ -1,0 +1,8 @@
+<li class="flex align-center gap margin-none min-width membership-item">
+<a class="overflow-ellipsis fill-shade txt-primary txt-undecorated" href="<%= room_path(membership.room.id!) %>">
+<strong><%= profile_display_name(membership.room, @user.not_nil!) %></strong>
+</a>
+<hr aria-hidden="true" class="separator">
+<span class="txt-small">
+<%= involvement_chip(membership.room, membership.membership) %>  </span>
+</li>

@@ -1,6 +1,6 @@
-<% recents.each_with_index do |q, i| %><% if i > 0 %>      <% end %><a class="align-center gap room btn txt-nowrap" href="/searches?q=<%= URI.encode_www_form(q) %>">
+<% recents.each_with_index do |q, i| %><% if i > 0 %>      <% end %><%= link_to "/searches?q=#{URI.encode_www_form(q)}", class: "align-center gap room btn txt-nowrap" do %>
   <span class="overflow-ellipsis">“<%= q %>”</span>
-</a><% end %><% unless recents.empty? %>
+<% end %><% end %><% unless recents.empty? %>
 
   <%= button_to "#{origin}/searches/clear", method: "delete", class: "btn searches__btn", data: {turbo_confirm: "Are you sure you want to clear your recent searches?"} do %>
     <img aria-hidden="true" src="<%= ChatLayout.asset("broom.svg") %>">

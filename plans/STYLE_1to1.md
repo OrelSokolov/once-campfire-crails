@@ -180,8 +180,14 @@ Crystal, (c) стилистическая проблема порта. План 
 - [x] `button_to` блоком/`method: :delete` — все ручные `<form
   class="button_to">` переведены на шардовый `button_to` (2026-10-25);
   байты — insertion-порядок сырого гема (см. notes/style-parity.md:
-  артефакты харнесса сортируют атрибуты, не гнаться за ними). Остались
-  2 ручные формы в ChatLayout (статический билдер — фаза 3).
+  артефакты харнесса сортируют атрибуты, не гнаться за ними). Хвост
+  «2 ручные формы ChatLayout» закрыт (2026-10-27, инкремент 1.4):
+  join_code — `button_to account_join_code_path` (роут `as:
+  account_join_code`) + invite-секция edit через `render partial:
+  "accounts/invite"` как у оракула; boost — quick-boost hidden-инпуты
+  `_actions` через `hidden_field_tag` (action_view_cr: gating
+  `remove_hidden_field_autocomplete`, oracle ft_hidden_no_ac),
+  FragmentCache RENDER_VERSION s2→s3.
 - [~] `content_for :nav/:footer` — точечно; основной механизм
   `page_open`/`page_close`; `@page_title`/`@body_class` — нет (механизм
   есть в rooms/layouts — render layout: c `@page_title`/content_for;
@@ -242,6 +248,29 @@ Crystal, (c) стилистическая проблема порта. План 
 - [x] ActiveJob + GlobalID-сериализация аргументов — `serialized`-макрос,
   `_aj_globalid`, джобы принимают записи (компромиссы — notes).
 
+### 2.8. privates.cr — Ruby-стиль `private`-секций (вместо `private def`)
+
+- [ ] Подключить шард `privates` (~/myshards/privates, v0.1.0): compile-time
+  макрос `privates do ... end` разворачивает каждый `def` блока в тот же AST,
+  что hand-written `private def` (без рантайм-обвязки); `def self.foo`
+  тоже работает. Закрывает пункт «`private def` вместо `private`-секции»
+  из класса b (неизбежный Crystal) — вычёркиваем его оттуда.
+  Остаточное отклонение: bare `private` — ключевое слово Crystal, имя макроса
+  `privates` + ` do`/`end`-обёртка (у оракула секции без обёртки);
+  фиксировано в notes/style-parity.md.
+  Порядок работ (регламент AGENTS.md):
+  1. Подключить локально (path/git), смоук на 2–3 классах (контроллер +
+     модель + concern-reopen): сборка, вызов приватного метода снаружи —
+     compile error, twinshot review default без дельт.
+  2. Опубликовать из ~/myshards/privates (версия уже 0.1.0 — bump не нужен
+     при первой публикации), пин в shard.yml, shards update.
+  3. Механическая конверсия по файлам (лучше отдельным инкрементом после
+     фазы 3, чтобы не плодить конфликты в ChatLayout-разборке): группы
+     подряд идущих `private def` → `privates do ... end`; единичные
+     `private def` между публичными методами остаются как есть (перенос
+     вверх/вниз ради секции — лишний диф).
+  4. `rake build:crails` + `twinshot review default` после каждого пучка.
+
 ---
 
 ## Фаза 3. Архитектурное выравнивание (после фаз 1–2)
@@ -265,10 +294,95 @@ Crystal, (c) стилистическая проблема порта. План 
   оракула между `</form>` и `</div>`) и hidden_field nil → без `value`
   (action_view.cr v0.1.23); аватарные webp-варнинги — soft_check
   (twinshot.yml), rationale в notes/style-parity.md. review default:
-  129/129 структура, 0 png-фейлов. Осталось:
-  messages_html/message_dom (горячий путь fragment-кэша целиком —
-  разбор message_dom/message_actions/presentation_dom на партиалы
-  _message.html.erb/_actions — следующий инкремент фазы 3).
+  129/129 структура, 0 png-фейлов. Инкремент 5 (2026-10-26):
+  messages/_message + _actions + _presentation + _unrenderable —
+  message_dom/message_actions/presentation_dom разобраны на ERB-партиалы
+  (контекст-класс MessagesERB по образцу BoostsERB: locals =
+  message + room/creator/attachment/boosts-снапшоты, presentation и
+  message--emoji вычисляются в контексте; ChatLayout.message_dom —
+  делегат, ручной message_actions удалён). Байты: cmp до/после
+  идентичен на 300 сообщениях bench.sqlite3 (бусты/вложения покрыты),
+  RENDER_VERSION не менялся. image_tag-иконки: kwargs aria: перед
+  class: (AssetTagHelper мерджит остаток в порядке вставки, а байты
+  оракула держат aria-hidden до class). Инкремент 6 (2026-10-27,
+  «1.4 — последние 2 формы»): quick-boost hidden-инпуты _actions →
+  `hidden_field_tag "boost[content]", character` (оракул-байты
+  `<input type="hidden" name id value />` без autocomplete; патч шарда:
+  hidden_field_tag уважает remove_hidden_field_autocomplete, кейс
+  ft_hidden_no_ac против гема 8.1.4, публикация — в хвосте фазы 7);
+  join_code → `button_to account_join_code_path` (роут `as:
+  "account_join_code"`), invite-секция accounts/edit — `render partial:
+  "accounts/invite"` вместо инлайн-дубля (сирота `@qr_path` и обёртка
+  `AccountsHelper#copy_button` удалены). RENDER_VERSION s2→s3
+  (self-closing ` />` у quick-boost инпутов). Смоук: /account/edit 200,
+  POST /account/join_code → 302 + регенерация кода; _boost-форма
+  байт-инвариантна. Инкремент 7 (2026-10-27, «1.3 — collection-рендер»):
+  messages/index, searches/index и rooms/refreshes/show.turbo_stream
+  рендерят `render partial: "messages/message", collection:, cached:
+  true` (MessagesHelper/SearchesHelper/RoomsHelper — типизированные
+  render-оверлоады поверх ChatLayout.messages_html; cached-лямбда
+  оракула → epoch-keyed FragmentCache, `cached:` держит форму вызова);
+  `messages_page_html` удалён. Сайдбар: users/sidebars/_show.html.erb
+  на партиалах rooms/_direct (collection, as_local: "membership",
+  cached: true — локал union `Membership | SidebarDirect` через alias
+  SidebarDirectLocal: broadcast-путь рендерит Membership, сайдбар —
+  batch-снапшот; оверлоады direct_members/unread? по типу локала),
+  rooms/_shared (locals room+unread, как оракул — each+render) и
+  rooms/_direct_placeholder (collection, as_local: "user"); ChatERB#render
+  принимает `cached:` (no-op — сайдбар целиком в ResponseCache);
+  SidebarDirect стал {room, unread, members} (epoch_ms вычисляется в
+  партиале, как у оракула). Профили: users/profiles/_membership —
+  collection ×2 (shared/direct), items —
+  Users::ProfilesHelper::MembershipEntry {room, membership}
+  (batch-preload; оракул читает membership.room), ручной membership_row
+  удалён. Verified: crails-харнесс 72/0/0; twinshot compare — мои
+  экраны structure identical (sidebar-fragment, sidebar
+  switched-to-pets, search no-results/empty, профили); 39 структурных
+  фейлов прогона — единый паттерн чужого WIP (autocomplete на
+  quick-boost инпутах, инкремент 6). Инкремент 8 (2026-10-27, «1.2 — layout-обёртки»):
+  layouts/application.html.erb 1:1 с оракулом (плоский исходник; flash-блок
+  на ActionController::Flash, csp_meta_tag пустой) — включён глобальный
+  layout-механизм action_pack_cr (`__av_layout`/`__render_layout` в
+  __default_render). Хелперы layout: ApplicationHelper#
+  page_title_tag/current_user_meta_tags/custom_styles_tag/body_classes
+  ([@body_class, admin, account-has-logo])/csp_meta_tag + преbuild
+  stylesheet_link_tag(:all)/javascript_importmap_tags, новый CableHelper#
+  script_aware_action_cable_meta_tag (helper :cable). page_open/page_close
+  всех экранов → регистрация (@page_title/@body_class, content_for
+  :nav/:footer/:sidebar через page_shell_open/page_shell_close) — рендерят
+  пустую строку, оболочку даёт конвейер; ChatLayout.head/body_open/
+  page_open/page_close удалены (nav чата → ChatLayout.chat_nav +
+  content_for :nav в room_page), _body_close.html.erb удалён.
+  Ручные сборки — явный __render_layout: room_page (композер → :footer,
+  сайдбар-фрейм → :sidebar, меты чата → :head), rooms new/edit
+  (render layout: возвращает только внутренний layout), sidebars#show
+  (не-frame ветка), sessions#create/render_rejection, searches#index
+  (внутри cache_page), allow_browser (фолбэк __render_layout на
+  ApplicationController для abstract-контекста). Реструктурированы под
+  оракул шаблоны: welcome/show, sessions/new (@page_title + content_for
+  :head, flash из layout: prepare_login(alert:) → flash.now),
+  sessions/incompatible_browser (титул в concern AllowBrowser),
+  rooms/directs/new, messages/show (мини-обёртка удалена; messages#index
+  остаётся без layout — `layout false, only: :index` оракула).
+Инкремент 9 (2026-10-27, «1.1 — nav-партиалы/link_to do»):
+  nav-хелперы экранов переведены в ERB-партиалы с `link_to do` —
+  accounts/_nav, users/_nav (`link_to user_profile_path, class: "btn"
+  do`), searches/_recent_searches; устаревшие литеральные `<a>`
+  в accounts/users_helper удалены. Дедуп layout-хелперов
+  application_helper.cr (двойной набор после параллельного инкремента).
+  Патч action_view_cr v0.1.25 опубликован: hidden_field_tag уважает
+  remove_hidden_field_autocomplete (8.2-приложения теряли
+  `autocomplete="off"` на всех hidden-инпутах — 37 из 39 структурных
+  фейлов review были этим). _message.html.erb: восстановлены ведущие
+  erb-комментарии + пустая строка оригинала — они дают текстовую ноду
+  `\n` перед первым сообщением prepend-страницы истории (watercooler-
+  paged диф); body партиала пока плоский/на locals — полный 1:1-текст
+  инкрементом позже. Verified: review default 126/129 passed (3 warn —
+  soft_check webp-аватары), структура 129/129.
+Осталось: полный 1:1-текст вьюх (плоские отступы/locals вместо
+  message.room и т.п.) + удаление переходных page_shell_open/close-шимов
+  (вьюхи ещё зовут их вместо @page_title/content_for напрямую); bots-вьюхи
+  не 1:1 (оракул использует _bot/_form партиалы) — после этого helper :all.
 - [x] Убрать двойное именование `Campfire::ResponseCache` /
   `ResponseCache`-алиасы (осталось только полное имя).
 - [x] Заменить централизованный `Campfire::ResponseCache.invalidate!` в каждом
@@ -295,7 +409,9 @@ Crystal, (c) стилистическая проблема порта. План 
 
 ## Не делаем (класс b — неизбежный Crystal)
 
-`private def` вместо `private`-секции, типизированные сигнатуры `: Nil`/`: Room?`,
+`private def` вместо `private`-секции — закрывается шардом privates.cr
+(план 2.8; имя макроса `privates do`, bare `private` — ключевое слово),
+типизированные сигнатуры `: Nil`/`: Room?`,
 декларации `@room : Room?`, `require`-бойлерплейт, `.freeze`, subjectless `case`,
 `db/schema.yml` vs `schema.rb`, минтест-суита `test/**` оракула, puma/resque-конфиги.
 Фиксируем отклонения в `notes/known-gaps.md`.

@@ -1,33 +1,33 @@
-<%= login_head %><body class="" data-controller="local-time lightbox">
-  <a href="#main-content" class="skip-navigation btn">Skip to main content</a>
-  <nav id="nav">
-  </nav>
-  <%= flash_html %><main id="main-content">
-    <section class="txt-align-center">
-      <div class="panel<%= panel_modifier %>">
-        <figure class="account-logo avatar center margin-block-end txt-xx-large"><img src="<%= fresh_account_logo_path %>" alt="Account logo" width="300" height="300"></figure>
-        <%= form_with url: "#{origin}/session", class: "flex flex-column gap" do |form| %>
-          <fieldset class="flex flex-column gap center-block upad">
-            <legend class="txt-large txt-align-center"><strong><%= @account_name %></strong></legend>
-            <div class="flex align-center gap">
-              <%= translation_button("email_address") %>
-              <label class="flex align-center gap input input--actor txt-large">
-                <%= form.email_field :email_address, required: true, class: "input", autofocus: true, autocomplete: "username", placeholder: "Enter your email address", value: (email.empty? ? nil : email) %>
-                <%= icon("email.svg", 24, "colorize--black") %>
-              </label>
-            </div>
-            <div class="flex align-center gap">
-              <%= translation_button("password") %>
-              <label class="flex align-center gap input input--actor txt-large">
-                <%= form.password_field :password, required: true, class: "input", autocomplete: "current-password", placeholder: "Enter your password", maxlength: 72 %>
-                <%= icon("password.svg", 24, "colorize--black") %>
-              </label>
-            </div>
-            <%= form.button class: "btn btn--reversed center txt-large", type: "submit", name: "log_in" do %>
-              <%= icon("arrow-right.svg", nil) %>
-              <span class="for-screen-reader">Go</span>
-          <% end %>      </fieldset>
-        <% end %>  </div>
+<% @page_title = "Sign in" %>
+<% content_for :head do %>
+  <meta name="turbo-visit-control" content="reload">
+<% end %>
+
+<section class="txt-align-center">
+  <div class="panel<%= panel_modifier %>">
+    <figure class="account-logo avatar center margin-block-end txt-xx-large"><img src="<%= fresh_account_logo_path %>" alt="Account logo" width="300" height="300"></figure>
+    <%= form_with url: "#{origin}/session", class: "flex flex-column gap" do |form| %>
+      <fieldset class="flex flex-column gap center-block upad">
+        <legend class="txt-large txt-align-center"><strong><%= @account_name %></strong></legend>
+        <div class="flex align-center gap">
+          <%= translation_button("email_address") %>
+          <label class="flex align-center gap input input--actor txt-large">
+            <%= form.email_field :email_address, required: true, class: "input", autofocus: true, autocomplete: "username", placeholder: "Enter your email address", value: (email.empty? ? nil : email) %>
+            <%= icon("email.svg", 24, "colorize--black") %>
+          </label>
+        </div>
+        <div class="flex align-center gap">
+          <%= translation_button("password") %>
+          <label class="flex align-center gap input input--actor txt-large">
+            <%= form.password_field :password, required: true, class: "input", autocomplete: "current-password", placeholder: "Enter your password", maxlength: 72 %>
+            <%= icon("password.svg", 24, "colorize--black") %>
+          </label>
+        </div>
+        <%= form.button class: "btn btn--reversed center txt-large", type: "submit", name: "log_in" do %>
+          <%= icon("arrow-right.svg", nil) %>
+          <span class="for-screen-reader">Go</span>
+      <% end %>      </fieldset>
+    <% end %>  </div>
     <% if o = @owner %><div class="txt-align-center margin-block-double full-width">
       <a class="btn center" href="mailto:&quot;<%= o.name.to_s %>&quot; &lt;<%= o.email_address.to_s %>&gt;" title="Email <%= o.name.to_s %>">
         <%= icon("lifebuoy.svg", nil) %>
@@ -36,13 +36,3 @@
       <div class="txt-align-center center margin-block txt-subtle">Campfire&trade; version <span class="version-badge"><%= version %></span></div>
       </div>
     <% end %></section>
-    <footer id="footer">
-    </footer>
-  </main>
-  <aside id="sidebar" data-controller="toggle-class" data-toggle-class-toggle-class="open">
-  </aside>
-  <%= lightbox_dialog %><a href="https://once.com" id="app-logo" target="_blank" aria-label="Once software from 37signals home page">
-    <img alt="Campfire logo" src="<%= campfire_icon_src %>" width="256" height="216">
-  </a>
-</body>
-</html>

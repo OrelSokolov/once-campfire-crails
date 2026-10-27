@@ -2,9 +2,104 @@
 module ApplicationHelper
   include ActionController::Helper
   include ActionView::Helpers::TagHelper
+
+  # Layout ivars (oracle: views set @page_title/@body_class at the top of
+  # the template; page_title_tag/body_classes read them from the layout).
+  @page_title : String? = nil
+  @body_class : String? = nil
+
   def icon(name : String, size : Int32? = 20, cls : String? = nil) : ERB::SafeString
     ERB::SafeString.new(ChatLayout.icon(name, size, cls))
   end
+
+  # ————— layouts/application.html.erb (oracle application_helper.rb) —————
+
+  def page_title_tag : ERB::SafeString
+    tag.title(@page_title.to_s.presence || "Campfire")
+  end
+
+  # safe_join with no separator: both meta tags on one line (the tag()
+  # form renders the self-closing `/>` bytes of the reference head).
+  def current_user_meta_tags : ERB::SafeString
+    if user = Current.user
+      tag(:meta, name: "current-user-id", content: user.id.to_s) +
+        tag(:meta, name: "current-user-name", content: user.name.to_s)
+    else
+      ERB::SafeString.new("")
+    end
+  end
+
+  def custom_styles_tag : ERB::SafeString
+    if styles = Current.account.try(&.custom_styles).to_s.presence
+      tag.style(ERB::SafeString.new(styles), data: {"turbo_track" => "reload"})
+    else
+      ERB::SafeString.new("")
+    end
+  end
+
+  # Oracle: [ @body_class, admin_body_class, account_logo_body_class ].
+  def body_classes : String
+    [ @body_class, admin_body_class, account_logo_body_class ]
+      .compact.join(" ")
+  end
+
+  # CSP is not configured — Rails' csp_meta_tag emits nothing.
+  def csp_meta_tag : ERB::SafeString
+    ERB::SafeString.new("")
+  end
+
+  # Rails.configuration.x.vapid.public_key (config/initializers/vapid.rb).
+  def vapid_public_key : String
+    ChatLayout::VAPID_PUBLIC_KEY
+  end
+
+  # The manifest route (format suffix fixed — no route helper in the port).
+  def webmanifest_path(format : String = "json") : String
+    "/webmanifest.json"
+  end
+
+  # stylesheet_link_tag :all / javascript_importmap_tags: the reference
+  # prebuild manifest blocks (every link already carries
+  # data-turbo-track="reload"; the dashed-kwarg call form of the oracle is
+  # not expressible in Crystal kwargs).
+  def stylesheet_link_tag(*sources : String | Symbol, **opts) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout::STYLESHEETS)
+  end
+
+  def javascript_importmap_tags(*args, **opts) : ERB::SafeString
+    ERB::SafeString.new(ChatLayout::IMPORTMAP)
+  end
+
+  private def admin_body_class : String?
+    "admin" if Current.user.try(&.administrator?)
+  end
+
+  private def account_logo_body_class : String?
+    "account-has-logo" if Current.account.try(&.logo_attachment)
+  end
+
+  # ————— Transitional layout wrappers (STYLE_1to1 phase 3) —————
+  # The crails page_open/page_close helpers register the layout inputs
+  # (@page_title/@body_class, content_for :nav/:footer/:sidebar) and
+  # render nothing; the action render pipeline wraps the template output
+  # in layouts/application.html.erb (action_pack_cr __render_layout).
+
+  def page_shell_open(title : String, body_class : String? = nil,
+                      nav_html : String = "") : ERB::SafeString
+    @page_title = title
+    @body_class = body_class
+    content_for(:nav) { ERB::SafeString.new(nav_html) } unless nav_html.empty?
+    ERB::SafeString.new("")
+  end
+
+  def page_shell_close(footer_html : String? = nil,
+                       sidebar_html : String? = nil) : ERB::SafeString
+    content_for(:footer) { ERB::SafeString.new(footer_html) } if footer_html
+    content_for(:sidebar) { ERB::SafeString.new(sidebar_html) } if sidebar_html
+    ERB::SafeString.new("")
+  end
+
+  # —————
 
   # Prebuilt asset path (icons without width/height and other template assets).
   def asset(name : String) : String
@@ -56,9 +151,10 @@ module ApplicationHelper
     url
   end
 
-  # layouts/_body_close with no content blocks (accounts/searches override it).
+  # Default page close: footer/sidebar stay empty (accounts/searches and
+  # the chat screens register their own through page_shell_close).
   def page_close : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_close)
+    page_shell_close
   end
 
   # dom_id(room, prefix) — the oracle's RecordIdentifier resolves the STI

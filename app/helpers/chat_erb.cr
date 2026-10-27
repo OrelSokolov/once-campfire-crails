@@ -1,6 +1,13 @@
 # ChatERB: ERB rendering context for the app/views/** HTML templates
 # (markup lives in templates compiled at build time via compile_template,
 # like the jbuilder partials); helpers delegate to ChatLayout.
+# The sidebar direct-row partial (users/sidebars/rooms/_direct) renders
+# both from a Membership (directs#create broadcast) and from a
+# SidebarDirect snapshot (the sidebar collection item) — the typed local
+# is the union (a type alias: compile_partials resolves a Path, not a
+# `A | B` call AST).
+alias SidebarDirectLocal = Membership | ChatERB::SidebarDirect
+
 class ChatERB
   # Full ActionView surface (like the controllers' render context):
   # form_with/composer_form_tag needs FormBuilder, whose @view is typed
@@ -18,7 +25,7 @@ class ChatERB
   include RichTextHelper
   include DropTargetHelper
 
-  def initialize(@room : Room? = nil, @footer : String = "", @sidebar : String = "",
+  def initialize(@room : Room? = nil,
                  @origin : String = "", @involvement : String = "mentions",
                  @ua : String = "",
                  @user : User? = nil,
@@ -31,19 +38,6 @@ class ChatERB
   # rooms/show/_composer.html.erb, rooms/involvements/**
   def room : Room
     @room.not_nil!
-  end
-
-  # layouts/_body_close.html.erb (SafeString: raw HTML for <%= %>)
-  def footer : ERB::SafeString
-    ERB::SafeString.new(@footer)
-  end
-
-  # layouts/_body_close.html.erb — the oracle's content_for :sidebar string
-  # (SafeString). Named sidebar_html, not sidebar: compile_template
-  # "sidebar" below defines the sidebar template render method and would
-  # shadow this accessor.
-  def sidebar_html : ERB::SafeString
-    ERB::SafeString.new(@sidebar)
   end
 
   # asset("arrow-up.svg") → "/assets/arrow-up-f96b3895.svg" (ChatLayout).
@@ -59,11 +53,6 @@ class ChatERB
   def image_tag(source : String, **opts) : ERB::SafeString
     ::ActionView::Helpers::AssetTagHelper.image_tag(
       ChatLayout.asset(source), __av_opts_to_h(opts))
-  end
-
-  # Layout lightbox dialog (layouts/_lightbox).
-  def lightbox : ERB::SafeString
-    render(partial: "layouts/lightbox")
   end
 
   # ————— rooms/involvements (bell + pwa dialogs + show) —————
@@ -145,10 +134,23 @@ class ChatERB
 
   # ————— users/sidebars/show (sidebar) —————
 
+  # View model of a sidebar direct-room row: the oracle renders the
+  # users/sidebars/rooms/_direct partial collection off Membership
+  # records (associations preloaded by the controller); the port
+  # batch-loads rooms/members/unread in the helper, so the snapshot
+  # travels as the collection item (BoostEntry precedent). The partial
+  # and its helpers dispatch on the local's type — the broadcast path
+  # (directs#create) still renders the same partial off a Membership.
   class SidebarDirect
-    attr_accessor room_id : Int64, epoch_ms : Int64, unread : Bool, members : Array(User)
+    attr_accessor room : Room
+    attr_accessor unread : Bool
+    attr_accessor members : Array(User)
 
-    def initialize(@room_id, @epoch_ms, @unread, @members)
+    def initialize(@room, @unread, @members)
+    end
+
+    def room_id : Int64
+      @room.id.not_nil!
     end
   end
 
@@ -190,10 +192,6 @@ class ChatERB
 
   # Direct room label: one member — the first word of the name; several —
   # initials (first letter of up to 3 words each) joined to_sentence-style.
-  def direct_label(d : SidebarDirect) : String
-    direct_label(d.members)
-  end
-
   def direct_label(members : Array(User)) : String
     if members.size > 1
       parts = members.map do |m|
@@ -222,9 +220,18 @@ class ChatERB
     members.empty? ? [membership.user.not_nil!] : members
   end
 
+  # Sidebar collection item: members are batch-preloaded (no SQL here).
+  def direct_members(entry : SidebarDirect) : Array(User)
+    entry.members
+  end
+
   # Oracle Membership#unread?: unread_at.present?
   def unread?(membership : Membership) : Bool
     !membership.unread_at.nil?
+  end
+
+  def unread?(entry : SidebarDirect) : Bool
+    entry.unread
   end
 
   # Sidebar data-sorted-list-number: room updated_at epoch in ms.
@@ -252,7 +259,6 @@ class ChatERB
   compile_template "sidebar", "app/views/users/sidebars/_show.html.erb", dedent: true
 
   compile_template "composer", "app/views/rooms/show/_composer.html.erb"
-  compile_template "body_close", "app/views/layouts/_body_close.html.erb", dedent: true
   compile_template "bell", "app/views/rooms/involvements/_bell.html.erb"
   compile_template "involvement_show", "app/views/rooms/involvements/_show.html.erb", dedent: true
   compile_template "incompatible_browser", "app/views/sessions/incompatible_browser.html.erb"
@@ -261,10 +267,32 @@ class ChatERB
   # the shared @__erb_buf, so a nested call would clobber the parent's
   # buffer; partials swap it out and restore it.
   compile_partials({
-    "layouts/lightbox"     => {path: "app/views/layouts/_lightbox.html.erb", locals: {} of String => Nil},
-    "users/sidebars/rooms/direct" => {path: "app/views/users/sidebars/rooms/_direct.html.erb", locals: {"membership" => Membership}},
+    # The direct row renders both from a Membership (directs#create
+    # broadcast) and from a SidebarDirect snapshot (sidebar collection).
+    "users/sidebars/rooms/direct" => {path: "app/views/users/sidebars/rooms/_direct.html.erb",
+                                      locals: {"membership" => SidebarDirectLocal}},
+    "users/sidebars/rooms/shared" => {path: "app/views/users/sidebars/rooms/_shared.html.erb",
+                                      locals: {"room" => Room, "unread" => Bool}},
+    "users/sidebars/rooms/direct_placeholder" => {path: "app/views/users/sidebars/rooms/_direct_placeholder.html.erb",
+                                                  locals: {"user" => User}},
     "browser_settings"     => {path: "app/views/pwa/_browser_settings.html.erb", locals: {} of String => Nil},
     "system_settings"      => {path: "app/views/pwa/_system_settings.html.erb", locals: {} of String => Nil},
     "install_instructions" => {path: "app/views/pwa/_install_instructions.html.erb", locals: {} of String => Nil},
   })
+
+  # Oracle collection render passes cached: true (fragment cache); the
+  # sidebar renders through the whole-page ResponseCache, so the flag is
+  # accepted for the 1:1 call shape and is a no-op here.
+  #
+  # NOTE: must stay AFTER compile_partials — a hand-written def that
+  # precedes the macro-generated `render` pair is shadowed by it (the
+  # overloads never merge); previous_def delegates to the generated
+  # collection render without re-entering this overload (a plain
+  # render(...) call would re-match cached:'s default).
+  def render(partial : String, *, collection : Array, as_local : String? = nil,
+             locals : Hash? = nil, spacer_template : String? = nil,
+             cached : Bool = false) : ERB::SafeString
+    previous_def(partial, collection: collection, as_local: as_local,
+      locals: locals, spacer_template: spacer_template)
+  end
 end

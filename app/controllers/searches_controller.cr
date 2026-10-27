@@ -57,7 +57,12 @@ class SearchesController < ApplicationController
       @recents = recents
       @return_room = return_room
       @epoch = db_epoch
-      Campfire::ResponseCache::Page.new(__render_view("index").to_s)
+      # page_open/page_close register the layout inputs during the template
+      # render; the shell comes from __render_layout (layouts/application).
+      # The template renders before the layout block — a nested render
+      # inside would clobber the layout's shared output buffer.
+      content = __render_view("index").to_s
+      Campfire::ResponseCache::Page.new(__render_layout { content }.to_s)
     end
     send_page(page)
   end

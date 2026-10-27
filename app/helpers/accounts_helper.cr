@@ -2,29 +2,22 @@
 module AccountsHelper
   include ActionController::Helper
   def page_open(user : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("account", "Account settings",
-      nav_html: account_nav(user)))
+    page_shell_open("Account settings", nav_html: account_nav(user))
   end
 
   def page_close : ERB::SafeString
     version = HTML.escape(ENV["APP_VERSION"]? || "parity")
     footer = %(<div class="txt-align-center center margin-block-double txt-subtle">Campfire&trade; version <span class="version-badge">) +
              version + %(</span></div>)
-    ERB::SafeString.new(ChatLayout.page_close(footer))
-  end
-
-  def copy_button(url : String) : ERB::SafeString
-    button_to_copy_to_clipboard(url) do
-      ERB::SafeString.new(%(\n<span class="for-screen-reader">Copy join link</span>\n#{ChatLayout.icon("copy-paste.svg", 20, "colorize--black")}\n))
-    end
+    page_shell_close(footer)
   end
 
   def translation_button(key : String) : ERB::SafeString
     ERB::SafeString.new(TranslationsHelper.translation_button(key))
   end
 
-  # Nav links are literal <a> tags: link_to renders href as the last
-  # attribute while the oracle output has href first (byte parity).
+  # accounts/_nav.html.erb: back link + admin bots/custom-styles links
+  # (link_to do — the oracle's nav block).
   def account_nav(user : User) : String
     render(partial: "accounts/nav", locals: {"user" => user}).raw
   end

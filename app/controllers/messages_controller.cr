@@ -27,6 +27,8 @@ class MessagesController < ApplicationController
       messages = find_messages
       return head(:no_content) if messages.empty?
       @messages = messages
+      # Oracle: layout false, only: :index — the paginator fetch gets the
+      # bare collection, without layouts/application.
       Campfire::ResponseCache::Page.new(__render_view("index").to_s)
     end
     send_page(page)

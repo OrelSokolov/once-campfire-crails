@@ -1,11 +1,18 @@
 class Users::ProfilesController < ApplicationController
 
   @user : User?
-  @shared_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
-  @direct_memberships : Array(Tuple(Room, Membership)) = [] of Tuple(Room, Membership)
+  @shared_memberships : Array(Users::ProfilesHelper::MembershipEntry) = [] of Users::ProfilesHelper::MembershipEntry
+  @direct_memberships : Array(Users::ProfilesHelper::MembershipEntry) = [] of Users::ProfilesHelper::MembershipEntry
   @ua : String = ""
   @transfer_url : String = ""
   @qr_path : String = ""
+
+  # Oracle users/profiles/show.html.erb renders the _membership partial
+  # collection twice (shared + direct rooms).
+  compile_partials({
+    "users/profiles/membership" => {path: "app/views/users/profiles/_membership.html.erb",
+                                     locals: {"membership" => Users::ProfilesHelper::MembershipEntry}},
+  })
 
   def show
     user = current_user!
@@ -16,14 +23,15 @@ class Users::ProfilesController < ApplicationController
       .to_a.index_by(&.id!)
     user.memberships.each do |membership|
       next unless room = rooms[membership.room_id!]?
+      entry = Users::ProfilesHelper::MembershipEntry.new(room, membership)
       if room.direct?
-        @direct_memberships << {room, membership}
+        @direct_memberships << entry
       else
-        @shared_memberships << {room, membership}
+        @shared_memberships << entry
       end
     end
-    @shared_memberships.sort_by! { |(room, _)| room.name.to_s.downcase }
-    @direct_memberships.sort_by! { |(room, _)| room.id! }
+    @shared_memberships.sort_by! { |entry| entry.room.name.to_s.downcase }
+    @direct_memberships.sort_by! { |entry| entry.room.id! }
     @transfer_url = transfer_url_for(user)
     @qr_path = "/qr_code/" + Base64.urlsafe_encode(@transfer_url, padding: false)
   end

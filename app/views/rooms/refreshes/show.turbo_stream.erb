@@ -1,4 +1,4 @@
-<%= (turbo_stream.append dom_id(@room.not_nil!, :messages), messages_html(@room.not_nil!, @new_messages) if @new_messages.any?) %>
+<%= (turbo_stream.append dom_id(@room.not_nil!, :messages), render(partial: "messages/message", collection: @new_messages, cached: true).to_s if @new_messages.any?) %>
 <% @updated_messages.each do |message| %>
-<%= turbo_stream.replace dom_id(message), messages_html(@room.not_nil!, [message]) %>
+<%= turbo_stream.replace dom_id(message), render(partial: "messages/message", collection: [message], cached: true).to_s %>
 <% end %>

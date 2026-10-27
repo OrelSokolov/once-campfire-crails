@@ -5,7 +5,7 @@
     </figure>
   </div>
   <div id="search-results" class="messages searches__results" data-controller="search-results" data-search-results-target="messages" data-search-results-me-class="message--me" data-search-results-threaded-class="message--threaded" data-search-results-mentioned-class="message--mentioned" data-search-results-formatted-class="message--formatted">
-    <%= messages_html %></div></div>
+    <%= render partial: "messages/message", collection: @messages, cached: true %></div></div>
 <% content_for :footer do %><div class="composer flex align-end gap">
   <a class="btn flex-item-no-shrink margin-block-end" style="view-transition-name: input-switcher; --btn-border-radius: 0.5em" href="<%= room_path(@return_room) %>">
     <img aria-hidden="true" src="<%= asset("arrow-left.svg") %>">

@@ -17,17 +17,10 @@ room = Room.order("id").first?.not_nil!
 
 messages = Message.where("room_id = ?", room.id.not_nil!)
   .order("created_at DESC").limit(5).to_a.reverse
-html = String.build do |io|
-  io << ChatLayout.head("test", david, room.id, chat: true)
-  io << ChatLayout.body_open(room, david, ua: "curl", origin: "http://127.0.0.1:1")
-  io << ChatLayout.message_area(room, ChatLayout.messages_html(messages, "1", room, "http://127.0.0.1:1"), david, base_url: "http://127.0.0.1:1")
-  io << ChatLayout.page_close(ChatERB.new(room: room, origin: "http://127.0.0.1:1").composer.to_s,
-    ChatLayout.chat_sidebar_frame)
-end
-puts "page tail: #{html[-60..].inspect}"
-if (idx = html.rindex("</button></form>"))
-  puts "composer close ctx: #{html[idx..idx + 40]?.inspect}"
-end
+# Page shell assembly moved to layouts/application (rooms#show renders
+# through __render_layout) — this script keeps only the message_dom checks
+# below.
+_ = messages
 
 # ——— звуки и og-embed: presentation конкретных сообщений сида ———
 [933434492_i64, 933434493_i64, 933434494_i64, 933434495_i64, 933434496_i64].each do |mid|

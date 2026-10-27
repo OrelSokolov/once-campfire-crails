@@ -5,26 +5,34 @@ module RoomsHelper
                     ChatLayout.messages_html(messages, db_epoch, room, origin)
 
     response.headers["Content-Type"] = "text/html; charset=utf-8"
-    title = if (n = room.name)
-              n.to_s
-            else
-              others = User.where(
-                %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
-                room.id!, user.id!).order("id").map(&.name.to_s)
-              ChatLayout.display_sentence(others, user.name.to_s)
-            end
-    html = String.build do |io|
-      io << ChatLayout.head(title, room.id, chat: true)
-      io << ChatLayout.body_open(room,
-        ua: request.headers["User-Agent"]?.to_s, origin: origin)
-      io << ChatLayout.message_area(room, messages_html, base_url: origin)
-      # rooms/show/_composer renders into content_for :footer (oracle
-      # show.html.erb), the layout reads it back in _body_close.
-      chat_erb = ChatERB.new(room: room, origin: origin)
-      chat_erb.composer
-      io << ChatLayout.page_close(chat_erb.content_for(:footer).to_s,
-        sidebar_turbo_frame_tag(src: user_sidebar_path).raw)
+    # rooms/show.html.erb: @page_title/@body_class + content_for
+    # :head/:nav/:footer/:sidebar; the page shell is layouts/application.
+    @page_title = if (n = room.name)
+                    n.to_s
+                  else
+                    others = User.where(
+                      %(id IN (SELECT user_id FROM memberships WHERE room_id = ? AND user_id != ?)),
+                      room.id!, user.id!).order("id").map(&.name.to_s)
+                    ChatLayout.display_sentence(others, user.name.to_s)
+                  end
+    @body_class = "sidebar"
+    content_for(:head) do
+      ERB::SafeString.new(%(<meta name="turbo-cache-control" content="no-preview">\n) +
+        %(<meta name="current-room-id" content="#{room.id}">\n))
     end
+    content_for(:nav) do
+      ERB::SafeString.new(ChatLayout.chat_nav(room,
+        ua: request.headers["User-Agent"]?.to_s, origin: origin))
+    end
+    # rooms/show/_composer renders into content_for :footer (oracle
+    # show.html.erb); the layout reads it back in yield :footer.
+    chat_erb = ChatERB.new(room: room, origin: origin)
+    chat_erb.composer
+    content_for(:footer) { chat_erb.content_for(:footer) }
+    content_for(:sidebar) { sidebar_turbo_frame_tag(src: user_sidebar_path) }
+    html = __render_layout {
+      ChatLayout.message_area(room, messages_html, base_url: origin)
+    }.to_s
     Campfire::ResponseCache::Page.new(html)
   end
 
@@ -39,18 +47,22 @@ module RoomsHelper
     ChatLayout.system_welcome(origin, invite)
   end
 
-  # rooms/refreshes/show.turbo_stream.erb: the message list markup for
-  # turbo_stream append/replace content (the oracle renders the
-  # messages/message partial collection; the port compiles it at build time).
-  def messages_html(room : Room, messages : Array(Message)) : String
-    ChatLayout.messages_html(messages, db_epoch, room, origin)
+  # Oracle rooms/refreshes/show.turbo_stream.erb: the append/replace
+  # content is `render partial: "messages/message", collection:`,
+  # cached:` (the messages/message partial through the fragment-cache hot
+  # path). `cached:` carries the oracle call shape; the port's cache is
+  # epoch-keyed (known-gaps).
+  def render(partial : String, *, collection : Array(Message),
+             cached : Bool = true) : ERB::SafeString
+    raise ArgumentError.new("Missing partial #{partial.inspect}") unless partial == "messages/message"
+    ERB::SafeString.new(
+      ChatLayout.messages_html(collection, db_epoch, @room, origin))
   end
 
   # rooms/directs/edit.html.erb shell (the directs edit screen keeps its own
   # wrapper; the opens/closeds pages moved to rooms/layouts/*).
   def page_open(title : String, back_path : String) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("room-form", title,
-      nav_html: nav_back_to(back_path).raw))
+    page_shell_open(title, nav_html: nav_back_to(back_path).raw)
   end
 
   # Oracle rooms_helper.rb link_back_to_last_room_visited: back to the last

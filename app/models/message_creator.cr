@@ -82,20 +82,16 @@ module MessageCreator
 
     rows.each do |row|
       mentioned = mentions.includes?(row[:user_id])
-      if webhooks && row[:status] == 0 && row[:role] == 2 && (direct || mentioned)
-        conn.query_all(
-          "SELECT id FROM webhooks WHERE user_id = ?", row[:user_id]) do |rs|
-          rs.read(Int64)
-        end.each do |webhook_id|
-          jobs << Bot::WebhookJob.__queue_pair(webhook_id, message)
-        end
+      if webhooks && row[:status] == 0 && row[:role] == 2 && (direct || mentioned) &&
+         (bot = User.find?(row[:user_id])) && (pair = bot.deliver_webhook_later(message))
+        jobs << pair
       end
     end
 
     # Room::PushMessageJob: one push job per message; recipients (Room::MessagePusher) are filtered at delivery.
     jobs << room.push_later(message)
     # Message::BroadcastUnreadRoomJob: fan out the unread room to per-user sidebar streams.
-    jobs << Message::BroadcastUnreadRoomJob.__queue_pair(message)
+    jobs << Message::Broadcasts.broadcast_unread_room_later(message)
     jobs
   end
 

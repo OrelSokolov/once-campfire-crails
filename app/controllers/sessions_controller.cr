@@ -20,7 +20,11 @@ class SessionsController < ApplicationController
       redirect_to root_url
     else
       prepare_login(alert: true)
-      render(html: __render_view("new").to_s, status: :unauthorized)
+      # The content renders BEFORE the layout block: compile_template and
+      # __av_layout share @__erb_buf, a nested render inside the block
+      # would clobber the layout's accumulated output.
+      content = __render_view("new").to_s
+      render(html: __render_layout { content }.to_s, status: :unauthorized)
     end
   end
 
@@ -47,8 +51,10 @@ class SessionsController < ApplicationController
 
   # Data for sessions/new.html.erb: account name in the legend, owner for
   # accounts/_help_contact, email from the params (the value attribute).
+  # alert drives the layout's flash block (oracle flash.now[:alert]).
   private def prepare_login(alert : Bool = false) : Nil
     @login_alert = alert
+    flash.now("alert", "Too many requests or unauthorized.") if alert
     account = Account.take
     @account_name = account.try(&.name).to_s
     @owner = User.where("role = ?", 1).order("id").take
@@ -59,6 +65,7 @@ class SessionsController < ApplicationController
   # (429 from rate_limit / 401 from a failed sign-in).
   private def render_rejection : Nil
     prepare_login(alert: true)
-    render(html: __render_view("new").to_s, status: :too_many_requests)
+    content = __render_view("new").to_s
+    render(html: __render_layout { content }.to_s, status: :too_many_requests)
   end
 end

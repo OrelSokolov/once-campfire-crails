@@ -1,0 +1,27 @@
+<%# Be sure to check/update messages/_template.html.erb when changing this file %>
+
+<%# Bump this version when the message presentation filters change what they emit. Editing this line changes the template digest, which busts BOTH this fragment cache and the collection cache that keys on this partial's digest (helper Ruby changes alone don't). %>
+<%= message_tag message do %>
+<h2 class="message__day-separator"><%= local_datetime_tag message.created_at, style: :date %></h2>
+<figure class="avatar message__avatar">
+<%= avatar_tag creator %>
+</figure>
+<turbo-frame id="<%= dom_id message, :edit %>">
+<div class="message__body">
+<div class="message__body-content">
+<div class="message__meta">
+<h3 class="message__heading">
+<span class="message__author" title="<%= message_author_title creator %>">
+<strong data-reply-target="author"><%= creator.name %></strong>
+</span>
+<a target="_top" class="message__permalink" href="<%= room_at_message_path(room, message) %>"><%= message_timestamp(message, class: "message__timestamp") %></a>
+<span class="message__room">
+<a target="_top" data-reply-target="link" href="<%= room_at_message_path(room, message) %>"><%= room_display_name(room) %></a>
+</span>
+</h3>
+<%= render partial: "messages/actions", locals: {"message" => message, "room" => room, "attachment" => attachment, "url" => room_at_message_url(room, message)} %></div>
+<%= render partial: "messages/presentation", locals: {"message" => message} %><%= render_boosts message %>
+</div>
+</div>
+</turbo-frame>
+<% end %>

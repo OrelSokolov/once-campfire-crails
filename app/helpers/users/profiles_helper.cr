@@ -1,9 +1,20 @@
 # Users::ProfilesHelper: ERB helpers for app/views/users/profiles/show.html.erb.
 module Users::ProfilesHelper
   include ActionController::Helper
+
+  # View model of a membership row on the profile page: the oracle renders
+  # the users/profiles/_membership partial collection off membership.room
+  # (associations preloaded by the controller); the port preloads rooms in
+  # one query, so the pair travels as one item (BoostEntry precedent).
+  struct MembershipEntry
+    attr_reader room : Room
+    attr_reader membership : Membership
+
+    def initialize(@room, @membership)
+    end
+  end
   def page_open(user : User) : ERB::SafeString
-    ERB::SafeString.new(ChatLayout.page_open("profile", user.name.to_s,
-      nav_html: profile_nav))
+    page_shell_open(user.name.to_s, nav_html: profile_nav)
   end
 
   def install_instructions : ERB::SafeString
@@ -47,19 +58,8 @@ module Users::ProfilesHelper
     ChatLayout.display_sentence(others, viewer.name.to_s)
   end
 
-  def membership_row(room : Room, membership : Membership,
-                     viewer : User) : ERB::SafeString
-    name = HTML.escape(profile_display_name(room, viewer))
-    ERB::SafeString.new(
-      %(<li class="flex align-center gap margin-none min-width membership-item">\n) +
-      %(<a class="overflow-ellipsis fill-shade txt-primary txt-undecorated" href="#{room_path(room.id!)}">\n) +
-      %(<strong>#{name}</strong>\n</a>\n) +
-      %(<hr aria-hidden="true" class="separator">\n) +
-      %(<span class="txt-small">\n) +
-      involvement_chip(room, membership).raw +
-      %(  </span>\n</li>))
-  end
-
+  # Oracle _membership.html.erb: the involvement chip inside the
+  # turbo-frame (involvement_<dom_id>).
   def involvement_chip(room : Room, membership : Membership) : ERB::SafeString
     current = membership.involvement.to_s.presence || "mentions"
     nxt = next_involvement(room, current)
