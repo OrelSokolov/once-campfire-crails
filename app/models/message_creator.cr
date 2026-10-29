@@ -25,6 +25,7 @@ module MessageCreator
     # a single writer fiber per process (see write_queue.cr); broadcast and cache
     # invalidation happen after, outside the queue.
     message = Campfire::WriteQueue.perform do
+      attachment_blob : ActiveStorage::Blob? = nil
       created = retry_on_lock do
         ActiveRecord::Base.transaction do
           # has_rich_text :body — the body= setter queues the rich_text row;
@@ -38,7 +39,7 @@ module MessageCreator
           message_id = record.id!
 
           conn = ActiveRecord::Base.__session # pinned transaction connection
-          Message::Attachment.store(conn, record, attachment, now) if attachment
+          attachment_blob = Message::Attachment.store(conn, record, attachment, now) if attachment
           # indexMessage: a file without text is indexed by its filename.
           Message::Searchable.insert_in_index(conn, message_id,
             plain.presence || attachment.try(&.filename) || "")
@@ -51,7 +52,12 @@ module MessageCreator
       # waiting for the queue's write lock inside another transaction held the production
       # write-lock and deadlocked both pools (full app deadlock observed at conc=16).
       Campfire::JobQueue.enqueue_batch(created[:jobs])
-      created
+      {record: created[:record], jobs: created[:jobs], attachment_blob: attachment_blob}
+    end
+    # process_attachment (create_with_attachment!): eager :thumb/:poster before the
+    # broadcast renders the presentation; failures are logged and posted without a preview.
+    if (blob = message[:attachment_blob]?)
+      Message::Attachment.process_attachment(blob)
     end
     # Broadcast with the attachment when a file was stored (attachMessage → publishMessage:
     # presentation instead of the rich-text body).

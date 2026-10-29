@@ -31,4 +31,15 @@ module RichTextHelper
   def rich_text_blob_url_template : String
     "#{origin}/rails/active_storage/blobs/redirect/:signed_id/:filename"
   end
+
+  # Oracle RichTextHelper#editable_body (ActionText::Fragment.replace +
+  # Content#to_editor_html): every attachment is rebuilt from its
+  # attachable before editing — a Trix-era embed carries its details as
+  # node attributes the editor doesn't round-trip, a mention edited
+  # under Trix carries the generic content type the editor doesn't
+  # permit, and a hand-written embed carries whatever markup the author
+  # put there. The builders live in ChatLayout (editable_body).
+  def editable_body(message : Message) : String
+    ChatLayout.editable_body(message.body.to_s)
+  end
 end

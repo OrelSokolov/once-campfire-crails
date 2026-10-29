@@ -43,14 +43,16 @@ module ChatLayout
   end
 
   # Rails SignedGlobalID: signs "gid://campfire/User/<id>?expires_in" with
-  # the "signed_global_ids" key, purpose "attachable" (rails.js sgid).
-  # Shared by the controller and the jbuilder partials, hence it lives in
-  # ChatLayout.
+  # the "signed_global_ids" key, purpose "attachable" (rails.js sgid). Key
+  # derivation follows Rails 7.1+ key_generator (PBKDF2-HMAC-SHA256), the
+  # verifier signature is HMAC-SHA1 — byte-identical to the oracle's
+  # User#attachable_sgid. Shared by the controller and the jbuilder
+  # partials, hence it lives in ChatLayout.
   def self.attachable_sgid(user_id : Int64) : String
     secret = ENV["SECRET_KEY_BASE"]? ||
              raise RuntimeError.new("SECRET_KEY_BASE is not configured")
     key = ActiveSupport::CachingKeyGenerator.new(
-      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha1))
+      ActiveSupport::KeyGenerator.new(secret, iterations: 1000, digest: :sha256))
       .generate_key("signed_global_ids")
     verifier = ActiveSupport::MessageVerifier.new(key, url_safe: true, digest: :sha1)
     verifier.generate("gid://campfire/User/#{user_id}?expires_in",
@@ -592,6 +594,146 @@ module ChatLayout
     nil
   end
 
+  # ————— Editable body (messages/edit: rich_text_area value) —————
+
+  # Oracle RichTextHelper#editable_body + ActionText::Content#to_editor_html:
+  # the value the edit form's editor loads — NOT the stored body. Every
+  # <action-text-attachment> is rebuilt from its attachable, because the
+  # editor keeps an attachment's content as it finds it: a Trix-era
+  # embed carries its details as node attributes the editor doesn't
+  # round-trip, a mention edited under Trix carries the generic content
+  # type the editor doesn't permit, and a hand-written embed carries
+  # whatever markup the author put there.
+  #
+  # Oracle pipeline: Fragment.wrap(body.strip) sets node content-type =
+  # attachable.attachable_content_type and content = the rendered
+  # attachable partial (render_action_text_attachment); the editor
+  # value (RichText#to_editor_html) then safe-list-sanitizes the OG
+  # embed content (the custom <actiontext-opengraph-embed> element is
+  # unwrapped, the title anchor's rel/target are stripped) and
+  # re-renders the mention partial unchomped (trailing "\n") — with the
+  # content attribute moved last, where the Nokogiri round-trip leaves
+  # it. Attachables other than OG embeds and Users make the oracle
+  # raise NoMethodError (editable_body reads attachable_content_type);
+  # the port leaves such nodes unchanged.
+  def self.editable_body(body : String) : String
+    body = body.strip
+    outp = IO::Memory.new
+    cursor = 0
+    while (start = body.byte_index("<action-text-attachment", cursor))
+      attrs, tag_end = parse_tag(body, start)
+      outp << body.byte_slice(cursor, start - cursor)
+      if (close = body.byte_index("</action-text-attachment>", tag_end))
+        outp << (editable_attachment_tag(attrs) ||
+                 body.byte_slice(start, tag_end - start))
+        # the node's children and closing tag pass through untouched
+        outp << body.byte_slice(tag_end, close + "</action-text-attachment>".size - tag_end)
+        cursor = close + "</action-text-attachment>".size
+      else
+        outp << body.byte_slice(start, tag_end - start)
+        cursor = tag_end
+      end
+    end
+    outp << body.byte_slice(cursor, body.bytesize - cursor)
+    outp.to_s
+  end
+
+  # The rebuilt <action-text-attachment> open tag: original attribute
+  # order, content-type replaced in place, content re-appended last
+  # (to_editor_html's render_attachments removes and re-sets it). Nil
+  # for attachables the port does not rebuild (see editable_body).
+  private def self.editable_attachment_tag(attrs : Hash(String, String)) : String?
+    content_type, content =
+      if attrs["content-type"]?.to_s.includes?("application/vnd.actiontext.opengraph-embed")
+        {"application/vnd.actiontext.opengraph-embed", editable_opengraph_content(attrs)}
+      elsif (sgid = attrs["sgid"]?) && (user = mention_user(sgid))
+        {"application/vnd.campfire.mention", editable_mention_content(user)}
+      else
+        return nil
+      end
+    String.build do |io|
+      io << "<action-text-attachment"
+      type_set = false
+      attrs.each do |k, v|
+        next if k == "content"
+        if k == "content-type"
+          io << %( content-type=") << attr_escape(content_type) << '"'
+          type_set = true
+        else
+          # untouched attributes pass their raw value through: the
+          # oracle's parse→serialize round trip is byte-identical for
+          # the entities the editor writes (&amp; &quot; …)
+          io << " " << k << %(=") << v << '"'
+        end
+      end
+      io << %( content-type=") << attr_escape(content_type) << '"' unless type_set
+      io << %( content=") << attr_escape(content) << "\">"
+    end
+  end
+
+  # _opengraph_embed partial (render_action_text_attachment, chomped) in
+  # the shape to_editor_html's sanitize leaves it: the
+  # actiontext-opengraph-embed wrapper unwrapped (its indent newlines
+  # remain) and the title anchor stripped to a bare href. Attr values
+  # are pre-unescaped once (Nokogiri node semantics); og_attributes'
+  # own content unescape then gives the second level the oracle gets
+  # from parsing the content markup.
+  private def self.editable_opengraph_content(attrs : Hash(String, String)) : String
+    norm = {} of String => String
+    attrs.each { |k, v| norm[k] = unescape_entities(v) }
+    data = og_attributes(norm, norm["content"]?)
+    twitter = data[:url].to_s.starts_with?("https://pbs.twimg.com/profile_images")
+    klass = twitter ? "og-embed gap og-embed--twitter-avatar" : "og-embed gap "
+    title = truncate_ellipsis(HTML.escape(data[:filename].to_s), 280)
+    desc = truncate_ellipsis(HTML.escape(data[:desc].to_s), 560)
+    title_html = if (href = data[:href])
+                   # link_to emitted rel/target; the sanitize pass strips
+                   # both, leaving href alone
+                   %(<a href="#{HTML.escape(href)}">) + title + %(</a>)
+                 else
+                   title
+                 end
+    String.build do |io|
+      io << %(<figure class="attachment attachment--content attachment--og">\n)
+      io << %(  \n)
+      io << %(    <div class="#{klass}">\n)
+      io << %(      <div class="og-embed__content">\n)
+      io << %(        <div class="og-embed__title">\n)
+      io << %(          ) << title_html << "\n"
+      io << %(        </div>\n)
+      io << %(        <div class="og-embed__description">) << desc << %(</div>\n)
+      io << %(      </div>\n)
+      if (url = data[:url])
+        io << %(        <div class="og-embed__image">\n)
+        io << %(          <img src="#{HTML.escape(url)}" class="image center" alt="">\n)
+        io << %(        </div>\n)
+      end
+      io << %(    </div>\n)
+      io << %(  \n)
+      io << %(</figure>)
+    end
+  end
+
+  # users/_mention partial re-rendered by to_editor_attachment! (no
+  # sanitize pass over this string): fresh attachable_sgid and
+  # avatar_tag markup — the tag-builder image_tag form with the " />"
+  # tail — unchomped, so the partial's trailing newline stays in the
+  # attribute.
+  private def self.editable_mention_content(user : User) : String
+    uid = user.id.not_nil!
+    %(<span class="mention" sgid="#{attachable_sgid(uid)}") +
+      %(<a title="#{HTML.escape(user_title(user.name, user.bio))}" class="btn avatar" ) +
+      %(data-turbo-frame="_top" href="#{route_path("user", uid)}">) +
+      %(<img aria-hidden="true" src="#{fresh_user_avatar_path(uid, user.updated_at)}" width="48" height="48" /></a> ) +
+      %(#{HTML.escape(user.name.to_s)}</span>\n)
+  end
+
+  # Nokogiri attribute serialization: only & and " are escaped (a
+  # literal < or > stays inside a double-quoted attribute value).
+  private def self.attr_escape(value : String) : String
+    value.gsub('&', "&amp;").gsub('"', "&quot;")
+  end
+
   # ————— Autolink (port of rails_autolink: auto_link_urls + emails) —————
 
   AUTO_LINK_RE = /(?:(?:(?:ed2k|ftp|http|https|irc|mailto|news|gopher|nntp|telnet|webcal|xmpp|callto|feed|svn|urn|aim|rsync|tag|ssh|sftp|rtsp|afs|file):\/\/|www\.\w)[^\s<\x{a0}"]+)/imx
@@ -770,6 +912,11 @@ module ChatLayout
     # unanalyzed images (metadata "{}") and all non-images.
     attr_accessor width : Int64 | Float64 | Nil = nil
     attr_accessor height : Int64 | Float64 | Nil = nil
+    # Eager preview state (the oracle's representation(:thumb).processed? /
+    # preview(:poster) variant checks): the derivative file exists on the
+    # ActiveStorage service.
+    attr_accessor thumb_processed : Bool = false
+    attr_accessor poster_processed : Bool = false
 
     def initialize(@blob_id, @filename, @content_type, @key)
     end
@@ -794,6 +941,7 @@ module ChatLayout
         JOIN active_storage_blobs b ON b.id = a.blob_id
         WHERE a.record_type = 'Message' AND a.record_id IN (#{placeholders})),
       args: message_ids, as: {Int64, Int64, String, String, String, String?})
+    service = ActiveStorage.service
     rows.each do |(mid, bid, filename, ct, key, metadata)|
       attachment = Attachment.new(bid, filename, ct, key)
       if meta = metadata.presence
@@ -803,7 +951,67 @@ module ChatLayout
       end
       table[mid] = attachment
     end
+    mark_processed(table) unless table.empty?
     table
+  end
+
+  # processed? state for #attachments_for. The oracle preloads
+  # variant_records: Rails' check is a VariantRecord lookup (track_variants),
+  # and its preview is an attached preview-image blob. Seed data carries that
+  # Rails layout — a VariantRecord row per processed thumb, a preview_image
+  # attachment plus VariantRecords on the frame blob for posters — while
+  # port-posted messages write derivatives under deterministic service keys
+  # (variants/<key>/<variation.key>, byte-equal to the tokens
+  # representation_url signs). A derivative counts as processed when either
+  # layout knows it; the lazy representations route converges on demand.
+  private def self.mark_processed(table : Hash(Int64, Attachment)) : Nil
+    service = ActiveStorage.service
+    conn = ActiveRecord::Base.connection
+    blob_ids = table.values.map(&.blob_id)
+
+    ph = blob_ids.map { "?" }.join(", ")
+    variant_blobs = conn.query_all(
+      "SELECT DISTINCT blob_id FROM active_storage_variant_records WHERE blob_id IN (#{ph})",
+      args: blob_ids, as: Int64).to_set
+
+    # Posters: preview_image attachments on the video blobs whose frame blob
+    # has a variant record (Preview#processed? && variant.processed?).
+    poster_blobs = Set(Int64).new
+    video_ids = table.values.select(&.video?).map(&.blob_id)
+    unless video_ids.empty?
+      vph = video_ids.map { "?" }.join(", ")
+      frames = conn.query_all(
+        %(SELECT a.record_id, a.blob_id FROM active_storage_attachments a
+          WHERE a.name = 'preview_image' AND a.record_type = 'ActiveStorage::Blob'
+            AND a.record_id IN (#{vph})),
+        args: video_ids, as: {Int64, Int64})
+      frame_ids = frames.map(&.[1])
+      unless frame_ids.empty?
+        fph = frame_ids.map { "?" }.join(", ")
+        with_variant = conn.query_all(
+          "SELECT DISTINCT blob_id FROM active_storage_variant_records WHERE blob_id IN (#{fph})",
+          args: frame_ids, as: Int64).to_set
+        frames.each do |(video_id, frame_id)|
+          poster_blobs << video_id if with_variant.includes?(frame_id)
+        end
+      end
+    end
+
+    table.each do |mid, a|
+      if ActiveStorage::Blob::VARIABLE_CONTENT_TYPES.includes?(a.content_type)
+        variation = ActiveStorage::Variation.new(
+          {"format" => ActiveStorage.default_variant_format(a.filename, a.content_type),
+           "resize_to_limit" => [1200, 800]} of String => ActiveStorage::Variation::Value)
+        a.thumb_processed = variant_blobs.includes?(a.blob_id) ||
+                            service.exist?("variants/#{a.key}/#{variation.key}")
+      elsif a.video?
+        variation = ActiveStorage::Variation.new(
+          {"format" => "webp", "resize_to_limit" => [1200, 800]} of String => ActiveStorage::Variation::Value)
+        a.poster_processed = poster_blobs.includes?(a.blob_id) ||
+                             service.exist?("variants/#{a.key}/#{variation.key}")
+      end
+      table[mid] = a # struct — write the flags back
+    end
   end
 
   def self.storage_verifier
@@ -821,38 +1029,39 @@ module ChatLayout
   end
 
   # /rails/active_storage/representations/redirect/<blob_id>/<variation>/<filename>
-  # (transforms as in express: 1200x800; format is the file extension,
-  # except the video poster where Rails always converts the frame to webp).
+  # (transforms as in express: 1200x800; the format is the variant's default —
+  # the source extension for web images, png otherwise; the video poster is
+  # always the webp variation of the drawn frame; the URL's filename stays
+  # the source blob's, as in the oracle's poster URL).
   def self.representation_url(a : Attachment, format : String? = nil) : String
     token = storage_verifier.generate(a.blob_id, purpose: "blob_id")
-    ext = format || File.extname(a.filename).lchop('.')
-    fmt = ext.empty? ? "png" : ext
+    fmt = format || ActiveStorage.default_variant_format(a.filename, a.content_type)
+    # The URL keeps the SOURCE blob's filename (the oracle's poster URL for
+    # alpha-centuri.mov ends in .mov, not .webp — the served bytes are the
+    # webp variant, the route's content type comes from the variation).
+    filename = a.filename
     # Rails signs the transforms themselves (an object, not a string):
     # {"_rails":{"data":{"format":..,"resize_to_limit":[..]},"pur":"variation"}}
     variation = storage_verifier.generate(
       ActiveSupport::RawJSON.new(%({"format":"#{fmt}","resize_to_limit":[1200,800]})), purpose: "variation")
-    "/rails/active_storage/representations/redirect/#{token}/#{variation}/#{URI.encode_path_segment(a.filename)}"
+    "/rails/active_storage/representations/redirect/#{token}/#{variation}/#{URI.encode_path_segment(filename)}"
   end
 
-  # ActiveStorage web_image? (Blob#web_image?): only these types go
-  # through the variant preview in messages; bmp/tiff/svg and
-  # non-images get render_link (file-chip), as in
-  # Messages::AttachmentPresentation.
-  WEB_IMAGE_TYPES = {"image/png", "image/jpeg", "image/jpg", "image/gif",
-                     "image/webp"}
-
-  # Oracle Messages::AttachmentPresentation: video — a video tag with a
-  # poster (the frame is converted to webp), web image — lightbox + img,
-  # everything else (txt, bmp, …) — a file-chip with icon, download and
-  # share.
+  # Oracle Messages::AttachmentPresentation#render_preview: video — a video
+  # tag, with the poster only once the webp variant of the drawn frame was
+  # processed (a preview that failed or was skipped for size is not
+  # attempted again from here — its URL would be hit on every view); a
+  # processed image — lightbox + img; everything else (txt, bmp that failed
+  # to decode, …) — a file-chip with icon, download and share.
   def self.attachment_presentation(a : Attachment) : String
     url = blob_url(a)
     if a.video?
-      content = %(<video src="#{url}" poster="#{representation_url(a, "webp")}" ) +
+      poster = a.poster_processed ? %( poster="#{representation_url(a, "webp")}") : ""
+      content = %(<video src="#{url}"#{poster} ) +
         %(controls="controls" preload="none" width="100%" height="100%" ) +
         %(class="message__attachment"></video>)
       inline_media_dimension_constraints(a, content)
-    elsif WEB_IMAGE_TYPES.includes?(a.content_type)
+    elsif a.thumb_processed
       repr = representation_url(a)
       img = if (dims = preview_dimensions(a))
               %(<img width="#{number(dims[0])}" height="#{number(dims[1])}" ) +

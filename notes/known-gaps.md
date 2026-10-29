@@ -188,8 +188,23 @@
 - `app/models/message/pagination.cr`: Rails `Page < Array` невозможен в
   Crystal (дженерики не наследуются) — возвращается `Array(Message)`.
 - `app/models/message/attachment.cr`: вложение — прямая вставка blob +
-  attachments + touch; variants `:thumb`/`:poster` (vips/ffmpeg) не
-  портированы; анализ изображения синхронный внутри транзакции.
+  attachments + touch; analysis и eager-обработка превью синхронны
+  (analyze! в транзакции, `process_attachment` — после коммита до
+  broadcast, как `create_with_attachment!` оракула). variants `:thumb`
+  (vips) / `:poster` (ffmpeg-кадр + webp) закрыто 2026-10-27
+  (active_storage_cr v0.1.5: Preview/VideoPreviewer,
+  Blob#representation, Variation#default_to c дефолтом формата как в
+  8.2): гвард 250MP, PreviewError/Vips::Error → пост без превью с warn,
+  рендер проверяет `processed?` (у seed-данных — Rails-раскладка:
+  VariantRecord / preview_image-attachment; у порта — существование
+  производной на Disk-сервисе; гейт принимает любую из двух), URL
+  представления сохраняет имя исходного файла (постер mov — `.mov`,
+  как в оракуле), bmp/tiff превьюятся в png (default_variant_format).
+  Отклонение: превью-кадр хранится под детерминированным ключом
+  `previews/{blob.key}` (без отдельного preview-image blob, как у
+  гема), постер-вариант — под ключом видео-blob (у гема — blob'а
+  кадра); port-пост не пишет строки variant_records (на HTML-парити
+  не влияет — гейт видит обе раскладки).
 - `app/models/membership.cr`: `Relation#joins` по belongs_to не поддержан —
   сырые JOIN-фрагменты; строковый `ar_enum` с lenient-чтением из БД.
 - `app/models/account.cr`: `has_json :settings` — закрыто 2026-10-27
@@ -276,9 +291,11 @@
 
 - `app/controllers/concerns/version_headers.cr`: X-Version/X-Rev из ENV
   (аналог инициализатора version.rb), не из `Rails.application.config`.
-- `app/controllers/accounts/custom_styles_controller.cr`: `update` без
-  `notice: "✓"` в redirect_to (flash не портирован); тест гонку Turbo-редиректа
-  закрывает маркером data-parity-sent.
+- `app/controllers/accounts/custom_styles_controller.cr`: `notice: "✓"`
+  в redirect_to закрыт (2026-10-27): flash-механика action_pack (cookie
+  `crails_flash`, sweep по чтению) — смоук: Set-Cookie на редиректе, рендер
+  блока .flash на следующем GET, повторный запрос без flash; тест гонку
+  Turbo-редиректа закрывает маркером data-parity-sent.
 - `app/helpers/**`: tag-билдер (action_view 0.1.16) — семантика rails-main:
   контент+блок склеиваются (8.1.4-гем терял позиционный контент при блоке,
   отмечено в spec как not-oracle-drivable); атрибуты с дефисами
@@ -311,20 +328,29 @@
   `helper_method` — compile-валидация без рантайм-эффекта (контекст рендера
   = контроллер); оракульные `platform`/`signed_in?`/`last_room_visited`
   не портированы (crails-хелперы несут свою логику platform через @ua).
-- `app/controllers/first_runs_controller.cr`: avatar в permit-списке для
-  паритета, но загрузка не портирована — FirstRun игнорирует поле.
 - `app/controllers/rooms/involvements_controller.cr`: `update` не делает
   `broadcast_visibility_changes` оракула — проверить, известен ли гэп.
 
-## rich_text_area value: editable_body (2026-10-26)
+## rich_text_area value: editable_body (2026-10-26; ported 2026-10-27)
 
-messages/edit передаёт `value: @message.body.to_s`; оракул —
-`value: editable_body(@message)` (ActionText::Fragment.replace:
-перестройка аттачментов из attachable — Trix-era embeds с деталями в
-атрибутах узла, mention'ы с generic content-type, рукописные embeds).
-Трансформация требует ActionText::Attachment.from_node +
-render_action_text_attachment — не портировано; тела без
-edit-ломающихся аттачментов рендерятся идентично.
+messages/edit передаёт `value: editable_body(@message)` — как оракул
+(RichTextHelper#editable_body → ChatLayout.editable_body). Порт
+повторяет полную цепочку ActionText (Fragment.replace +
+Content#to_editor_html): content-type восстанавливается из attachable,
+content = отрендеренный партиал (OG-embed — в форме после
+safe-list-санитайзера to_editor_html: без actiontext-обёртки, анкор без
+rel/target; mention — сырой users/_mention со свежим sgid и `\n` на конце),
+атрибут content переносится в конец тега. Байтовая сверка с оракулом:
+script/editable_body_smoke.cr (8 кейсов, включая Trix-era/lexxy/рукописные
+embeds и mention'ы под Trix).
+
+Дивергенция: attachable вне OG-embeds/User (RemoteImage, ContentAttachment,
+MissingAttachable — например mention удалённого юзера) — оракул падает
+NoMethodError (500 на edit); порт оставляет узел без изменений.
+
+Заодно исправлена деривация ключа в ChatLayout.attachable_sgid:
+PBKDF2-HMAC-SHA256 (Rails 7.1+ key_generator), а не SHA1 — раньше
+подпись sgid в autocompletable JSON расходилась с оракулом.
 
 ## RecordCache: снапшоты — объекты, не attributes (2026-10-27)
 

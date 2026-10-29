@@ -23,7 +23,7 @@ shards:
 
   active_storage_cr:
     git: https://github.com/orelsokolov/active_storage.cr.git
-    version: 0.1.4
+    version: 0.1.5
 
   active_support_cr:
     git: https://github.com/orelsokolov/active_support.cr.git

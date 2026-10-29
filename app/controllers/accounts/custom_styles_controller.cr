@@ -17,7 +17,7 @@ class Accounts::CustomStylesController < ApplicationController
       account.custom_styles = styles.to_s
     end
     account.save!
-    redirect_to edit_account_custom_styles_url
+    redirect_to edit_account_custom_styles_url, notice: "✓"
   end
 
   # Strong Parameters

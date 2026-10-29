@@ -63,11 +63,12 @@ class ActiveStorageController < ApplicationController
   end
 
   # Lazy variant processing (the gem's RepresentationsController#edit): transformations
-  # from the signed variation token → the shard's Variation → image_processing transform,
-  # cached on disk under variants/<blob.key>/<variation.key>. Video is not variable: the
-  # preview frame is extracted with ffmpeg and run through the same Variation. nil means
+  # from the signed variation token → Blob#representation (a vips variant for images, an
+  # ffmpeg preview frame + variation for videos), cached on the service under
+  # variants/<blob.key>/<variation.key> — the same key the eager post-time processing
+  # writes, so this only runs when that failed or was skipped. nil means
   # processing failed → the original file.
-  private def representation_variant(blob : ActiveStorageBlob,
+  private def representation_variant(blob : ActiveStorage::Blob,
                                      variation : JSON::Any) : {String, String}?
     transformations = {} of String => ActiveStorage::Variation::Value
     variation.as_h.each do |name, value|
@@ -79,55 +80,12 @@ class ActiveStorageController < ApplicationController
           return nil
       end
     end
-    variation = ActiveStorage::Variation.new(transformations)
-    variant_key = "variants/#{blob.key}/#{variation.key}"
-    service = ActiveStorage.service
-    return nil unless service.is_a?(ActiveStorage::DiskService)
-
-    input_key, source_ext =
-      if blob.content_type.to_s.starts_with?("video/")
-        frame_key = "previews/#{blob.key}"
-        unless service.exist?(frame_key)
-          frame = extract_video_frame(service.path_for(blob.key.to_s))
-          return nil unless frame
-          service.upload(frame_key, frame, content_type: "image/jpeg")
-        end
-        {frame_key, "jpg"}
-      else
-        return nil unless ActiveStorage::Blob::VARIABLE_CONTENT_TYPES.includes?(
-          blob.content_type.to_s)
-        {blob.key.to_s, mimedefault_ext(blob)}
-      end
-
-    unless service.exist?(variant_key)
-      source = service.download(input_key)
-      bytes = variation.transform(source, source_ext)
-      service.upload(variant_key, bytes, content_type: variation.content_type)
-    end
-    {service.path_for(variant_key), variation.content_type}
+    repr = blob.representation(transformations)
+    repr.processed
+    {disk_path(repr.key), repr.content_type}
   rescue ex : Exception
-    # vips/mini_magick could not handle the file — the original (as before the shard).
+    # vips/ffmpeg could not handle the file — the original (as before the shard).
     nil
-  end
-
-  # The reference's VideoPreviewer#draw: first frame, 640 wide, image2.
-  private def extract_video_frame(source_path : String) : String?
-    frame_path = File.join(Dir.tempdir, "as_preview_#{Random::Secure.hex(8)}.jpg")
-    status = Process.run("ffmpeg", {"-y", "-i", source_path, "-vf", "scale=640:-1",
-      "-frames:v", "1", "-f", "image2", frame_path},
-      output: Process::Redirect::Close, error: Process::Redirect::Close)
-    return nil unless status.success? && File.exists?(frame_path)
-    bytes = File.read(frame_path)
-    File.delete(frame_path)
-    bytes
-  rescue ex : Exception
-    nil
-  end
-
-  # Source extension for transform (png fallback, like Variation).
-  private def mimedefault_ext(blob : ActiveStorageBlob) : String
-    ext = File.extname(blob.filename.to_s).lchop('.')
-    ext.empty? ? "png" : ext
   end
 
   # Verifier with salt "ActiveStorage", shared with ChatLayout.storage_verifier.
@@ -135,18 +93,18 @@ class ActiveStorageController < ApplicationController
     ChatLayout.storage_verifier
   end
 
-  private def find_authorized_blob(token : String, user : User) : ActiveStorageBlob?
+  private def find_authorized_blob(token : String, user : User) : ActiveStorage::Blob?
     blob_id = storage_verifier.verified_any(token, purpose: "blob_id")
       .try(&.as_i?)
     return nil unless blob_id
-    blob = ActiveStorageBlob.find?(blob_id.to_i64)
+    blob = ActiveStorage::Blob.find?(blob_id.to_i64)
     return nil unless blob
     authorized_blob?(blob, user) ? blob : nil
   end
 
   # authorizedBlob (storage.js): User/Account attachments are public; Message/RichText —
   # membership in the message's room; no attachments — the owner from metadata.campfire_upload_user_id.
-  private def authorized_blob?(blob : ActiveStorageBlob, user : User) : Bool
+  private def authorized_blob?(blob : ActiveStorage::Blob, user : User) : Bool
     conn = ActiveRecord::Base.connection
     attachments = conn.query_all(
       "SELECT record_type, record_id FROM active_storage_attachments WHERE blob_id = ?",

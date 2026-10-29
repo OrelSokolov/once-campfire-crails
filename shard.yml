@@ -18,11 +18,12 @@ dependencies:
   active_record_cr:
     github: OrelSokolov/active_record.cr
     version: ~> 0.1.27
-  # bumped явно: 0.1.4 — attach(UploadedFile)/name= сеттер, фикс имени
-  # attachment (":avatar" → "avatar").
+  # bumped явно: 0.1.5 — Preview/VideoPreviewer (ffmpeg-постер видео) +
+  # Blob#representation/default_variant_format/Variation#default_to —
+  # eager variants :thumb/:poster сообщений; 0.1.4 — attach(UploadedFile).
   active_storage_cr:
     github: OrelSokolov/active_storage.cr
-    version: ~> 0.1.4
+    version: ~> 0.1.5
   active_support_cr:
     github: OrelSokolov/active_support.cr
     version: ~> 0.1.13
