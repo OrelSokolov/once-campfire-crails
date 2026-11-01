@@ -6,4 +6,4 @@
 source "https://rubygems.org"
 
 gem "terminal-table" # таблицы `rake report`
-gem "twinshot", path: "/home/oleg/twinshot/"
+gem "twinshot"
