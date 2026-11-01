@@ -5,10 +5,13 @@
 def run_henchmark(apps, extra)
   server, client = cpu_sets
   step "CPU: server=#{server} client=#{client}"
-  sh!(File.join(HARNESS, "bin", "benchmark"), "--apps", apps.join(","),
-      "--cpus", server, "--client-cpus", client,
-      "--rounds", ENV.fetch("BENCH_ROUNDS", "3"),
-      "--duration", ENV.fetch("BENCH_DURATION", "8"), *extra, env: harness_env)
+  args = ["--apps", apps.join(","), "--cpus", server, "--client-cpus", client,
+          "--rounds", ENV.fetch("BENCH_ROUNDS", "3"),
+          "--duration", ENV.fetch("BENCH_DURATION", "8")]
+  # Route filter for apps that cannot serve the full contract set — the harness
+  # still validates every route it measures.
+  args.concat(["--routes", ENV["BENCH_ROUTES"]]) if ENV["BENCH_ROUTES"]
+  sh!(File.join(HARNESS, "bin", "benchmark"), *args, *extra, env: harness_env)
 end
 
 def save_results(label)
@@ -31,10 +34,10 @@ task :verify, [:app] do |_t, args|
   run_henchmark(apps, ["--preflight"])
 end
 
-desc "Formal benchmark (benchmark[c] — a single app; without an argument — all apps, one run)"
+desc "Formal benchmark (benchmark[c] — a single app; BENCH_APPS=crails,rust — several in one interleaved run)"
 task :benchmark, [:app] do |_t, args|
   abort "Benchmarking requires Linux (docker --network host + taskset)." unless linux?
-  apps = each_app(args[:app])
+  apps = each_app(args[:app].to_s.empty? ? ENV["BENCH_APPS"] : args[:app])
   apps.each { |a| abort "Image #{IMAGE[a]} not built: rake build[#{a}]" unless image_exists?(IMAGE[a]) }
   Rake::Task["harness"].invoke # idempotent: fetches/checks the harness before the run
   run_henchmark(apps, [])

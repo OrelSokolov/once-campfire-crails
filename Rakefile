@@ -76,6 +76,11 @@ APPS = {
   "rust"    => { repo: "https://github.com/basecamp/once-campfire-rust.git",    rev: "6dae2fd3c1a2dce61ca11beb731bcce2b42b67ad" },
   "c"       => { repo: "https://github.com/basecamp/once-campfire-c.git",       rev: "873a51f523de5a0cc235884e5725cfb5521d2027" },
   "elixir"  => { repo: "https://github.com/basecamp/once-campfire-elixir.git",  rev: "58964cf8a8788b2a20c7bde16dae65b025812593" },
+  # dotnet: upstream since 3730956 ("Pass the official verification harness")
+  # implements the same verification compatibility our fork carried (bcrypt,
+  # session_token cookie, Rails signed_id, search ordering, /up) — verified
+  # locally: 3286f07 passes the full harness; the fork is no longer needed.
+  "dotnet"  => { repo: "https://github.com/devmobasa/once-campfire-dotnet.git", rev: "3286f07aa8d00b21e749b8c8c03eb3d5ad3c2ce1" },
 }.freeze
 CRAILS_APP = "crails"
 APP_ORDER  = APPS.keys + [CRAILS_APP] # crails strictly last
@@ -91,6 +96,7 @@ IMAGE = {
   "rails" => "once-campfire:app", "express" => "once-campfire-express:app",
   "go" => "once-campfire-go:app", "rust" => "campfire-rust:app",
   "c" => "once-campfire-c:app", "elixir" => "campfire-elixir:app",
+  "dotnet" => "once-campfire-dotnet:app",
   CRAILS_APP => "once-campfire-crails:app",
 }.freeze
 
@@ -170,10 +176,14 @@ def harness_env
   # Isolate harness scripts from the parent's bundler environment: rubygems
   # loads bundler/setup at startup via BUNDLER_SETUP/BUNDLE_GEMFILE, while the
   # harness is not a bundler project (minitest/stdlib) and has no Gemfile tie.
-  %w[BUNDLER_SETUP BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLE_EXEC_OPTS RUBYOPT].each { |k| env[k] = nil }
+  %w[BUNDLER_SETUP BUNDLE_GEMFILE BUNDLE_BIN_PATH BUNDLE_EXEC_OPTS RUBYOPT GEM_PATH GEM_HOME].each { |k| env[k] = nil }
   # A host redis on 6379 prevents the container from binding (harness uses
   # --network host); the Rails image already has no local redis, Elixir is
   # switched to the external one via REDIS_URL. See REPORT.md.
+  # The dotnet app forces SSL in production mode (as Rails does); the harness
+  # talks plain HTTP on the loopback interface, so the front server must not
+  # redirect (README of the port: docker run -e DISABLE_SSL=1).
+  env["DOTNET_BENCH_ENV"] = { "DISABLE_SSL" => "1" }.to_json
   env["ELIXIR_BENCH_ENV"] = { REDIS_URL: "redis://127.0.0.1:6379/0" }.to_json if port_busy?(6379)
   env
 end
